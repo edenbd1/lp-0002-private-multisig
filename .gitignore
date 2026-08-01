@@ -1,0 +1,5 @@
+/target
+**/target
+_external/
+*.pdf
+.DS_Store

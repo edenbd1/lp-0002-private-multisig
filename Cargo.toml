@@ -1,0 +1,44 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/multisig-core",
+]
+# Guest crates build on the riscv32im-risc0-zkvm-elf toolchain and are excluded
+# from the host workspace, same layout as the LP-0005 / LP-0003 projects this
+# reuses. `_external/` holds cloned reference repos, never build them as members.
+exclude = [
+    "_external",
+    "crates/membership-circuit/methods/guest-lez",
+    "crates/multisig-verifier-spel/methods/guest",
+]
+
+[workspace.dependencies]
+sha2 = { version = "0.10", default-features = false }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+serde_json = "1"
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+rand = "0.8"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/edenbd1/lp-0002-private-multisig"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+# Demos and tests intentionally use unwrap/expect for clarity.
+unwrap_used = "allow"
+expect_used = "allow"
+
+[profile.release]
+debug = 1
+lto = true
+
+[profile.release.build-override]
+opt-level = 3

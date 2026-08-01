@@ -1,0 +1,20 @@
+[package]
+name = "multisig-core"
+description = "Shared primitives for LP-0002: member-set commitments, approval nullifiers, and the in-circuit M-of-N approval logic."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+sha2 = { workspace = true }
+serde = { workspace = true }
+
+[features]
+default = ["std"]
+# `std` adds the host-only tree builder. The guests build with
+# `default-features = false` so the crate stays no_std inside the zkVM.
+std = []
+
+[lints]
+workspace = true

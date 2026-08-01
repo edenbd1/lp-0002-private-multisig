@@ -47,6 +47,13 @@ executor:
 cargo test -p multisig-verifier-tests
 ```
 
-15 tests: two honest controls and twelve attacks, plus the framework-layer test.
+28 tests: four honest controls (one per instruction) and the rest attacks, each
+required to be rejected with the code documented above. Every one of the
+thirteen codes is exercised — an audit pass found that 5001, 5007 and 5008 were
+not, while this page claimed they were, and `create_multisig` and
+`create_proposal` had no coverage against the binary at all. Both gaps are
+closed.
+
 The circuit-side bindings are covered separately by 22 tests in
-`cargo test -p multisig-core`.
+`cargo test -p multisig-core`, and the pin between the verifier and the
+membership binary by 2 more in `--test program_id_pin`. 53 in total.

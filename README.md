@@ -48,7 +48,7 @@ cd lp-0002-private-multisig
 ```
 
 No network, no funded account, no sequencer required. The demo runs the 22
-circuit tests, the 15 adversarial tests against the built verifier binary through
+circuit tests, the 28 adversarial tests against the built verifier binary through
 the sequencer's own executor, a full 3-of-5 lifecycle, and reports the measured
 compute cost.
 
@@ -60,12 +60,12 @@ To rebuild the on-chain programs (needs Docker and `cargo-risczero`):
 
 ### Test inventory
 
-`cargo test --workspace` runs **40** tests. Counted, so you can check the claim:
+`cargo test --workspace` runs **53** tests. Counted, so you can check the claim:
 
 | Suite | Count | What it establishes |
 |---|---:|---|
 | `multisig-core` — `approve_adversarial` | 22 | The circuit-side bindings: non-members, borrowed Merkle paths, invented roots, forged nullifiers, bait-and-switch actions, the padding sentinel, tree construction |
-| `multisig-verifier-tests` — `verifier_rejects` | 15 | The **built verifier binary** through the sequencer's own executor: 2 honest controls, 12 attacks, 1 framework-layer check |
+| `multisig-verifier-tests` — `verifier_rejects` | 28 | The **built verifier binary** through the sequencer's own executor: 4 honest controls (one per instruction), 22 attacks, 2 framework-layer checks |
 | `multisig-verifier-tests` — `program_id_pin` | 2 | The verifier pins the committed membership binary, and the pin is not a placeholder |
 | `multisig-sdk` doctest | 1 | The documented API compiles and runs |
 
@@ -111,7 +111,7 @@ sessions.
 | `crates/multisig-core` | Shared primitives and the in-circuit approval logic. `no_std`. 22 adversarial tests |
 | `crates/membership-circuit/methods/guest-lez` | The membership proof as a native LEZ program, so the privacy circuit composes it with `env::verify` |
 | `crates/multisig-verifier-spel/methods/guest` | The on-chain verifier: `create_multisig`, `create_proposal`, `approve`, `execute` |
-| `crates/multisig-verifier-tests` | 15 adversarial tests against the built binary, through the sequencer's own executor |
+| `crates/multisig-verifier-tests` | 28 adversarial tests against the built binary, through the sequencer's own executor |
 | `crates/multisig-sdk` | The reusable client library for Logos modules. Transport-agnostic |
 | `crates/multisig-cli` | `msig`, the command line client |
 | `app/` | The Basecamp GUI |
@@ -152,16 +152,16 @@ with `getTransaction` against `https://testnet.lez.logos.co`.
 | Step | Transaction |
 |---|---|
 | deploy `membership_lez` | `64098974b7d28f4facf1218e771d27c6163f7fb7ce3bd4f218df6db42ace6dde` |
-| deploy `multisig_verifier` | `dd8d0dc2206712468c163a018d40323fc953284401670ed43f9bad87f28bba69` |
-| `create_multisig` | `109d8b42922e435268c31f8ba3f474c77b6b143488ac1137a90bca122e733791` |
-| `create_proposal` | `4e0524446e074004b4f703c9d4c122c952c03a8b1cfbecbf1b987ffb18bf8fb6` |
-| `approve` A (privacy tx) | `ead4460536488d41c0f23ebc0d1b8c3074142ebd425ca085f26e91e294094486` |
-| `approve` B (privacy tx) | `c2fddecd9624fa9dd7c3734895eaf6027adbf44c49e7f8457bb0563fc9ae10b9` |
-| `execute` | `f1ccbe5145b804ec43f0579a3dc3fd482eb30029992ca2b35e460caa34b6371f` |
+| deploy `multisig_verifier` | `e24f5367521616f235acd26e3ee8937e8fc071335f187fab3ad282b6a691192f` |
+| `create_multisig` | `de22a8c917774643969fec0b566082f701867b1359f18574fc8ee390badb3cdd` |
+| `create_proposal` | `b7a4f74534cf9efc5da734c50b3c3ace7d1e7aa35aeaf86ca8f736dd566ea832` |
+| `approve` (member A, **privacy tx**) | `6e035e4e702bcd241faa2ac304bc32178193bef25d66036a8bf7b0915d716347` |
+| `approve` (member B, **privacy tx**) | `968c5d1ba1b828f93ee44a037b313f1c8c2b3ea30afb9302857b18fd8619dc55` |
+| `execute` | `5817c49ce6ab86b5349ca2d55b95662f4cf7192b89be924d1f72c74f5d0e8b74` |
 
-The two approval markers — `3SuRQe4gpDBMic5evbtsdXTHaSCCYhqT4GuLr7TFboF2` and
-`ECfwebcZyv2Vju3Fu2Q1mceu6E8yBtjLkXaGSNDS581r` — and the execution marker
-`HaHrL1NPcjy2e4HBHP4Nq7gp7BXJd57jfSvUhi3y9fjo` are all owned by the verifier
+The two approval markers — `9q31RPufMoRe6pXcxrcuwFEJQN2Wnr2qV4HhXnV8a42r` and
+`GMgP7TMKoFVimMxX7PmtbeYG1dhGTGHUDh4F1yJmc8pv` — and the execution marker
+`EsV6LpVUfR1iunep8g4etg1qTGQfzxbA1J7PjDBsFV5b` are all owned by the verifier
 program. Neither approval marker could exist without a membership proof having
 been verified on chain, and neither names a member.
 
@@ -173,7 +173,7 @@ Full detail, including how to re-verify each one yourself, in
 | Program | ImageID |
 |---|---|
 | `membership_lez` | `a48ecc5289404ad01fd6d6fd1d79eaebb8d2f0fe4f2dc2ebbc85003ee82af3d6` |
-| `multisig_verifier` | `1f4178286ee2380cb031aaef9e073bf7bdcce33b6e00716df5bcf5686230ee24` |
+| `multisig_verifier` | `cf5724b0e8dabd4a1519f8d9ea7371d69e1d7e2f6d8c931f1e4b3110150d7982` |
 
 The verifier pins the membership program id as a constant, so a chained call can
 only ever reach the audited binary. `./scripts/build-programs.sh --check` fails if

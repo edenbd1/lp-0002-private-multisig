@@ -79,7 +79,7 @@ Stated plainly, because a privacy claim that overreaches is worse than none.
 | **N**, the member-set size | Committed at creation; the Merkle tree's shape is derivable |
 | **M**, the threshold | Inside `config_hash`, which is in the multisig PDA address |
 | **The number of approvals so far** | Each is a marker account; counting them is trivial |
-| **The proposed action** | `action_hash` is in the proposal PDA address; the preimage is published so members can decide |
+| **The proposed action** | `action_hash` is inside `proposal_ref`, which is in the proposal PDA address; the preimage is published so members can decide |
 | **That *some* member approved at time T** | The marker account appears in a block |
 | **The executor's identity** | They sign and pay for the execution transaction |
 
@@ -125,7 +125,11 @@ the circuit half and `crates/multisig-verifier-tests/` for the on-chain half.
    `init` refuses.
 
 5. **Approvals do not cross multisigs or proposals.** `proposal_ref` carries
-   `multisig_id`, and `action_hash` is itself multisig-scoped.
+   `multisig_id`, and `action_hash` is itself multisig-scoped. Crucially the
+   proposal's **PDA address** is also seeded by `[multisig_id, proposal_ref]`, so
+   the binding is enforced by the address rather than only committed inside a
+   hash the program cannot invert. See *An audit finding* below for why that
+   distinction is not academic.
 
 6. **The public key ties the secret to the committed leaf.** The circuit proves
    `npk = H(prefix || msk)` and `account_id = derive_account_id(npk, identifier)`,

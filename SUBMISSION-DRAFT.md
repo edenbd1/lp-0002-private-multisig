@@ -137,13 +137,13 @@ honestly.
       built by `msig approve-args` and proved locally; ~10 minutes per approval.
 - [x] **A reference integration on LEZ testnet.** A 2-of-3 multisig created, a
       proposal published, two approvals gathered on the privacy-preserving path,
-      and executed. Seven transactions, all live; see
+      and executed against the fixed verifier. Seven transactions, all live; see
       [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 - [x] **At least 1 multisig instance on testnet with a proposal submitted,
       approved by threshold, and executed.** Multisig
-      `4nf2HZtLRKCJh6eJHcsntgCntRXktMXxUw1BCwKhFvdR`, proposal
-      `4eWzzaDj668TCMyMC7BsWhZjVUKKm2SJ4kByThn2G9AZ`, execution marker
-      `HaHrL1NPcjy2e4HBHP4Nq7gp7BXJd57jfSvUhi3y9fjo` — all owned by the verifier.
+      `chmP8jUqSHh2irhKVxBkM6GaGfLHmSq3TgCABziET3R`, proposal
+      `GdGHweUajfx7ocZNSC87WQNeYUP3Zm4EsNUiBqA4u3Kc`, execution marker
+      `EsV6LpVUfR1iunep8g4etg1qTGQfzxbA1J7PjDBsFV5b` — all owned by the verifier.
       Re-verify with `./scripts/verify-onchain.sh`.
 - [x] **Full documentation and a clean public repository.**
 
@@ -227,7 +227,10 @@ stated as such rather than hidden behind the cycle counts.
 
 ### Supportability
 
-40 tests across four suites, counted and itemised in the README. The two guest
+53 tests across four suites, counted and itemised in the README. That number
+went from 40 after an audit pass found a threshold bypass and three untested
+error codes; the finding and its cost are written up in `docs/security.md`
+rather than quietly patched. The two guest
 crates are excluded from the host workspace because they target
 `riscv32im-risc0-zkvm-elf` — but the deployed program is still under test,
 because `multisig-verifier-tests` is a workspace member exercising the built

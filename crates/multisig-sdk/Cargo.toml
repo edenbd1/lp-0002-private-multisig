@@ -1,0 +1,13 @@
+[package]
+name = "multisig-sdk"
+description = "Reusable client library for LP-0002: the multisig lifecycle in one API, transport-agnostic, for building Logos modules."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+multisig-core = { path = "../multisig-core" }
+
+[lints]
+workspace = true

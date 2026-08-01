@@ -273,7 +273,10 @@ fn the_same_member_yields_the_same_marker_twice() {
 
     let n1 = compute_approval_nullifier(&pref, &m.msk);
     let n2 = compute_approval_nullifier(&pref, &m.msk);
-    assert_eq!(n1, n2, "the nullifier is deterministic per (proposal, member)");
+    assert_eq!(
+        n1, n2,
+        "the nullifier is deterministic per (proposal, member)"
+    );
     assert_eq!(
         compute_approval_marker(&pref, &n1),
         compute_approval_marker(&pref, &n2),

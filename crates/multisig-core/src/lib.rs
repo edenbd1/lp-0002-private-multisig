@@ -417,13 +417,17 @@ pub fn approve(
     Ok(leaf)
 }
 
+/// A member's Merkle authentication path: their 0-indexed leaf position and the
+/// sibling hashes from the leaf up to (but excluding) the root.
+pub type MerklePath = (u64, Vec<[u8; 32]>);
+
 /// Creator-side helper: build a Merkle tree over the member leaves and return
 /// the root plus, for each leaf, its `(leaf_index, siblings)` path. Pads to a
 /// power of two with [`padding_leaf`] so paths are well-formed. Host only,
 /// because a creator builds the set off chain and publishes just the root.
 #[cfg(feature = "std")]
 #[must_use]
-pub fn build_member_tree(leaves: &[[u8; 32]]) -> ([u8; 32], Vec<(u64, Vec<[u8; 32]>)>) {
+pub fn build_member_tree(leaves: &[[u8; 32]]) -> ([u8; 32], Vec<MerklePath>) {
     assert!(!leaves.is_empty(), "a member set needs at least one member");
 
     let sentinel = padding_leaf();
@@ -433,8 +437,7 @@ pub fn build_member_tree(leaves: &[[u8; 32]]) -> ([u8; 32], Vec<(u64, Vec<[u8; 3
     }
     let width = level.len();
 
-    let mut paths: Vec<(u64, Vec<[u8; 32]>)> =
-        (0..leaves.len()).map(|i| (i as u64, Vec::new())).collect();
+    let mut paths: Vec<MerklePath> = (0..leaves.len()).map(|i| (i as u64, Vec::new())).collect();
 
     let mut nodes = level;
     let mut idx_width = width;

@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
     "crates/multisig-core",
+    "crates/multisig-sdk",
+    "crates/multisig-cli",
 ]
 # Guest crates build on the riscv32im-risc0-zkvm-elf toolchain and are excluded
 # from the host workspace, same layout as the LP-0005 / LP-0003 projects this

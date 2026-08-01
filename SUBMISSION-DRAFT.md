@@ -2,8 +2,8 @@
 
 > **Draft.** This is the file that would become `solutions/LP-0002.md` in a PR to
 > `logos-co/lambda-prize`. It is kept here so it can be reviewed before anything
-> is opened upstream. Two things are still outstanding and are marked as such
-> below: the public-testnet lifecycle, and the narrated demo video.
+> is opened upstream. One thing is still outstanding and is marked as such
+> below: the narrated demo video.
 
 **Submitted by:** edenbd1
 
@@ -135,10 +135,16 @@ honestly.
       who need not be a member at all.
 - [x] **Proof generation runs client-side on a standard laptop.** Approvals are
       built by `msig approve-args` and proved locally; ~10 minutes per approval.
-- [ ] **A reference integration on LEZ testnet.** ⚠️ **Not yet run.** The
-      lifecycle script is `scripts/deploy-and-run.sh`; see *Outstanding* below.
-- [ ] **At least 1 multisig instance on testnet with a proposal submitted,
-      approved by threshold, and executed.** ⚠️ **Not yet run.**
+- [x] **A reference integration on LEZ testnet.** A 2-of-3 multisig created, a
+      proposal published, two approvals gathered on the privacy-preserving path,
+      and executed. Seven transactions, all live; see
+      [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+- [x] **At least 1 multisig instance on testnet with a proposal submitted,
+      approved by threshold, and executed.** Multisig
+      `4nf2HZtLRKCJh6eJHcsntgCntRXktMXxUw1BCwKhFvdR`, proposal
+      `4eWzzaDj668TCMyMC7BsWhZjVUKKm2SJ4kByThn2G9AZ`, execution marker
+      `HaHrL1NPcjy2e4HBHP4Nq7gp7BXJd57jfSvUhi3y9fjo` — all owned by the verifier.
+      Re-verify with `./scripts/verify-onchain.sh`.
 - [x] **Full documentation and a clean public repository.**
 
 ### Usability
@@ -173,8 +179,8 @@ honestly.
 
 ### Supportability
 
-- [ ] **Deployed and tested on LEZ devnet/testnet.** ⚠️ Built and pinned, not yet
-      deployed.
+- [x] **Deployed and tested on LEZ devnet/testnet.** Both programs deployed;
+      full lifecycle run and independently re-verifiable over JSON-RPC.
 - [x] **E2E integration tests against a LEZ sequencer, in CI.**
       `multisig-verifier-tests` runs the built binary through the sequencer's own
       executor — same executor, same input order, same 32M session limit — and
@@ -236,19 +242,32 @@ that constant is what stops a chained call from reaching an unaudited program.
 - [`docs/error-codes.md`](docs/error-codes.md)
 - [`docs/cu-costs.md`](docs/cu-costs.md)
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
-- Narrated demo video: ⚠️ pending
+- Narrated demo video: ⚠️ pending — script at `VIDEO_SCRIPT.md`
+
+## What the testnet run taught, and what it cost
+
+Two things went wrong on the way, both worth stating because they are invisible
+until you hit them and neither is a program bug:
+
+1. **One approver account cannot serve several approvals.** A privacy
+   transaction consumes the approver's commitment, so a second approval from the
+   same account panics in the *client-side* circuit — `Invalid
+   account_identities length, left: 4, right: 3` — before anything is submitted.
+   One private account per approval fixes it, and that is how a real deployment
+   works anyway.
+2. **Variadic accounts take one comma-separated flag.** `spel-cli` resolves them
+   with `last_value()`, so a repeated `--approvals` silently keeps only the last.
+   The program then saw one account against two nullifiers and rejected with
+   `E_APPROVAL_COUNT_MISMATCH` (5009) — the check doing exactly its job, which is
+   how the cause was found.
+
+Both are now fixed in `scripts/deploy-and-run.sh` and documented in
+`docs/DEPLOYMENT.md`.
 
 ## Outstanding
 
-Stated plainly rather than glossed:
-
-1. **The public-testnet lifecycle has not been run.** Everything is built, the
-   program identities are pinned, and `scripts/deploy-and-run.sh` is ready; it
-   needs a funded signer and several hours, since proving dominates.
-2. **The narrated video has not been recorded.** `VIDEO_SCRIPT.md` has the
-   script.
-
-Nothing in this submission claims either has happened.
+**The narrated video has not been recorded.** `VIDEO_SCRIPT.md` has the full
+script. Nothing in this submission claims otherwise.
 
 ## Terms & Conditions
 

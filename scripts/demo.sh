@@ -17,7 +17,9 @@
 # `scripts/deploy-and-run.sh` produces against the public testnet — see
 # docs/DEPLOYMENT.md for the transaction hashes.
 #
-# Set SEQUENCER_URL to also run the live on-chain verification at the end.
+# The last step reads the live deployment straight off the public testnet, using
+# the manifest committed under artifacts/testnet/ — so it works from a clean
+# clone with no local state.
 #
 #   ./scripts/demo.sh
 
@@ -44,13 +46,15 @@ test -f artifacts/programs/multisig_verifier.bin \
 spel program-id artifacts/programs/*.bin | grep -E '📦|ImageID'
 
 rule "1. the seven bindings, in the circuit"
-echo "22 adversarial tests over the approval logic: non-members, borrowed paths,"
-echo "invented roots, forged nullifiers, bait-and-switch actions, padding leaves."
+echo "25 adversarial tests over the approval logic: non-members, borrowed paths,"
+echo "invented roots, forged nullifiers, bait-and-switch actions, padding leaves,"
+echo "and a member listed twice still getting exactly one vote."
 cargo test -p multisig-core --quiet 2>&1 | tail -4
 
 rule "2. the on-chain checks, through the sequencer's executor"
-echo "15 tests against the built verifier binary: two honest controls and twelve"
-echo "attacks, each required to be rejected with its documented error code."
+echo "28 tests against the built verifier binary: four honest controls, one per"
+echo "instruction, and 22 attacks each required to be rejected with its documented"
+echo "error code — including the threshold bypass a third audit pass found."
 cargo test -p multisig-verifier-tests --quiet 2>&1 | tail -4
 
 rule "3. a 3-of-5 multisig, client side"
@@ -104,13 +108,15 @@ rule "10. compute cost"
 cargo test -p multisig-verifier-tests --quiet -- --ignored --nocapture 2>&1 \
   | grep -E 'approve |execute ' | sed 's/^/   /'
 
-if [ -n "${SEQUENCER_URL:-}" ]; then
-  rule "11. live on-chain verification"
-  ./scripts/verify-onchain.sh "$WORK" "$PROP_ID"
-else
-  rule "11. live on-chain verification (skipped)"
-  echo "Set SEQUENCER_URL and run ./scripts/verify-onchain.sh to check the"
-  echo "deployed markers over RPC. Deployment addresses are in docs/DEPLOYMENT.md."
-fi
+rule "11. the live deployment, read straight off the chain"
+echo "The multisig above is local. This checks the one that is actually deployed:"
+echo "its manifest is committed under artifacts/testnet/, so anyone can re-run this."
+echo
+./scripts/verify-onchain.sh artifacts/testnet "$(cat artifacts/testnet/proposal_id)" || {
+  echo
+  echo "If this failed, the public testnet may be unreachable from here."
+  echo "The transaction hashes are in docs/DEPLOYMENT.md and can be checked with"
+  echo "any JSON-RPC client."
+}
 
 printf '\n\033[1mdemo complete\033[0m — working directory %s\n' "$WORK"

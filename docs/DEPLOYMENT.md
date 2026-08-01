@@ -72,6 +72,19 @@ spel program-id artifacts/programs/membership_lez.bin
 spel program-id artifacts/programs/multisig_verifier.bin
 ```
 
+**The build is reproducible.** Rebuilding the verifier guest from a clean
+`cargo risczero build` reproduces ImageID
+`cf5724b0e8dabd4a1519f8d9ea7371d69e1d7e2f6d8c931f1e4b3110150d7982` exactly —
+checked, not assumed. That matters because the ImageID *is* the program's
+identity on chain: an evaluator who rebuilds and gets the same id knows the
+committed binary is the source in this repository, compiled.
+
+**And the deployed bytes are the committed bytes.** The exact contents of each
+committed binary appear inside its deployment transaction — offset 5, with the
+payload exactly five bytes longer than the file. Fetch either deployment
+transaction with `getTransaction`, base64-decode it, and search for the bytes of
+`artifacts/programs/<name>.bin`: they are there verbatim.
+
 A LEZ program-deployment transaction hash is `SHA256(borsh(bytecode))` —
 content-addressed. Re-deploying a byte-identical binary reproduces the identical
 hash, which is why the deploy step in `scripts/deploy-and-run.sh` is idempotent

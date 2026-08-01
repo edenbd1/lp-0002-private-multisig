@@ -58,6 +58,27 @@ To rebuild the on-chain programs (needs Docker and `cargo-risczero`):
 ./scripts/build-programs.sh
 ```
 
+### Test inventory
+
+`cargo test --workspace` runs **40** tests. Counted, so you can check the claim:
+
+| Suite | Count | What it establishes |
+|---|---:|---|
+| `multisig-core` — `approve_adversarial` | 22 | The circuit-side bindings: non-members, borrowed Merkle paths, invented roots, forged nullifiers, bait-and-switch actions, the padding sentinel, tree construction |
+| `multisig-verifier-tests` — `verifier_rejects` | 15 | The **built verifier binary** through the sequencer's own executor: 2 honest controls, 12 attacks, 1 framework-layer check |
+| `multisig-verifier-tests` — `program_id_pin` | 2 | The verifier pins the committed membership binary, and the pin is not a placeholder |
+| `multisig-sdk` doctest | 1 | The documented API compiles and runs |
+
+One further test is `#[ignore]`d: it reports the measured compute cost rather
+than asserting a property. Run it with
+`cargo test -p multisig-verifier-tests -- --ignored --nocapture`.
+
+**The deployed program is genuinely under test.** The two guest crates are
+excluded from the host workspace because they build for
+`riscv32im-risc0-zkvm-elf`, but `multisig-verifier-tests` is a workspace member
+and it exercises the *built binary* — so the on-chain program is not a component
+that ships untested.
+
 ---
 
 ## The lifecycle

@@ -244,7 +244,9 @@ impl Fixture {
     }
 
     fn proposal_account(&self, anchored: bool) -> AccountWithMetadata {
-        let id = public_pda(&self.verifier, &[self.proposal_ref]);
+        // Seeded by [multisig_id, proposal_ref]: the multisig_id in the address
+        // is what stops a proposal being paired with a foreign multisig.
+        let id = public_pda(&self.verifier, &[self.multisig_id, self.proposal_ref]);
         if anchored {
             owned_by(self.verifier, id)
         } else {
@@ -734,4 +736,441 @@ fn report_the_cycle_costs() {
             .expect("execute executes"),
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// create_multisig and create_proposal
+//
+// These two instructions had no coverage against the binary until an audit
+// pass noticed that three documented error codes — 5001, 5007, 5008 — were
+// never exercised, while docs/error-codes.md claimed every code was. The
+// claim is only worth making if the tests exist, so here they are.
+// ---------------------------------------------------------------------------
+
+/// Accounts for `create_multisig`, in declaration order.
+fn create_multisig_accounts(f: &Fixture, config_hash: [u8; 32]) -> Vec<AccountWithMetadata> {
+    vec![
+        uninitialised(public_pda(&f.verifier, &[f.multisig_id, config_hash])),
+        signer([0xA1; 32]),
+    ]
+}
+
+/// The control: an honest multisig creation is accepted.
+#[test]
+fn an_honest_create_multisig_is_accepted() {
+    let elf = elf();
+    let pid = program_id(&elf);
+    let f = Fixture::new(&pid);
+    let ix = VerifierInstruction::CreateMultisig {
+        multisig_id: f.multisig_id,
+        config_hash: f.config_hash,
+        member_root: f.member_root,
+        threshold: f.threshold,
+    };
+    run(&elf, &pid, create_multisig_accounts(&f, f.config_hash), &ix)
+        .expect("a well-formed multisig must be creatable");
+}
+
+/// A 0-of-N multisig would let anyone execute, so creation must refuse it
+/// outright rather than leave such an instance reachable on chain.
+#[test]
+fn creating_a_zero_threshold_multisig_is_rejected() {
+    let elf = elf();
+    let pid = program_id(&elf);
+    let f = Fixture::new(&pid);
+    let config = compute_config_hash(&f.member_root, 0);
+    let ix = VerifierInstruction::CreateMultisig {
+        multisig_id: f.multisig_id,
+        config_hash: config,
+        member_root: f.member_root,
+        threshold: 0,
+    };
+    let err = run(&elf, &pid, create_multisig_accounts(&f, config), &ix)
+        .expect_err("a zero threshold must be rejected");
+    assert_rejected(err, 5008, "at least 1");
+}
+
+/// A config hash that does not commit to the (root, threshold) pair it is
+/// presented with. Without this check `config_hash` would be opaque bytes and
+/// the anchoring of the threshold would mean nothing.
+#[test]
+fn creating_a_multisig_with_an_inconsistent_config_hash_is_rejected() {
+    let elf = elf();
+    let pid = program_id(&elf);
+    let f = Fixture::new(&pid);
+    let forged = [0xCD; 32];
+    let ix = VerifierInstruction::CreateMultisig {
+        multisig_id: f.multisig_id,
+        config_hash: forged,
+        member_root: f.member_root,
+        threshold: f.threshold,
+    };
+    let err = run(&elf, &pid, create_multisig_accounts(&f, forged), &ix)
+        .expect_err("an inconsistent config hash must be rejected");
+    assert_rejected(err, 5002, "config");
+}
+
+/// Accounts for `create_proposal`, in declaration order.
+fn create_proposal_accounts(
+    f: &Fixture,
+    proposal_ref: [u8; 32],
+    multisig_anchored: bool,
+) -> Vec<AccountWithMetadata> {
+    vec![
+        uninitialised(public_pda(&f.verifier, &[f.multisig_id, proposal_ref])),
+        f.multisig_account(multisig_anchored),
+        signer([0xA2; 32]),
+    ]
+}
+
+/// The control: an honest proposal against an anchored multisig is accepted.
+#[test]
+fn an_honest_create_proposal_is_accepted() {
+    let elf = elf();
+    let pid = program_id(&elf);
+    let f = Fixture::new(&pid);
+    let action_hash = compute_action_hash(&f.multisig_id, b"transfer 100 to the treasury");
+    let ix = VerifierInstruction::CreateProposal {
+        multisig_id: f.multisig_id,
+        config_hash: f.config_hash,
+        proposal_id: f.proposal_id,
+        action_hash,
+        proposal_ref: f.proposal_ref,
+    };
+    run(
+        &elf,
+        &pid,
+        create_proposal_accounts(&f, f.proposal_ref, true),
+        &ix,
+    )
+    .expect("a proposal on an anchored multisig must be creatable");
+}
+
+/// A proposal reference that does not commit to `(multisig, proposal, action)`.
+///
+/// This is the check that makes binding 3 real: if `proposal_ref` could be
+/// arbitrary bytes, approvals would no longer be tied to the action, and the
+/// bait-and-switch the whole design exists to prevent would be back.
+#[test]
+fn creating_a_proposal_with_an_unbound_ref_is_rejected() {
+    let elf = elf();
+    let pid = program_id(&elf);
+    let f = Fixture::new(&pid);
+    let action_hash = compute_action_hash(&f.multisig_id, b"transfer 100 to the treasury");
+    let forged_ref = [0xEF; 32];
+    let ix = VerifierInstruction::CreateProposal {
+        multisig_id: f.multisig_id,
+        config_hash: f.config_hash,
+        proposal_id: f.proposal_id,
+        action_hash,
+        proposal_ref: forged_ref,
+    };
+    let err = run(
+        &elf,
+        &pid,
+        create_proposal_accounts(&f, forged_ref, true),
+        &ix,
+    )
+    .expect_err("a proposal_ref that binds nothing must be rejected");
+    assert_rejected(err, 5007, "does not commit");
+}
+
+/// A proposal cannot be attached to a multisig that was never created.
+#[test]
+fn creating_a_proposal_on_an_unanchored_multisig_is_rejected() {
+    let elf = elf();
+    let pid = program_id(&elf);
+    let f = Fixture::new(&pid);
+    let action_hash = compute_action_hash(&f.multisig_id, b"transfer 100 to the treasury");
+    let ix = VerifierInstruction::CreateProposal {
+        multisig_id: f.multisig_id,
+        config_hash: f.config_hash,
+        proposal_id: f.proposal_id,
+        action_hash,
+        proposal_ref: f.proposal_ref,
+    };
+    let err = run(
+        &elf,
+        &pid,
+        create_proposal_accounts(&f, f.proposal_ref, false),
+        &ix,
+    )
+    .expect_err("a proposal on a multisig nobody created must be rejected");
+    assert_rejected(err, 5003, "anchor");
+}
+
+/// Witness bytes that do not decode as an `ApproveWitness`.
+///
+/// The decode happens before any other check in `approve`, so a caller who
+/// sends garbage must get a specific, documented rejection rather than an
+/// opaque guest panic.
+#[test]
+fn an_undecodable_witness_is_rejected() {
+    let elf = elf();
+    let pid = program_id(&elf);
+    let f = Fixture::new(&pid);
+    let mut ix = f.approve_ix(0);
+    if let VerifierInstruction::Approve { witness_words, .. } = &mut ix {
+        // Structurally valid u32s, but not a risc0-serde ApproveWitness.
+        *witness_words = vec![0xDEAD_BEEF, 1, 2, 3];
+    }
+    let err = run(&elf, &pid, f.approve_accounts(0, true, true), &ix)
+        .expect_err("an undecodable witness must be rejected");
+    assert_rejected(err, 5001, "did not decode");
+}
+
+// ---------------------------------------------------------------------------
+// Attacks an audit pass asked for that the original suite did not cover
+// ---------------------------------------------------------------------------
+
+/// Replay: executing a proposal a second time.
+///
+/// The guard is `init` on the execution marker — LEZ refuses to claim an
+/// account that is no longer default-owned. Modelled here by presenting the
+/// marker already owned by this program, which is the state the first
+/// execution leaves it in.
+#[test]
+fn executing_the_same_proposal_twice_is_rejected() {
+    let elf = elf();
+    let pid = program_id(&elf);
+    let f = Fixture::new(&pid);
+    let mut accounts = f.execute_accounts(&[0, 2, 4]);
+    // The state after a first successful execution.
+    accounts[0] = owned_by(
+        pid,
+        public_pda(&pid, &[compute_execution_marker(&f.proposal_ref)]),
+    );
+    let err = run(&elf, &pid, accounts, &f.execute_ix(&[0, 2, 4]))
+        .expect_err("a proposal must not execute twice");
+    let msg = format!("{err:#}").to_lowercase();
+    assert!(
+        msg.contains("claim") || msg.contains("init") || msg.contains("default"),
+        "expected the init/claim guard to reject a replay, got: {msg}"
+    );
+}
+
+/// An approval marker earned on a *different multisig* must not count here.
+///
+/// `proposal_ref` folds in `multisig_id`, so the marker for the same member on
+/// the same proposal id under another multisig lands at a different address and
+/// fails the marker-derivation check.
+#[test]
+fn an_approval_marker_from_another_multisig_is_rejected() {
+    let elf = elf();
+    let pid = program_id(&elf);
+    let f = Fixture::new(&pid);
+
+    // Same member, same proposal id, same action bytes — different multisig.
+    let other_msig = [0xB0; 32];
+    let other_action = compute_action_hash(&other_msig, b"transfer 100 to the treasury");
+    let other_ref = compute_proposal_ref(&other_msig, &f.proposal_id, &other_action);
+    let other_nullifier = compute_approval_nullifier(&other_ref, &f.members[0].0);
+    let other_marker = compute_approval_marker(&other_ref, &other_nullifier);
+
+    let mut accounts = f.execute_accounts(&[0, 2, 4]);
+    accounts[4] = owned_by(pid, public_pda(&pid, &[other_marker]));
+    let err = run(&elf, &pid, accounts, &f.execute_ix(&[0, 2, 4]))
+        .expect_err("a marker from another multisig must not count");
+    assert_rejected(err, 5012, "not the marker");
+}
+
+/// Presenting *more* than the threshold is allowed — the check is `>=`, not
+/// `==`. Worth pinning as a test so a later tightening to `==` is a deliberate
+/// choice rather than an accident.
+#[test]
+fn presenting_more_approvals_than_the_threshold_is_accepted() {
+    let elf = elf();
+    let pid = program_id(&elf);
+    let f = Fixture::new(&pid);
+    // Threshold is 3; present 4 distinct members.
+    run(
+        &elf,
+        &pid,
+        f.execute_accounts(&[0, 1, 2, 3]),
+        &f.execute_ix(&[0, 1, 2, 3]),
+    )
+    .expect("more approvals than the threshold must still satisfy it");
+}
+
+/// A member of the set who was never in *this* multisig's committed root
+/// cannot approve, even with a structurally valid witness — because the root
+/// the statement names is checked against the anchored one by ownership.
+#[test]
+fn approving_with_a_witness_for_a_different_member_set_is_rejected() {
+    let elf = elf();
+    let pid = program_id(&elf);
+    let f = Fixture::new(&pid);
+
+    // Build a witness that is internally valid against an invented one-member
+    // root, then present it against this multisig's anchored config.
+    let outsider_msk = [0xCC; 32];
+    let outsider_id = 99u128;
+    let outsider_salt = [0xDD; 32];
+    let aid = derive_account_id(&derive_npk(&outsider_msk), outsider_id);
+    let leaf = compute_member_leaf(&aid, &outsider_salt);
+    let (fake_root, fake_paths) = build_member_tree(&[leaf]);
+    let nullifier = compute_approval_nullifier(&f.proposal_ref, &outsider_msk);
+
+    let instruction = ApproveInstruction {
+        witness: ApproveWitness {
+            msk: outsider_msk,
+            identifier: outsider_id,
+            salt: outsider_salt,
+            merkle_path: fake_paths[0].1.clone(),
+            leaf_index: fake_paths[0].0,
+        },
+        statement: ApproveStatement {
+            member_root: fake_root,
+            proposal_ref: f.proposal_ref,
+            nullifier,
+        },
+    };
+    let marker_seed = compute_approval_marker(&f.proposal_ref, &nullifier);
+    let forged_config = compute_config_hash(&fake_root, f.threshold);
+    let ix = VerifierInstruction::Approve {
+        witness_words: risc0_zkvm::serde::to_vec(&instruction).expect("encode"),
+        multisig_id: f.multisig_id,
+        config_hash: forged_config,
+        member_root: fake_root,
+        threshold: f.threshold,
+        proposal_ref: f.proposal_ref,
+        nullifier,
+        approval_marker_seed: marker_seed,
+    };
+    // The invented root resolves to a multisig PDA nobody ever created.
+    let accounts = vec![
+        uninitialised(public_pda(&pid, &[marker_seed])),
+        uninitialised(public_pda(&pid, &[f.multisig_id, forged_config])),
+        f.proposal_account(true),
+        signer([0xC1; 32]),
+    ];
+    let err = run(&elf, &pid, accounts, &ix)
+        .expect_err("membership in an invented set must not be usable");
+    assert_rejected(err, 5003, "anchor");
+}
+
+/// AUDIT PROBE: can a proposal be executed while naming a *different* multisig,
+/// one the attacker created with a lower threshold over the same member root?
+///
+/// `execute` takes `proposal_ref` as an argument and constrains the proposal
+/// account to that PDA. It also takes `multisig_id`/`config_hash` and constrains
+/// the multisig account to *those*. If nothing ties the two together, an
+/// attacker can pair a real 5-of-N proposal with a 1-of-N multisig they created
+/// themselves over the same member root, and execute it with one approval.
+#[test]
+fn executing_a_proposal_under_a_foreign_multisig_is_rejected() {
+    let elf = elf();
+    let pid = program_id(&elf);
+    let f = Fixture::new(&pid); // 3-of-5, proposal_ref bound to f.multisig_id
+
+    // The attacker's own multisig: same member root, threshold lowered to 1.
+    // Creating this is legitimate — anyone may create a multisig.
+    let attacker_msig = [0xEE; 32];
+    let attacker_threshold = 1u32;
+    let attacker_config = compute_config_hash(&f.member_root, attacker_threshold);
+
+    let ix = VerifierInstruction::Execute {
+        multisig_id: attacker_msig,
+        config_hash: attacker_config,
+        member_root: f.member_root,
+        threshold: attacker_threshold,
+        // ...but the proposal is the real one, from the honest 3-of-5 multisig.
+        proposal_ref: f.proposal_ref,
+        approval_nullifiers: vec![f.nullifier(0)],
+        execution_marker_seed: compute_execution_marker(&f.proposal_ref),
+    };
+    let accounts = vec![
+        uninitialised(public_pda(
+            &pid,
+            &[compute_execution_marker(&f.proposal_ref)],
+        )),
+        // The attacker's multisig PDA, which they really did create.
+        owned_by(pid, public_pda(&pid, &[attacker_msig, attacker_config])),
+        f.proposal_account(true),
+        signer([0xE1; 32]),
+        f.marker_account(0, true),
+    ];
+
+    let err = run(&elf, &pid, accounts, &ix).expect_err(
+        "a proposal must not be executable under a multisig it does not belong to: \
+         that would let anyone lower the threshold of any proposal",
+    );
+
+    // Caught by SPEL's address validation, before the program body runs: the
+    // proposal account is at [multisig_id_A, proposal_ref] and the arguments
+    // name multisig B, so the derived address does not match the one presented.
+    //
+    // This is precisely what putting `multisig_id` in the proposal's seeds buys.
+    // Before that change the same call SUCCEEDED — the probe that found it is
+    // the reason this test exists.
+    let msg = format!("{err:#}").to_lowercase();
+    assert!(
+        msg.contains("pdamismatch") && msg.contains("proposal"),
+        "expected the proposal address to be rejected, got: {msg}"
+    );
+}
+
+/// The approve-side half of the same attack: creating an approval marker for
+/// someone else's proposal while naming a multisig you control.
+///
+/// This was step 2 of the chain the audit probe uncovered — an outsider mints a
+/// valid-looking marker on a proposal they are not a member of, which step 3
+/// then counts. Binding the proposal address to its multisig closes both halves
+/// at once.
+#[test]
+fn approving_a_proposal_under_a_foreign_multisig_is_rejected() {
+    let elf = elf();
+    let pid = program_id(&elf);
+    let f = Fixture::new(&pid);
+
+    // The attacker's own 1-of-1 multisig over a set containing only themselves.
+    let attacker_msk = [0xF1; 32];
+    let attacker_id = 7u128;
+    let attacker_salt = [0xF2; 32];
+    let aid = derive_account_id(&derive_npk(&attacker_msk), attacker_id);
+    let (root, paths) = build_member_tree(&[compute_member_leaf(&aid, &attacker_salt)]);
+    let attacker_msig = [0xF3; 32];
+    let attacker_config = compute_config_hash(&root, 1);
+
+    // ...used to approve the honest multisig's proposal.
+    let nullifier = compute_approval_nullifier(&f.proposal_ref, &attacker_msk);
+    let marker_seed = compute_approval_marker(&f.proposal_ref, &nullifier);
+    let instruction = ApproveInstruction {
+        witness: ApproveWitness {
+            msk: attacker_msk,
+            identifier: attacker_id,
+            salt: attacker_salt,
+            merkle_path: paths[0].1.clone(),
+            leaf_index: paths[0].0,
+        },
+        statement: ApproveStatement {
+            member_root: root,
+            proposal_ref: f.proposal_ref,
+            nullifier,
+        },
+    };
+    let ix = VerifierInstruction::Approve {
+        witness_words: risc0_zkvm::serde::to_vec(&instruction).expect("encode"),
+        multisig_id: attacker_msig,
+        config_hash: attacker_config,
+        member_root: root,
+        threshold: 1,
+        proposal_ref: f.proposal_ref,
+        nullifier,
+        approval_marker_seed: marker_seed,
+    };
+    let accounts = vec![
+        uninitialised(public_pda(&pid, &[marker_seed])),
+        owned_by(pid, public_pda(&pid, &[attacker_msig, attacker_config])),
+        f.proposal_account(true),
+        signer([0xC9; 32]),
+    ];
+
+    let err = run(&elf, &pid, accounts, &ix)
+        .expect_err("an outsider must not mint a marker on someone else's proposal");
+    let msg = format!("{err:#}").to_lowercase();
+    assert!(
+        msg.contains("pdamismatch") && msg.contains("proposal"),
+        "expected the proposal address to be rejected, got: {msg}"
+    );
 }

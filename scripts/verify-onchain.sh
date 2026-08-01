@@ -78,8 +78,8 @@ else:                print('OWNED-BY-ANOTHER-PROGRAM')
 echo "multisig instance — its address anchors the member root AND the threshold"
 check "multisig" "$(python3 scripts/pda.py "$VERIFIER" "$MSIG_ID" "$CONFIG_HASH")"
 
-echo "proposal — its address anchors the exact action"
-check "proposal" "$(python3 scripts/pda.py "$VERIFIER" "$PROPOSAL_REF")"
+echo "proposal — its address anchors the exact action AND its multisig"
+check "proposal" "$(python3 scripts/pda.py "$VERIFIER" "$MSIG_ID" "$PROPOSAL_REF")"
 
 echo "approval markers — each is an approval whose membership proof the privacy"
 echo "circuit verified on chain, and none of them names a member"

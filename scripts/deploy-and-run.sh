@@ -13,7 +13,12 @@
 #
 # Env:
 #   SIGNER       Public account id that pays and authors (must be funded)
-#   APPROVER     Private account id that signs approvals (authorized)
+#   APPROVERS    Comma-separated Private account ids, ONE PER APPROVAL.
+#                Not one account reused: a privacy transaction consumes the
+#                approver's commitment, so a second approval submitted from the
+#                same account panics in the client-side circuit with
+#                "Invalid account_identities length" before it is ever sent.
+#                Create them with `wallet account new private`.
 #   MEMBERS      member set size          (default 5)
 #   THRESHOLD    approvals required       (default 3)
 #   SPEL_BIN     spel >= 0.6.0            (default: spel on PATH)
@@ -40,7 +45,12 @@ RPC="${SEQUENCER_URL:-https://testnet.lez.logos.co}"
 MEMBERS="${MEMBERS:-5}"
 THRESHOLD="${THRESHOLD:-3}"
 : "${SIGNER:?set SIGNER to a funded Public account id}"
-: "${APPROVER:?set APPROVER to an authorized Private account id}"
+: "${APPROVERS:?set APPROVERS to a comma-separated list of Private account ids, one per approval}"
+IFS=',' read -r -a APPROVER_LIST <<< "$APPROVERS"
+if [ "${#APPROVER_LIST[@]}" -lt "$THRESHOLD" ]; then
+  echo "need at least $THRESHOLD approver accounts, got ${#APPROVER_LIST[@]}" >&2
+  exit 1
+fi
 
 IDL=idl/multisig_verifier.idl.json
 VERIFIER=artifacts/programs/multisig_verifier.bin
@@ -112,10 +122,11 @@ for i in $(seq 0 $((THRESHOLD-1))); do
   echo "-- member $i"
   "$CLI" approve-args --dir "$WORK" --proposal-id "$PROP_ID" --member "$i" \
     --out "$WORK/approve_$i.args" | sed 's/^/   /'
-  # A privacy transaction spends the signer's commitment, so the approver's
-  # private account must be re-synced before each approval or its membership
-  # proof is stale and the sequencer drops the transaction.
+  # Re-sync before each approval: a privacy transaction spends commitments, and
+  # a stale view produces a proof the sequencer drops.
   "$WALLET_BIN" account sync-private >/dev/null 2>&1 || true
+  # One approver account per approval — see the APPROVERS note above.
+  APPROVER="${APPROVER_LIST[$i]}"
   # shellcheck disable=SC2046
   "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" --bin-membership "$MEMBERSHIP" \
     -- approve --approver "Private/$APPROVER" $(tr '\n' ' ' < "$WORK/approve_$i.args") \
@@ -127,16 +138,23 @@ done
 echo "[6/6] execute"
 "$CLI" status --dir "$WORK" --proposal-id "$PROP_ID"
 "$CLI" execute-args --dir "$WORK" --proposal-id "$PROP_ID" --out "$WORK/exec.args" >/dev/null
-# The trailing approval marker accounts, in the same order as the nullifiers.
+# The approval marker accounts, in the same order as the nullifiers.
+#
+# `approvals` is a variadic (rest) account, and spel parses those as ONE
+# comma-separated flag: spel-cli/src/tx.rs uses last_value(), so repeating
+# --approvals silently keeps only the last one and the program then rejects the
+# call with E_APPROVAL_COUNT_MISMATCH (5009) because the account count no longer
+# matches the nullifier count.
 MARKERS=""
 while read -r seed; do
   [ -z "$seed" ] && continue
-  ADDR=$("$SPEL_BIN" pda --program "$($SPEL_BIN program-id "$VERIFIER" | awk -F': *' '/hex/{print $2;exit}')" "$seed")
-  MARKERS="$MARKERS --approvals $ADDR"
+  ADDR=$(python3 scripts/pda.py "$VERIFIER" "$seed")
+  MARKERS="${MARKERS:+$MARKERS,}$ADDR"
 done < "$WORK/exec.markers"
 # shellcheck disable=SC2046,SC2086
 "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" \
-  -- execute --executor "Public/$SIGNER" $(tr '\n' ' ' < "$WORK/exec.args") $MARKERS \
+  -- execute --executor "Public/$SIGNER" --approvals "$MARKERS" \
+  $(tr '\n' ' ' < "$WORK/exec.args") \
   2>&1 | tee "$WORK/exec.out" | tail -3
 EXEC_TX=$(grep -oE '[0-9a-f]{64}' "$WORK/exec.out" | head -1)
 [ -n "$EXEC_TX" ] && wait_tx "$EXEC_TX" "execute"

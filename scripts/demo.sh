@@ -49,13 +49,16 @@ rule "1. the seven bindings, in the circuit"
 echo "25 adversarial tests over the approval logic: non-members, borrowed paths,"
 echo "invented roots, forged nullifiers, bait-and-switch actions, padding leaves,"
 echo "and a member listed twice still getting exactly one vote."
-cargo test -p multisig-core --quiet 2>&1 | tail -4
+cargo test -p multisig-core --quiet 2>&1 \
+  | grep -E 'test result' | grep -v ' 0 passed' | sed 's/^/   /'
 
 rule "2. the on-chain checks, through the sequencer's executor"
 echo "28 tests against the built verifier binary: four honest controls, one per"
 echo "instruction, and 22 attacks each required to be rejected with its documented"
 echo "error code — including the threshold bypass a third audit pass found."
-cargo test -p multisig-verifier-tests --quiet 2>&1 | tail -4
+echo "Plus 2 that pin the verifier to the exact membership binary it chains to."
+cargo test -p multisig-verifier-tests --quiet 2>&1 \
+  | grep -E 'test result' | grep -v ' 0 passed' | sed 's/^/   /'
 
 rule "3. a 3-of-5 multisig, client side"
 cargo build --release --quiet -p multisig-cli

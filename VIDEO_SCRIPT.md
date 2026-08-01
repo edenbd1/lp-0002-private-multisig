@@ -97,7 +97,7 @@ Si oui → QuickTime → Screen Recording → Démarre. Sinon → stop, prévien
 
 **💬 SAY** :
 
-> "Twenty-five adversarial tests on the circuit logic — non-members, borrowed Merkle paths, invented member sets, forged nullifiers. Then twenty-eight more against the *built binary*, run through the sequencer's own executor. Same executor, same input order, same thirty-two megabyte session limit the chain applies. A rejection you see there is the rejection the chain performs."
+> "Twenty-five adversarial tests on the circuit logic — non-members, borrowed Merkle paths, invented member sets, forged nullifiers. Then twenty-eight more against the *built binary*, run through the sequencer's own executor. Same executor, same input order, same thirty-two megabyte session limit the chain applies. A rejection you see there is the rejection the chain performs. Plus two that pin the verifier to the exact membership binary it chains to, so it can't be swapped."
 
 **🎬 ACTION** : Scrolle sur `== 6.` puis `== 7.`
 

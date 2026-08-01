@@ -161,7 +161,7 @@ fn session(
     b.write(&caller)?;
     b.write(&pre)?;
     b.write(&data)?;
-    Ok(default_executor().execute(b.build()?, elf)?)
+    default_executor().execute(b.build()?, elf)
 }
 
 fn assert_rejected(err: anyhow::Error, code: u32, keyword: &str) {
@@ -185,11 +185,13 @@ struct Fixture {
     threshold: u32,
     config_hash: [u8; 32],
     proposal_id: [u8; 32],
-    action_hash: [u8; 32],
     proposal_ref: [u8; 32],
-    /// `(msk, identifier, salt, leaf_index, siblings)` per member.
-    members: Vec<([u8; 32], u128, [u8; 32], u64, Vec<[u8; 32]>)>,
+    members: Vec<TestMember>,
 }
+
+/// One member's private data plus their Merkle authentication path:
+/// `(msk, identifier, salt, leaf_index, siblings)`.
+type TestMember = ([u8; 32], u128, [u8; 32], u64, Vec<[u8; 32]>);
 
 impl Fixture {
     fn new(verifier: &ProgramId) -> Self {
@@ -227,7 +229,6 @@ impl Fixture {
             threshold,
             config_hash,
             proposal_id,
-            action_hash,
             proposal_ref,
             members,
         }

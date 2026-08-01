@@ -111,7 +111,18 @@ rule "10. compute cost"
 cargo test -p multisig-verifier-tests --quiet -- --ignored --nocapture 2>&1 \
   | grep -E 'approve |execute ' | sed 's/^/   /'
 
-rule "11. the live deployment, read straight off the chain"
+rule "11. the Basecamp package"
+if [ -f app/lp-0002-multisig.lgx ]; then
+  echo "The committed .lgx, with its own manifest hashes recomputed from its"
+  echo "contents — so the package is checked, not just present."
+  python3 scripts/package-lgx.py --verify app/lp-0002-multisig.lgx | sed 's/^/   /'
+else
+  echo "app/lp-0002-multisig.lgx missing. Build it with:"
+  echo "  cd app && cmake -B build -S . -DCMAKE_PREFIX_PATH=\$(brew --prefix qt) && cmake --build build"
+  echo "  python3 scripts/package-lgx.py"
+fi
+
+rule "12. the live deployment, read straight off the chain"
 echo "The multisig above is local. This checks the one that is actually deployed:"
 echo "its manifest is committed under artifacts/testnet/, so anyone can re-run this."
 echo

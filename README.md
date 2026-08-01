@@ -143,6 +143,31 @@ sessions.
 guest lockfiles; `4.4.2` breaks the guest toolchain with *"rustc 1.88.0-dev is
 not supported"*.
 
+## Live on the public LEZ testnet
+
+A **2-of-3** multisig, created, proposed, approved to threshold on the
+privacy-preserving path, and executed. Every hash is live — check any of them
+with `getTransaction` against `https://testnet.lez.logos.co`.
+
+| Step | Transaction |
+|---|---|
+| deploy `membership_lez` | `64098974b7d28f4facf1218e771d27c6163f7fb7ce3bd4f218df6db42ace6dde` |
+| deploy `multisig_verifier` | `dd8d0dc2206712468c163a018d40323fc953284401670ed43f9bad87f28bba69` |
+| `create_multisig` | `109d8b42922e435268c31f8ba3f474c77b6b143488ac1137a90bca122e733791` |
+| `create_proposal` | `4e0524446e074004b4f703c9d4c122c952c03a8b1cfbecbf1b987ffb18bf8fb6` |
+| `approve` A (privacy tx) | `ead4460536488d41c0f23ebc0d1b8c3074142ebd425ca085f26e91e294094486` |
+| `approve` B (privacy tx) | `c2fddecd9624fa9dd7c3734895eaf6027adbf44c49e7f8457bb0563fc9ae10b9` |
+| `execute` | `f1ccbe5145b804ec43f0579a3dc3fd482eb30029992ca2b35e460caa34b6371f` |
+
+The two approval markers — `3SuRQe4gpDBMic5evbtsdXTHaSCCYhqT4GuLr7TFboF2` and
+`ECfwebcZyv2Vju3Fu2Q1mceu6E8yBtjLkXaGSNDS581r` — and the execution marker
+`HaHrL1NPcjy2e4HBHP4Nq7gp7BXJd57jfSvUhi3y9fjo` are all owned by the verifier
+program. Neither approval marker could exist without a membership proof having
+been verified on chain, and neither names a member.
+
+Full detail, including how to re-verify each one yourself, in
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 ## Programs
 
 | Program | ImageID |

@@ -2,14 +2,61 @@
 
 ## Status
 
-**The programs are built and their identities are pinned below. The public-testnet
-lifecycle has not yet been run.** This page will carry the transaction hashes when
-it has; nothing here claims an on-chain fact that is not yet true.
+**Deployed, and the full lifecycle has been run on the public LEZ testnet.**
+Every hash below is live; re-check any of them with `getTransaction` against
+`https://testnet.lez.logos.co`.
 
-Everything that does not need a funded account is done and reproducible today:
-both guests build, the verifier is exercised against the sequencer's own executor
-by 15 adversarial tests, and `scripts/demo.sh` runs the full lifecycle end to end
-from a clean clone.
+## The lifecycle, on chain
+
+A **2-of-3** multisig: created, a proposal published, two approvals gathered on
+the privacy-preserving path, and executed.
+
+| Step | Transaction |
+|---|---|
+| deploy `membership_lez` | `64098974b7d28f4facf1218e771d27c6163f7fb7ce3bd4f218df6db42ace6dde` |
+| deploy `multisig_verifier` | `dd8d0dc2206712468c163a018d40323fc953284401670ed43f9bad87f28bba69` |
+| `create_multisig` | `109d8b42922e435268c31f8ba3f474c77b6b143488ac1137a90bca122e733791` |
+| `create_proposal` | `4e0524446e074004b4f703c9d4c122c952c03a8b1cfbecbf1b987ffb18bf8fb6` |
+| `approve` (member A, **privacy tx**) | `ead4460536488d41c0f23ebc0d1b8c3074142ebd425ca085f26e91e294094486` |
+| `approve` (member B, **privacy tx**) | `c2fddecd9624fa9dd7c3734895eaf6027adbf44c49e7f8457bb0563fc9ae10b9` |
+| `execute` | `f1ccbe5145b804ec43f0579a3dc3fd482eb30029992ca2b35e460caa34b6371f` |
+
+Multisig id `ebbb2ec23288ffbe6c8fdd2c35eac05e621a1081b07caef0265976606b3bb0f5`,
+member root `ed7da38f7f730d34dfdaaf28b08d5c16ad53b28b93367bfa732b62e21a20634c`,
+config hash `763f849ca5067a6b3dc0e163b04adad8ef413d166fc0b9c124652dc99699d34d`
+(which is what anchors the root *and* the threshold in the multisig's address).
+The action was `transfer 100 LEZ to the grants treasury`.
+
+## The accounts, and what they prove
+
+All five are owned by the verifier program
+(`2878411f,0c38e26e,efaa31b0,f73b079e,3be3ccbd,6d71006e,68f5bcf5,24ee3062`).
+Read them yourself with `./scripts/verify-onchain.sh`, or derive the addresses
+with `scripts/pda.py` and query `getAccount`.
+
+| Account | Address |
+|---|---|
+| multisig | `4nf2HZtLRKCJh6eJHcsntgCntRXktMXxUw1BCwKhFvdR` |
+| proposal | `4eWzzaDj668TCMyMC7BsWhZjVUKKm2SJ4kByThn2G9AZ` |
+| approval marker A | `3SuRQe4gpDBMic5evbtsdXTHaSCCYhqT4GuLr7TFboF2` |
+| approval marker B | `ECfwebcZyv2Vju3Fu2Q1mceu6E8yBtjLkXaGSNDS581r` |
+| execution marker | `HaHrL1NPcjy2e4HBHP4Nq7gp7BXJd57jfSvUhi3y9fjo` |
+
+**The two approval markers are the whole claim.** Each exists only because
+`approve` ran and claimed it; `approve` declares a `ChainedCall` to
+`membership_lez`; and on the privacy path LEZ's circuit composes that call with a
+real `env::verify` whose receipt the sequencer checks against the node-pinned
+`PRIVACY_PRESERVING_CIRCUIT_ID`. So neither marker could exist without a
+membership proof having been verified on chain.
+
+Their addresses are `SHA256(prefix ‖ proposal_ref ‖ nullifier)` where each
+nullifier is `SHA256(prefix ‖ proposal_ref ‖ msk)` for a member secret. Nothing
+in the pair names a member. Read the accounts and you learn that two distinct
+members approved, and nothing about which two.
+
+The execution marker exists only because `execute` re-derived both marker
+addresses from the nullifiers it was handed, found the verifier owns both, and
+counted them against the threshold anchored in the multisig's address.
 
 ## Built artifacts
 
@@ -58,13 +105,14 @@ rebuilding.
 ```bash
 export LEE_WALLET_HOME_DIR=~/.lee/wallet
 export SIGNER=<funded Public account id>
-export APPROVER=<authorized Private account id>
+# ONE private account per approval, comma separated — see the warning below.
+export APPROVERS=<private-id-1>,<private-id-2>,<private-id-3>
 
 ./scripts/deploy-and-run.sh
 ```
 
-It deploys both programs, creates a 3-of-5 multisig, publishes a proposal,
-gathers three approvals on the privacy-preserving path, and executes. Every
+It deploys both programs, creates a multisig, publishes a proposal, gathers
+`THRESHOLD` approvals on the privacy-preserving path, and executes. Every
 transaction hash is appended to `.testnet/lifecycle.tsv`.
 
 **Budget several hours.** Proving one approval with `RISC0_DEV_MODE=0` takes
@@ -76,10 +124,22 @@ and `THRESHOLD` to shrink it.
 > anyway. The script polls `getTransaction` rather than trusting the CLI's
 > verdict, and so should you.
 
-> A privacy transaction spends the signer's commitment, so the approver's private
-> account must be re-synced (`wallet account sync-private`) before each approval,
-> or its membership proof is stale and the sequencer drops the transaction. The
-> script does this between approvals.
+> **Use a different private account for each approval.** A privacy transaction
+> consumes the approver's commitment, so a second approval submitted from the
+> same account fails in the *client-side* circuit, before anything is sent, with
+>
+> ```
+> Guest panicked: assertion `left == right` failed: Invalid account_identities length
+>   left: 4
+>  right: 3
+> ```
+>
+> Create them with `wallet account new private`. This also matches how a real
+> deployment works: each member submits from their own account.
+
+> Re-sync (`wallet account sync-private`) before each approval as well: a privacy
+> transaction spends commitments, and a stale view produces a proof the sequencer
+> drops. The script does both.
 
 ## Verifying independently
 
@@ -111,8 +171,24 @@ spel --idl idl/multisig_verifier.idl.json \
 `create_multisig`, `create_proposal` and `execute` take a `Public/` authority and
 need no `--bin-` registration: they declare no chained call.
 
+`execute` takes its approval marker accounts as a **single comma-separated
+flag**:
+
+```bash
+spel --idl idl/multisig_verifier.idl.json \
+     --program artifacts/programs/multisig_verifier.bin \
+     -- execute --executor Public/<signer> \
+        --approvals <markerA>,<markerB> $(cat exec.args)
+```
+
+Repeating `--approvals` does **not** work and fails in a way that looks like a
+program bug: `spel-cli/src/tx.rs` resolves variadic accounts with `last_value()`,
+so only the final flag survives. The program then sees fewer accounts than
+nullifiers and correctly rejects with `E_APPROVAL_COUNT_MISMATCH` (5009).
+
 Argument encoding, since it is easy to get wrong:
 
 - fixed `[u8; 32]` arguments take **hex**
 - `Vec<u32>` (`--witness-words`) takes **comma-separated decimals**
 - `Vec<[u8; 32]>` (`--approval-nullifiers`) takes **comma-separated hex**
+- variadic accounts (`--approvals`) take **one comma-separated flag**

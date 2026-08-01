@@ -6,3 +6,5 @@ _external/
 
 /.demo/
 /.testnet/
+/.wallet/
+/_external/

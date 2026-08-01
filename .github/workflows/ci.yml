@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  # No mock receipts anywhere in CI.
+  RISC0_DEV_MODE: 0
+
+jobs:
+  # Host crates: formatting, lints, and the circuit-side adversarial suite.
+  workspace:
+    name: workspace (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The prize template requires both, and the evaluator reviews on a Linux
+        # VPS. Building on both here is the only way to know it holds.
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Build
+        run: cargo build --workspace --release
+
+      - name: Circuit-side adversarial tests
+        run: cargo test -p multisig-core -p multisig-sdk
+
+      - name: CLI lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          M=target/release/msig
+          W=$(mktemp -d)
+          P=0000000000000000000000000000000000000000000000000000000000000001
+          $M new-multisig --members 5 --threshold 3 --out "$W"
+          $M propose --dir "$W" --proposal-id $P --action "transfer 100 to the treasury"
+          for i in 0 3 4; do
+            $M approve-args --dir "$W" --proposal-id $P --member $i --out "$W/a$i.args"
+          done
+          $M status --dir "$W" --proposal-id $P
+          $M execute-args --dir "$W" --proposal-id $P --out "$W/exec.args"
+          echo "-- a double approval must be refused"
+          if $M approve-args --dir "$W" --proposal-id $P --member 0 --out "$W/dup.args"; then
+            echo "FAIL: a double approval was accepted"; exit 1
+          fi
+          echo "-- swapping the action under the same id must be refused"
+          if $M propose --dir "$W" --proposal-id $P --action "transfer 1000000 to the attacker"; then
+            echo "FAIL: the action was swapped"; exit 1
+          fi
+          echo "-- state survives a restart"
+          test -f "$W/proposals/$P.json"
+
+  # The on-chain half: run the committed verifier binary through the sequencer's
+  # own executor and require every forgery to be rejected. This is the
+  # e2e-against-sequencer job — same executor, same input order, same 32M
+  # session limit the chain applies.
+  verifier:
+    name: verifier vs sequencer executor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Programs are committed
+        run: |
+          test -f artifacts/programs/multisig_verifier.bin
+          test -f artifacts/programs/membership_lez.bin
+
+      - name: Adversarial suite against the built binary
+        run: cargo test -p multisig-verifier-tests
+
+      - name: Report compute cost
+        run: cargo test -p multisig-verifier-tests -- --ignored --nocapture
+
+  # The verifier hard-codes MEMBERSHIP_LEZ_PROGRAM_ID so a chained call can only
+  # reach the audited membership binary. Drift is a security bug, so it fails CI.
+  program-id-pin:
+    name: membership program id pin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install spel
+        run: cargo install --git https://github.com/logos-co/spel.git --tag v0.6.0 spel-cli
+
+      - name: Verify the pin matches the committed binary
+        run: ./scripts/build-programs.sh --check

@@ -1,0 +1,138 @@
+# LP-0002 — Private M-of-N Multisig for the Logos Execution Zone
+
+A threshold multisig where members hold shielded accounts, approvals leave no
+public trace of who voted, and the chain records only that a threshold was met —
+not which members met it. **Including from the other members.**
+
+Submission for [λPrize LP-0002](https://github.com/logos-co/lambda-prize/blob/master/prizes/LP-0002.md).
+
+---
+
+## What makes this different
+
+**The membership proof is genuinely verified on chain.** A LEZ *public*
+transaction proves and verifies nothing — the sequencer re-executes the program
+host-side (`lee/state_machine/src/program.rs:73-77`, commented *"Execute the
+program (without proving)"*). A multisig built on that path is a signature check
+wearing a zero-knowledge costume. This one targets the privacy-preserving path,
+where LEZ's circuit composes each chained call with a real `env::verify`
+(`lee/privacy_preserving_circuit/src/execution_state.rs:149`) and the sequencer
+checks the receipt against the node-pinned `PRIVACY_PRESERVING_CIRCUIT_ID`.
+
+**The member set and the threshold are anchored by address.** The multisig
+account is a PDA seeded by `[multisig_id, config_hash]` where
+`config_hash = H(member_root ‖ threshold)`. An invented member set, or a
+threshold lowered at execution time, resolves to an address nobody ever
+initialised. There is no code path that reads a threshold from caller-supplied
+data.
+
+**Approvals bind to the exact action.** `proposal_ref` commits to
+`(multisig_id, proposal_id, action_hash)`. Approvals gathered for a benign
+action are worthless for a malicious one published under the same proposal id —
+and, symmetrically, a junk action cannot burn the real proposal's markers.
+
+**M markers are M distinct members.** Each marker address is a function of a
+secret-bound nullifier, so two addresses imply two secrets. `execute` checks
+pairwise distinctness, checks each account is the marker PDA for the nullifier it
+was paired with *on this proposal*, and checks the verifier owns it — which it
+can only do if a membership proof was verified on chain.
+
+---
+
+## Quick start
+
+```bash
+git clone https://github.com/edenbd1/lp-0002-private-multisig
+cd lp-0002-private-multisig
+./scripts/demo.sh
+```
+
+No network, no funded account, no sequencer required. The demo runs the 22
+circuit tests, the 15 adversarial tests against the built verifier binary through
+the sequencer's own executor, a full 3-of-5 lifecycle, and reports the measured
+compute cost.
+
+To rebuild the on-chain programs (needs Docker and `cargo-risczero`):
+
+```bash
+./scripts/build-programs.sh
+```
+
+---
+
+## The lifecycle
+
+```bash
+msig new-multisig --members 5 --threshold 3 --out ms/
+msig create-multisig-args --dir ms/ --out ms/create.args
+msig propose --dir ms/ --proposal-id 01..01 --action "transfer 100 to the treasury"
+msig create-proposal-args --dir ms/ --proposal-id 01..01 --out ms/prop.args
+msig approve-args --dir ms/ --proposal-id 01..01 --member 0 --out ms/a0.args
+msig approve-args --dir ms/ --proposal-id 01..01 --member 3 --out ms/a3.args
+msig approve-args --dir ms/ --proposal-id 01..01 --member 4 --out ms/a4.args
+msig status --dir ms/ --proposal-id 01..01
+msig execute-args --dir ms/ --proposal-id 01..01 --out ms/exec.args
+```
+
+Each `.args` file is submitted with `spel`; see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+A member who holds only their own key uses `--msk <hex>` instead of `--member <i>`.
+
+Partial approvals are recorded in `ms/proposals/<id>.json` as they are generated,
+so a threshold can be gathered across restarts, days, and separate member
+sessions.
+
+---
+
+## Layout
+
+| Path | What |
+|---|---|
+| `crates/multisig-core` | Shared primitives and the in-circuit approval logic. `no_std`. 22 adversarial tests |
+| `crates/membership-circuit/methods/guest-lez` | The membership proof as a native LEZ program, so the privacy circuit composes it with `env::verify` |
+| `crates/multisig-verifier-spel/methods/guest` | The on-chain verifier: `create_multisig`, `create_proposal`, `approve`, `execute` |
+| `crates/multisig-verifier-tests` | 15 adversarial tests against the built binary, through the sequencer's own executor |
+| `crates/multisig-sdk` | The reusable client library for Logos modules. Transport-agnostic |
+| `crates/multisig-cli` | `msig`, the command line client |
+| `app/` | The Basecamp GUI |
+| `idl/` | The SPEL IDL, generated from source |
+| `scripts/` | Build, demo, testnet lifecycle, on-chain verification |
+
+## Documentation
+
+- **[docs/security.md](docs/security.md)** — the threat model, what is hidden
+  from whom, what is deliberately public, and the residual risks
+- [docs/error-codes.md](docs/error-codes.md) — every rejection, the attack it
+  stops, the test that proves it
+- [docs/cu-costs.md](docs/cu-costs.md) — measured compute cost per instruction
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — deployed program ids, transaction
+  hashes, and how to verify them independently
+- [app/README.md](app/README.md) — building and loading the Basecamp app
+
+## Toolchain
+
+| Component | Version |
+|---|---|
+| LEZ | `v0.2.0` |
+| SPEL | `v0.6.0` |
+| risc0 | `3.0.5` |
+| Rust (host) | stable |
+| Rust (guest) | `1.88` via `cargo risczero` Docker |
+
+`enum-ordinalize` and `enum-ordinalize-derive` are pinned to `4.3.2` in both
+guest lockfiles; `4.4.2` breaks the guest toolchain with *"rustc 1.88.0-dev is
+not supported"*.
+
+## Programs
+
+| Program | ImageID |
+|---|---|
+| `membership_lez` | `a48ecc5289404ad01fd6d6fd1d79eaebb8d2f0fe4f2dc2ebbc85003ee82af3d6` |
+| `multisig_verifier` | `1f4178286ee2380cb031aaef9e073bf7bdcce33b6e00716df5bcf5686230ee24` |
+
+The verifier pins the membership program id as a constant, so a chained call can
+only ever reach the audited binary. `./scripts/build-programs.sh --check` fails if
+the two drift.
+
+## Licence
+
+MIT or Apache-2.0, at your option.

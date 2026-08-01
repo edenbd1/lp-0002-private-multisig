@@ -1,0 +1,22 @@
+{
+  "name": "lp_0002_multisig",
+  "version": "0.1.0",
+  "description": "Private M-of-N multisig — approve a proposal from inside Basecamp by proving membership, without revealing which member you are, to observers or to the other members",
+  "author": "edenbd1",
+  "type": "ui",
+  "main": "lp_0002_multisig",
+  "dependencies": [],
+  "category": "privacy",
+  "build": {
+    "type": "cmake",
+    "files": [
+      "src/plugin.cpp",
+      "src/plugin.h",
+      "src/multisig_bridge.cpp",
+      "src/multisig_bridge.h",
+      "qml/Main.qml",
+      "qml/qmldir",
+      "src/metadata.json"
+    ]
+  }
+}

@@ -74,6 +74,47 @@ in the binary — `com.networkschool.logos.IComponent/1.0` and
 The approval list shows marker addresses, never member names — because that is
 all the chain records, and all the other members can see.
 
+## Packaged asset
+
+`app/lp-0002-multisig.lgx` (493 KB, SHA-256 `f0866b491dc112197af999c94efd263f2063162358b7710bad4299133933912b`) is the packaged module,
+carrying the `darwin-arm64` variant: the plugin dylib, the QML view, the module
+metadata, and the `msig` CLI the bridge drives. Drop it into Basecamp's
+user-plugins directory (`~/Library/Application Support/Logos/LogosBasecampDev/plugins/`
+on macOS) to load it.
+
+Verify the package matches its own manifest:
+
+```bash
+python3 scripts/package-lgx.py --verify app/lp-0002-multisig.lgx
+```
+
+### How it was packaged, and why not with Nix
+
+The reference path is `logos-module-builder`'s `logos_module()` macro inside its
+Nix dev shell, which calls `lgx create` from
+[`logos-co/logos-package`](https://github.com/logos-co/logos-package). That
+remains the canonical tool.
+
+This package was produced by `scripts/package-lgx.py`, which implements the same
+format directly, because Nix was not available on the build machine and shipping
+no `.lgx` was not an acceptable answer. It is not reverse-engineered by guessing:
+the manifest hash scheme is transcribed from `logos-package`'s
+`src/crypto/signing.cpp` (`computeDirectoryHash` / `computeParentDirectoryHash`),
+and **the script refuses to write a package unless that transcription still
+reproduces the manifests of two packages built by the real tool** — LP-0003's and
+LP-0005's. Run the check on its own:
+
+```bash
+python3 scripts/package-lgx.py --self-test
+```
+
+If Nix is available, prefer the reference path:
+
+```bash
+LOGOS_MODULE_BUILDER_ROOT=/path/to/logos-module-builder cmake -B build
+cmake --build build
+```
+
 ## Files
 
 | File | What |

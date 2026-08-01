@@ -1,0 +1,40 @@
+# SPEL guest for the LP-0002 on-chain multisig verifier. Anchors the member set
+# and the threshold on chain by PDA address, and chains to the LEZ-native
+# membership program so each approval is genuinely verified on the
+# privacy-preserving path.
+[workspace]
+
+[package]
+name        = "multisig-verifier-guest"
+version     = "0.1.0"
+edition     = "2021"
+license     = "MIT OR Apache-2.0"
+publish     = false
+
+[[bin]]
+name = "multisig_verifier"
+path = "src/bin/multisig_verifier.rs"
+
+[dependencies]
+spel-framework = { git = "https://github.com/logos-co/spel.git", tag = "v0.6.0" }
+# spel-framework's macro emits `nssa_core::` paths, so lee_core must be in scope
+# under that name. Same aliasing spel itself uses.
+nssa_core      = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", features = ["host"], package = "lee_core" }
+risc0-zkvm     = { version = "=3.0.5", default-features = false, features = ["std"] }
+
+multisig-core = { path = "../../../multisig-core", default-features = false }
+
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+sha2  = { version = "0.10", default-features = false }
+
+# Pinned for the risc0 guest toolchain (rustc 1.88-dev).
+ruint = "=1.17.2"
+
+[patch.crates-io]
+sha2 = { git = "https://github.com/risc0/RustCrypto-hashes.git", tag = "sha2-v0.10.8-risczero.0" }
+
+[profile.release]
+opt-level     = 3
+lto           = "thin"
+codegen-units = 1
+panic         = "abort"

@@ -1,0 +1,457 @@
+// LP-0002 on-chain private M-of-N multisig verifier.
+//
+// WHAT MAKES THE THRESHOLD REAL ON CHAIN
+//
+// A LEZ public transaction re-executes rather than proves
+// (`lee/state_machine/src/program.rs:73-77`), so no program on the public path
+// can verify a membership proof. This program targets the privacy-preserving
+// path, where LEZ's circuit composes each chained call with a real `env::verify`
+// over the callee's `ProgramOutput`
+// (`lee/privacy_preserving_circuit/src/execution_state.rs:149`) and the sequencer
+// checks the receipt against the pinned `PRIVACY_PRESERVING_CIRCUIT_ID`. The
+// `approve` instruction declares a ChainedCall to the LEZ-native membership
+// program, so membership is genuinely verified on chain as a precondition of the
+// transaction being accepted.
+//
+// WHY THE MEMBER SET AND THE THRESHOLD ARE ANCHORED BY ADDRESS
+//
+// A membership proof establishes membership against whatever root the statement
+// names. On its own that is not enough: an attacker could invent a one-leaf tree
+// holding themselves. The multisig account is a PDA whose address derives from
+// `[multisig_id, config_hash]`, and `config_hash = H(member_root || threshold)`.
+// `create_multisig` initialises exactly that PDA, so it becomes owned by this
+// program. Every other instruction references the multisig as the PDA for the
+// `(multisig_id, config_hash)` it was handed, and requires it to be owned by
+// this program. An invented root, or a lowered threshold, gives a different
+// config hash, hence a different PDA address that was never initialised, whose
+// owner is the default — and the instruction is rejected.
+//
+// The same trick anchors the proposal: its PDA address is `proposal_ref`, which
+// commits to `(multisig_id, proposal_id, action_hash)`. Approvals are therefore
+// bound to the exact action, and a bait-and-switch under the same proposal id
+// lands on a different, unapproved address.
+//
+// PRIVACY AND UNLINKABILITY
+//
+// A privacy `Message` publishes neither `program_id` nor `instruction_data`
+// (`privacy_preserving_transaction/message.rs:14-24`). The only public trace an
+// approval leaves is the marker PDA, seeded by
+// `SHA256(APPROVAL_MARKER_PREFIX || proposal_ref || nullifier)`. The nullifier is
+// `SHA256(APPROVAL_NULLIFIER_PREFIX || proposal_ref || msk)`, a function of the
+// member's secret, so an observer who knows every member of the set — including
+// the other members — still cannot link a marker to one of them. Claiming the
+// marker requires it to be uninitialised, which is the double-approval guard: a
+// second approval by the same member on the same proposal targets the same
+// address and fails.
+//
+// The execution is likewise unlinkable: it consumes marker addresses, never
+// member identities, and the executor need not be a member at all.
+
+#![no_main]
+
+use spel_framework::prelude::*;
+
+risc0_zkvm::guest::entry!(main);
+
+// ---------------------------------------------------------------------------
+// Error codes. Deterministic and stable: an integration may branch on these.
+// Documented in docs/error-codes.md.
+// ---------------------------------------------------------------------------
+
+/// The witness bytes did not decode as an `ApproveWitness`.
+const E_BAD_WITNESS: u32 = 5001;
+/// `config_hash` is not `H(member_root || threshold)` for the supplied pair.
+const E_CONFIG_MISMATCH: u32 = 5002;
+/// No multisig is committed at this `(multisig_id, config_hash)`: the member set
+/// or the threshold is not anchored.
+const E_MULTISIG_NOT_ANCHORED: u32 = 5003;
+/// No proposal is committed at this `proposal_ref`.
+const E_PROPOSAL_NOT_ANCHORED: u32 = 5004;
+/// The supplied nullifier is not the one the witness yields.
+const E_NULLIFIER_MISMATCH: u32 = 5005;
+/// A marker seed does not commit to the proposal and nullifier it claims to.
+const E_MARKER_SEED_MISMATCH: u32 = 5006;
+/// `proposal_ref` is not `H(multisig_id || proposal_id || action_hash)`.
+const E_PROPOSAL_REF_MISMATCH: u32 = 5007;
+/// A threshold of zero would make the multisig meaningless.
+const E_BAD_THRESHOLD: u32 = 5008;
+/// Fewer approval accounts than nullifiers, or vice versa.
+const E_APPROVAL_COUNT_MISMATCH: u32 = 5009;
+/// Fewer distinct approvals than the anchored threshold.
+const E_THRESHOLD_NOT_MET: u32 = 5010;
+/// The same nullifier was presented twice in one execution.
+const E_DUPLICATE_APPROVAL: u32 = 5011;
+/// An approval account is not the marker PDA for the nullifier it was paired
+/// with, or not for this proposal.
+const E_APPROVAL_NOT_FOR_PROPOSAL: u32 = 5012;
+/// An approval marker exists at the right address but was never claimed by this
+/// program, so no membership proof was ever verified for it.
+const E_APPROVAL_NOT_ANCHORED: u32 = 5013;
+
+/// ProgramId of the LEZ-native membership program (`membership_lez.bin`).
+/// The deployment is content-addressed, so this pins exactly the audited binary.
+///
+/// Verify with:
+///   spel program-id artifacts/programs/membership_lez.bin
+///
+/// Regenerated by `scripts/build-programs.sh`, which fails if this constant and
+/// the built binary disagree.
+pub const MEMBERSHIP_LEZ_PROGRAM_ID: nssa_core::program::ProgramId =
+    [0, 0, 0, 0, 0, 0, 0, 0];
+
+#[lez_program]
+mod multisig_verifier {
+    #[allow(unused_imports)]
+    use super::*;
+
+    /// Publish a multisig: commit to a member set and a threshold.
+    ///
+    /// Anyone can create a multisig; it is theirs, funded by them, and
+    /// independent of every other. What matters is that a given
+    /// `(multisig_id, config_hash)` maps to exactly one on-chain PDA, which
+    /// `init` guarantees by refusing to overwrite an existing account.
+    ///
+    /// Accounts:
+    /// - `multisig` (init, PDA seeded by `[multisig_id, config_hash]`): the
+    ///   on-chain commitment. Its address encodes the member root *and* the
+    ///   threshold, so nothing needs to be written into its data and neither
+    ///   can be altered later.
+    /// - `authority` (signer): the creator.
+    #[instruction]
+    pub fn create_multisig(
+        #[account(init, pda = [arg("multisig_id"), arg("config_hash")])]
+        multisig: AccountWithMetadata,
+        #[account(signer)] authority: AccountWithMetadata,
+        multisig_id: [u8; 32],
+        config_hash: [u8; 32],
+        member_root: [u8; 32],
+        threshold: u32,
+    ) -> SpelResult {
+        // A 0-of-N multisig would let anyone execute. Reject it at creation so
+        // no such instance can exist on chain.
+        if threshold == 0 {
+            return Err(SpelError::custom(
+                E_BAD_THRESHOLD,
+                "threshold must be at least 1",
+            ));
+        }
+
+        // Re-derive the commitment the PDA address encodes. The macro already
+        // constrains `multisig` to be the PDA for this `(id, config_hash)`; this
+        // check is what gives `config_hash` its meaning, tying the address to a
+        // specific member root and threshold rather than to opaque bytes.
+        let expected = multisig_core::compute_config_hash(&member_root, threshold);
+        if expected != config_hash {
+            return Err(SpelError::custom(
+                E_CONFIG_MISMATCH,
+                "config_hash does not commit to this (member_root, threshold)",
+            ));
+        }
+
+        Ok(SpelOutput::execute(vec![multisig, authority], vec![]))
+    }
+
+    /// Publish a proposal against an existing multisig.
+    ///
+    /// Accounts:
+    /// - `proposal` (init, PDA seeded by `proposal_ref`): the on-chain
+    ///   commitment to `(multisig_id, proposal_id, action_hash)`.
+    /// - `multisig` (PDA seeded by `[multisig_id, config_hash]`): required to be
+    ///   owned by this program, so a proposal cannot be attached to a multisig
+    ///   that was never created.
+    /// - `authority` (signer): the proposer. Deliberately unrestricted — a
+    ///   proposal on its own grants nothing; only M approvals do.
+    #[instruction]
+    pub fn create_proposal(
+        #[account(init, pda = arg("proposal_ref"))] proposal: AccountWithMetadata,
+        #[account(pda = [arg("multisig_id"), arg("config_hash")])]
+        multisig: AccountWithMetadata,
+        #[account(signer)] authority: AccountWithMetadata,
+        multisig_id: [u8; 32],
+        config_hash: [u8; 32],
+        proposal_id: [u8; 32],
+        action_hash: [u8; 32],
+        proposal_ref: [u8; 32],
+    ) -> SpelResult {
+        if multisig.account.program_owner == nssa_core::program::DEFAULT_PROGRAM_ID {
+            return Err(SpelError::custom(
+                E_MULTISIG_NOT_ANCHORED,
+                "no multisig is committed for this (id, config): it is not anchored",
+            ));
+        }
+
+        let expected =
+            multisig_core::compute_proposal_ref(&multisig_id, &proposal_id, &action_hash);
+        if expected != proposal_ref {
+            return Err(SpelError::custom(
+                E_PROPOSAL_REF_MISMATCH,
+                "proposal_ref does not commit to this (multisig, proposal, action)",
+            ));
+        }
+
+        Ok(SpelOutput::execute(
+            vec![proposal, multisig, authority],
+            vec![],
+        ))
+    }
+
+    /// Approve a proposal by proving membership in the committed member set,
+    /// without revealing which member.
+    ///
+    /// Accounts:
+    /// - `approval_marker` (init, PDA seeded by `approval_marker_seed`): the
+    ///   public, replay-guarded record that *some* member approved. Its address
+    ///   reveals nothing about who.
+    /// - `multisig` (PDA seeded by `[multisig_id, config_hash]`): the anchored
+    ///   member set and threshold. Required to be owned by this program, so an
+    ///   invented root, whose PDA was never initialised, is rejected.
+    /// - `proposal` (PDA seeded by `proposal_ref`): the anchored action.
+    /// - `approver` (signer): the account submitting the approval. Note this is
+    ///   *not* the member's identity — a member may submit from any account, and
+    ///   the proof binds the approval to the member's secret, not to this signer.
+    ///
+    /// Args:
+    /// - `witness_words`: the approval witness, risc0-serde encoded. Carried to
+    ///   the chained call. Safe only because a privacy transaction publishes no
+    ///   instruction data; this must never be invoked on the public path.
+    /// - the rest: the public statement the proof establishes.
+    #[instruction]
+    pub fn approve(
+        #[account(init, pda = arg("approval_marker_seed"))]
+        approval_marker: AccountWithMetadata,
+        #[account(pda = [arg("multisig_id"), arg("config_hash")])]
+        multisig: AccountWithMetadata,
+        #[account(pda = arg("proposal_ref"))] proposal: AccountWithMetadata,
+        #[account(signer)] approver: AccountWithMetadata,
+        witness_words: Vec<u32>,
+        multisig_id: [u8; 32],
+        config_hash: [u8; 32],
+        member_root: [u8; 32],
+        threshold: u32,
+        proposal_ref: [u8; 32],
+        nullifier: [u8; 32],
+        approval_marker_seed: [u8; 32],
+    ) -> SpelResult {
+        // 1. Decode the witness and rebuild the statement the proof establishes.
+        let witness: multisig_core::ApproveWitness = risc0_zkvm::serde::from_slice(&witness_words)
+            .map_err(|_| SpelError::custom(E_BAD_WITNESS, "witness_words did not decode"))?;
+
+        // 2. Tie `config_hash` to the member root the proof will be checked
+        //    against, and to the threshold the execution will be checked against.
+        let expected_config = multisig_core::compute_config_hash(&member_root, threshold);
+        if expected_config != config_hash {
+            return Err(SpelError::custom(
+                E_CONFIG_MISMATCH,
+                "config_hash does not commit to this (member_root, threshold)",
+            ));
+        }
+
+        // 3. Anchor the member set. The macro's
+        //    `pda = [multisig_id, config_hash]` constraint already guarantees
+        //    `multisig` is the PDA for exactly this config. Requiring it to be
+        //    owned by this program rejects an invented member set: only
+        //    `create_multisig` initialises these PDAs, so a fabricated root
+        //    lands on an uninitialised address whose owner is the default.
+        if multisig.account.program_owner == nssa_core::program::DEFAULT_PROGRAM_ID {
+            return Err(SpelError::custom(
+                E_MULTISIG_NOT_ANCHORED,
+                "no multisig is committed for this (id, config): the member set is not anchored",
+            ));
+        }
+
+        // 4. Anchor the action. Approving requires naming the true
+        //    `proposal_ref`, which commits to the exact action bytes.
+        if proposal.account.program_owner == nssa_core::program::DEFAULT_PROGRAM_ID {
+            return Err(SpelError::custom(
+                E_PROPOSAL_NOT_ANCHORED,
+                "no proposal is committed at this proposal_ref",
+            ));
+        }
+
+        // 5. Re-derive the nullifier from the witness secret and the proposal,
+        //    and require it to equal the pinned one. Without this a caller could
+        //    prove one approval while occupying another member's marker.
+        let derived = multisig_core::compute_approval_nullifier(&proposal_ref, &witness.msk);
+        if derived != nullifier {
+            return Err(SpelError::custom(
+                E_NULLIFIER_MISMATCH,
+                "nullifier does not match the supplied witness",
+            ));
+        }
+
+        // 6. Bind the marker address to the proposal and the nullifier, so the
+        //    public trace records which proposal was approved and `execute` can
+        //    re-derive exactly this address from the nullifier it is handed.
+        let expected_seed = multisig_core::compute_approval_marker(&proposal_ref, &nullifier);
+        if expected_seed != approval_marker_seed {
+            return Err(SpelError::custom(
+                E_MARKER_SEED_MISMATCH,
+                "approval_marker_seed does not commit to the proposal and nullifier",
+            ));
+        }
+
+        // 7. Declare the chained call. The privacy circuit executes and proves
+        //    the membership program, then discharges the assumption with
+        //    env::verify over its ProgramOutput. Merkle membership against
+        //    `member_root` and the nullifier derivation are proved there, in
+        //    zero knowledge.
+        let instruction = multisig_core::ApproveInstruction {
+            witness,
+            statement: multisig_core::ApproveStatement {
+                member_root,
+                proposal_ref,
+                nullifier,
+            },
+        };
+        let chained = vec![nssa_core::program::ChainedCall::new(
+            MEMBERSHIP_LEZ_PROGRAM_ID,
+            Vec::new(),
+            &instruction,
+        )];
+
+        // 8. Claim the marker PDA; pass the rest through unchanged.
+        Ok(SpelOutput::execute(
+            vec![approval_marker, multisig, proposal, approver],
+            chained,
+        ))
+    }
+
+    /// Execute a proposal once the anchored threshold of distinct approvals
+    /// exists.
+    ///
+    /// This is the instruction that makes the multisig an M-of-N gate rather
+    /// than a collection of independent approvals. It counts, on chain, and it
+    /// counts *distinct members* — see check 6 below.
+    ///
+    /// Anyone may execute; the executor need not be a member. That is
+    /// deliberate, and it is what makes the completed execution unlinkable to
+    /// any member's account: the transaction that lands carries the executor's
+    /// signature, and the executor can be a disinterested relayer.
+    ///
+    /// Accounts:
+    /// - `execution_marker` (init, PDA seeded by `execution_marker_seed`): the
+    ///   proof-of-execution a downstream integration consumes. `init` refuses to
+    ///   overwrite, so a proposal executes at most once.
+    /// - `multisig`, `proposal`: the anchored config and action.
+    /// - `executor` (signer): pays and authors.
+    /// - `approvals` (rest): the M approval markers being counted. The macro
+    ///   does not constrain rest-account addresses, so each is re-derived and
+    ///   checked explicitly below.
+    #[instruction]
+    pub fn execute(
+        ctx: ProgramContext,
+        #[account(init, pda = arg("execution_marker_seed"))]
+        execution_marker: AccountWithMetadata,
+        #[account(pda = [arg("multisig_id"), arg("config_hash")])]
+        multisig: AccountWithMetadata,
+        #[account(pda = arg("proposal_ref"))] proposal: AccountWithMetadata,
+        #[account(signer)] executor: AccountWithMetadata,
+        approvals: Vec<AccountWithMetadata>,
+        multisig_id: [u8; 32],
+        config_hash: [u8; 32],
+        member_root: [u8; 32],
+        threshold: u32,
+        proposal_ref: [u8; 32],
+        approval_nullifiers: Vec<[u8; 32]>,
+        execution_marker_seed: [u8; 32],
+    ) -> SpelResult {
+        // 1. Tie config_hash to the pair it commits to. This is what stops an
+        //    executor from supplying `threshold = 1` against a 3-of-5 set: a
+        //    different threshold yields a different config hash, hence a
+        //    different multisig PDA, which check 2 then finds uninitialised.
+        let expected_config = multisig_core::compute_config_hash(&member_root, threshold);
+        if expected_config != config_hash {
+            return Err(SpelError::custom(
+                E_CONFIG_MISMATCH,
+                "config_hash does not commit to this (member_root, threshold)",
+            ));
+        }
+
+        // 2. The anchored multisig. Its address encodes the threshold enforced
+        //    in check 5.
+        if multisig.account.program_owner == nssa_core::program::DEFAULT_PROGRAM_ID {
+            return Err(SpelError::custom(
+                E_MULTISIG_NOT_ANCHORED,
+                "no multisig is committed for this (id, config): threshold is not anchored",
+            ));
+        }
+
+        // 3. The anchored proposal, hence the exact action being executed.
+        if proposal.account.program_owner == nssa_core::program::DEFAULT_PROGRAM_ID {
+            return Err(SpelError::custom(
+                E_PROPOSAL_NOT_ANCHORED,
+                "no proposal is committed at this proposal_ref",
+            ));
+        }
+
+        // 4. The execution marker is scoped to this proposal.
+        let expected_exec = multisig_core::compute_execution_marker(&proposal_ref);
+        if expected_exec != execution_marker_seed {
+            return Err(SpelError::custom(
+                E_MARKER_SEED_MISMATCH,
+                "execution_marker_seed does not commit to this proposal",
+            ));
+        }
+
+        // 5. Enough approvals, against the anchored threshold.
+        if approvals.len() != approval_nullifiers.len() {
+            return Err(SpelError::custom(
+                E_APPROVAL_COUNT_MISMATCH,
+                "each approval account must be paired with its nullifier",
+            ));
+        }
+        if approvals.len() < threshold as usize {
+            return Err(SpelError::custom(
+                E_THRESHOLD_NOT_MET,
+                "fewer approvals than the anchored threshold",
+            ));
+        }
+
+        // 6. Distinctness, checked pairwise. This is the step that turns "M
+        //    approval accounts" into "M distinct members": each marker address
+        //    is a function of a nullifier, and each nullifier is a function of a
+        //    member's secret, so two different addresses imply two different
+        //    secrets. Presenting the same marker M times is caught here.
+        //
+        //    Quadratic in M on purpose: M is a multisig threshold, a small
+        //    number, and a sort would cost more cycles than it saves. The CU
+        //    measurements in docs/cu-costs.md cover M up to 7.
+        for i in 0..approval_nullifiers.len() {
+            for j in (i + 1)..approval_nullifiers.len() {
+                if approval_nullifiers[i] == approval_nullifiers[j] {
+                    return Err(SpelError::custom(
+                        E_DUPLICATE_APPROVAL,
+                        "the same approval was presented more than once",
+                    ));
+                }
+            }
+        }
+
+        // 7. Every account presented is genuinely the approval marker for its
+        //    nullifier *on this proposal*, and was genuinely claimed by this
+        //    program — which is the only way it could have come into existence,
+        //    and only ever after a membership proof was verified on chain.
+        for (account, nullifier) in approvals.iter().zip(approval_nullifiers.iter()) {
+            let seed = multisig_core::compute_approval_marker(&proposal_ref, nullifier);
+            let expected_id = compute_pda(&ctx.self_program_id, &[&seed]);
+            if account.account_id != expected_id {
+                return Err(SpelError::custom(
+                    E_APPROVAL_NOT_FOR_PROPOSAL,
+                    "an approval account is not the marker PDA for its nullifier on this proposal",
+                ));
+            }
+            if account.account.program_owner != ctx.self_program_id {
+                return Err(SpelError::custom(
+                    E_APPROVAL_NOT_ANCHORED,
+                    "an approval marker was never claimed by this program",
+                ));
+            }
+        }
+
+        // 8. Claim the execution marker. Its existence, owned by this program,
+        //    is the proof that M distinct members approved exactly this action.
+        let mut accounts = vec![execution_marker, multisig, proposal, executor];
+        accounts.extend(approvals);
+        Ok(SpelOutput::execute(accounts, vec![]))
+    }
+}

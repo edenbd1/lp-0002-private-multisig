@@ -1,0 +1,34 @@
+# LEZ-native membership guest for LP-0002. Emits a ProgramOutput so the privacy
+# circuit composes it with env::verify on the privacy-preserving transaction
+# path. Built with `cargo risczero build` and excluded from the host workspace.
+[package]
+name = "membership-lez-guest"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace]
+
+[[bin]]
+name = "membership_lez"
+path = "src/bin/membership_lez.rs"
+
+[dependencies]
+risc0-zkvm = { version = "=3.0.5", default-features = false, features = ["std"] }
+multisig-core = { path = "../../../multisig-core", default-features = false }
+lee_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", default-features = false }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+sha2 = { version = "0.10", default-features = false }
+# Pinned for the risc0 guest toolchain (rustc 1.88-dev); newer releases fail the
+# Docker build with "rustc 1.88.0-dev is not supported".
+ruint = { version = "=1.17.2", default-features = false }
+
+# Risc0 patches sha2 to use its guest accelerator.
+[patch.crates-io]
+sha2 = { git = "https://github.com/risc0/RustCrypto-hashes.git", tag = "sha2-v0.10.8-risczero.0" }
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = 3

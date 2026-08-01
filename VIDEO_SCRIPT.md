@@ -1,182 +1,252 @@
-# Narrated demo script
+# 🎬 LP-0002 — script vidéo (~6 min)
 
-The prize requires a **narrated** walkthrough in which the builder explains what
-they built and why, walks through the architecture and key implementation
-decisions, and shows the full end-to-end flow with terminal output confirming
-`RISC0_DEV_MODE=0`. A silent screencast is not sufficient — this is the single
-most common reason submissions in this program get closed.
+> **⚠️ Tap les liens directement sur ton phone — ne pas copy-paste (les URLs sont longues et peuvent être tronquées au copy).**
 
-Target: 10–14 minutes. Speak over every step; do not just let the terminal scroll.
+- Durée totale visée : **~6 minutes**
+- Langue : English
+- `🎬 ACTION` = ce que tu fais à l'écran
+- `💬 SAY` = ce que tu lis à voix haute
+
+> **Toutes les commandes de ce script ont été exécutées et vérifiées.** Les sorties
+> annoncées sont les vraies. Si quelque chose ne sort pas comme écrit, arrête et
+> dis-le-moi plutôt que d'improviser.
 
 ---
 
-## 0. Setup before recording
+# ⚙️ Pré-vol (~3 min de prep)
+
+## Terminal
+
+**🎬 ACTION** :
 
 ```bash
-cd lp-0002-private-multisig
-git log --oneline | head -5      # show it is real work with history
-rm -rf .demo
+cd /Users/eden/data/ns.com/lp-0002
+clear
 ```
 
-Have two terminal tabs: one for the demo, one for `docs/security.md` open in a
-pager or editor for the architecture segment.
+Agrandis la police (⌘+ plusieurs fois — le texte doit être lisible en 1080p),
+ferme Slack/Discord/notifications, fenêtre terminal en plein écran.
+
+## Un seul onglet browser
+
+**🎬 ACTION : ONGLET A (le repo)** — tap ce lien :
+
+→ **[Repo : edenbd1/lp-0002-private-multisig](https://github.com/edenbd1/lp-0002-private-multisig)**
+
+> **Pas d'onglet block explorer cette fois.** Une transaction privacy ne publie
+> ni `program_id` ni `instruction_data`, donc l'indexeur de l'explorer n'a rien à
+> afficher pour une approbation. C'est la propriété de confidentialité qui
+> fonctionne, pas un bug — et c'est exactement ce qu'on montre à la scène 3, en
+> lisant la chaîne directement. Plus fort qu'un explorer, et ça ne peut pas
+> t'afficher une page vide en pleine caméra.
+
+## Vérif de dernière seconde (30 s, avant d'enregistrer)
+
+**🎬 ACTION** :
+
+```bash
+P=$(cat artifacts/testnet/proposal_id)
+./scripts/verify-onchain.sh artifacts/testnet $P
+```
+
+Tu dois voir **cinq ✅** et `all accounts present and owned by the verifier`.
+Si oui → QuickTime → Screen Recording → Démarre. Sinon → stop, préviens-moi.
 
 ---
 
-## 1. What this is and why (1 min, talking head or slide)
+# SCÈNE 1 — Intro (0:00 – 0:45)
 
-> "This is LP-0002, a private M-of-N multisig for the Logos Execution Zone.
-> Members hold shielded accounts. When a threshold approves a proposal, the chain
-> records that the threshold was met — and nothing about who met it. Not to
-> outside observers, and, the part I care most about, not to the other members
-> either. The prize asks for exactly that: without revealing identity to on-chain
-> observers *or other members*."
+**🎬 ACTION** : Terminal vide
 
----
+**💬 SAY** :
 
-## 2. The decision that shaped everything (2 min)
+> "Hi, I'm Eden. This is my submission for Logos Lambda Prize L-P zero-zero-zero-two — Private M-of-N Multisig."
 
-Open `docs/security.md` at *"Why the proof is genuinely verified on chain"*.
+**💬 SAY** :
 
-> "The first thing I checked was whether a LEZ public transaction actually
-> verifies a proof. It does not. The sequencer re-executes the program host-side
-> — here, in `program.rs`, the comment literally says *execute the program,
-> without proving*. So a multisig on the public path would be a signature check
-> wearing a zero-knowledge costume.
->
-> The path that works is the privacy-preserving transaction. The client proves
-> locally, and LEZ's privacy circuit composes each chained call with a real
-> `env::verify` — this line — and the sequencer checks the receipt against the
-> pinned circuit id. So my `approve` instruction declares a chained call to a
-> membership program, and that membership proof is verified on chain as a
-> precondition of the transaction being accepted.
->
-> For that to work the callee has to *be* a LEZ program emitting a
-> `ProgramOutput`, not a standalone Risc0 guest. That is why `membership_lez`
-> exists in the shape it does."
+> "A threshold multisig where members hold shielded accounts. When M members approve, the chain records that the threshold was met — and nothing about which members met it. Not to outside observers, and, the part I care most about, not to the other members either. The brief asks for exactly that: without revealing identity to on-chain observers *or other members*."
+
+**💬 SAY** :
+
+> "The membership proof is genuinely verified on chain, and everything is live on the public L-E-Z testnet. Let me show you."
 
 ---
 
-## 3. Anchoring: the attacks that shaped the design (2–3 min)
+# SCÈNE 2 — Le demo (0:45 – 3:00)
 
-Open `crates/multisig-verifier-spel/methods/guest/src/bin/multisig_verifier.rs`.
-
-> "A membership proof proves membership against whatever root the statement
-> names. On its own that is worthless — I can build a one-leaf tree containing
-> myself. So the multisig account is a PDA whose address derives from the
-> multisig id and a config hash, and the config hash commits to the member root
-> *and the threshold*. Only `create_multisig` initialises that address. An
-> invented member set gives a different address that was never created, so its
-> owner is the default, and I reject it.
->
-> Putting the threshold inside the same hash is what stops the other obvious
-> attack: supplying `threshold = 1` at execution against a 3-of-5 set. Different
-> threshold, different config hash, different address, never created. There is no
-> code path anywhere that reads a threshold from caller-supplied data.
->
-> The third one took me longer to see. If approvals were scoped to a proposal id
-> alone, I could publish a harmless action, collect three approvals, then publish
-> a second proposal under the same id with a malicious action — and the approvals
-> would count for it. So `proposal_ref` folds in the action hash. Approvals bind
-> to exact bytes. And symmetrically, someone publishing a junk action under my
-> proposal id cannot burn my markers, because they land at different addresses."
-
-Scroll to `execute`, checks 6 and 7.
-
-> "And this is what makes M markers mean M distinct *members*. Each marker
-> address is a function of a nullifier, each nullifier is a function of a member's
-> secret. Two different addresses imply two different secrets. So I check the
-> nullifiers are pairwise distinct, that each account is the marker PDA for the
-> nullifier it was paired with on *this* proposal, and that my program owns it —
-> which it can only do if a membership proof was verified on chain."
-
----
-
-## 4. The demo (4–5 min)
+**🎬 ACTION** : Tape lentement :
 
 ```bash
 ./scripts/demo.sh
 ```
 
-Narrate as it runs. Points to hit, in order:
+**🎬 ACTION** : Entrée. Ça prend environ **5 secondes**. Laisse défiler,
+**puis scrolle doucement vers le haut** pendant que tu parles.
 
-- **Step 0** — pause on `RISC0_DEV_MODE=0`. Say it out loud: no mock receipts.
-- **Step 1** — "22 adversarial tests on the circuit logic. Non-members, borrowed
-  Merkle paths, invented roots, forged nullifiers, bait-and-switch actions, and
-  the padding sentinel — because padding leaves are real leaves and I had to
-  prove nobody can approve as one."
-- **Step 2** — "These 15 run the *built binary* through the sequencer's own
-  executor. Same executor, same input order, same 32-megabyte session limit. A
-  rejection here is the rejection the chain performs. Two honest controls, twelve
-  attacks, each required to fail with its documented code."
-- **Steps 3–5** — the 3-of-5 lifecycle, three members approving.
-- **Step 6** — "Member zero tries again and is refused, with the reason."
-- **Step 7** — "And the action cannot be swapped under the same id."
-- **Step 9** — *slow down here.* "This is the whole point. On chain this proposal
-  is three addresses. Each one is a hash of a nullifier, and each nullifier is a
-  hash of a member secret. Someone who knows all five members — including the
-  other four members — cannot tell which three of them these came from."
-- **Step 10** — the measured compute cost.
+**💬 SAY** (pendant que ça tourne) :
+
+> "Runs from a clean clone. No network needed for the first ten steps, no funded account, no local sequencer."
+
+**🎬 ACTION** : Scrolle jusqu'en haut, sur `== 0. environment`
+
+**💬 SAY** :
+
+> "First line — R-I-S-C zero dev mode equals zero. Real proofs, no mock receipts. That's required by the brief, and it's the first thing I show."
+
+**🎬 ACTION** : Scrolle sur `== 1.` et `== 2.`
+
+**💬 SAY** :
+
+> "Twenty-five adversarial tests on the circuit logic — non-members, borrowed Merkle paths, invented member sets, forged nullifiers. Then twenty-eight more against the *built binary*, run through the sequencer's own executor. Same executor, same input order, same thirty-two megabyte session limit the chain applies. A rejection you see there is the rejection the chain performs."
+
+**🎬 ACTION** : Scrolle sur `== 6.` puis `== 7.`
+
+**💬 SAY** :
+
+> "Step six: a member tries to approve twice and is refused. Step seven: someone tries to swap the action under the same proposal id, and that's refused too. That second one matters — if approvals were scoped to a proposal id alone, you could collect signatures for a harmless action and then execute a malicious one under the same id."
+
+**🎬 ACTION** : Scrolle sur `== 9. what an observer sees` — **ralentis ici**
+
+**💬 SAY** (le cœur de la soumission — prends ton temps) :
+
+> "This is the whole point. On chain, this proposal is three addresses. Each one is a hash of a nullifier, and each nullifier is a hash of a member secret. Someone who knows all five members — including the other four members — cannot tell which three of them these came from."
+
+**🎬 ACTION** : Scrolle sur `== 10. compute cost`
+
+**💬 SAY** :
+
+> "Measured compute cost: approve is three hundred thirty-six thousand cycles, one and a half percent of the public budget. Execute scales linearly in M."
 
 ---
 
-## 5. Reliability and the SDK (1–2 min)
+# SCÈNE 3 — La chaîne, en direct (3:00 – 4:15)
+
+**🎬 ACTION** : Scrolle tout en bas, sur `== 11. the live deployment`
+
+**💬 SAY** :
+
+> "And the last step reads the live deployment straight off the public testnet. Five accounts, all owned by the verifier program: the multisig, the proposal, two approval markers, and the execution marker."
+
+**💬 SAY** :
+
+> "Those two approval markers are the whole claim. Each exists only because the approve instruction ran and claimed it. Approve declares a chained call to a L-E-Z-native membership program, and on the privacy path L-E-Z's circuit composes that call with a real env-verify, whose receipt the sequencer checks against the pinned circuit I-D. So neither marker could exist without a membership proof having been verified on chain."
+
+**🎬 ACTION** : Tape (pour montrer que ce n'est pas mon script qui raconte ce qu'il veut) :
 
 ```bash
-cat .demo/proposals/00...01.json
+curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json' \
+ -d '{"jsonrpc":"2.0","id":1,"method":"getAccount","params":["9q31RPufMoRe6pXcxrcuwFEJQN2Wnr2qV4HhXnV8a42r"]}'
 ```
 
-> "Approvals are recorded before the command returns, so a partial set survives a
-> client restart. That is the reliability criterion, and it falls out naturally:
-> proving takes ten minutes an approval, so a real threshold *is* gathered across
-> days and separate sessions."
+**💬 SAY** :
 
-Show `crates/multisig-sdk/src/lib.rs` briefly.
-
-> "The SDK is the crate a Logos module depends on. It opens no socket and touches
-> no filesystem — give it data, it gives you instruction arguments. The CLI and
-> the Basecamp app are both thin shells over it."
+> "Don't take my script's word for it. That's the raw chain, one of the approval markers. Owned by the verifier program. Zero bytes of data — it names nobody."
 
 ---
 
-## 6. The Basecamp app (1 min)
+# SCÈNE 4 — L'audit (4:15 – 5:20)
 
-Show it loaded, run one approval through the GUI.
+**🎬 ACTION** : Reste sur le terminal
 
-> "Every button runs an `msig` subcommand, so the GUI and the chain compute the
-> same commitments from the same code. And notice the approval list shows marker
-> addresses, never member names — because that is all the chain records."
+**💬 SAY** :
 
----
+> "One more thing, because I think it matters more than a feature list."
 
-## 7. Honest limits (1 min)
+**💬 SAY** :
 
-Open `docs/security.md` at *"What is not hidden"*.
+> "After the first version was deployed, I ran an adversarial audit — writing tests that try to *break* the program rather than confirm it works. It found a threshold bypass in my own code."
 
-> "N is public. M is public. The count of approvals so far is public — each one is
-> an account. The action is public. And two things I want to name rather than
-> bury: timing correlation is real, because approvals land minutes apart and a
-> member whose account activity is otherwise visible can be linked by timing
-> rather than by cryptography. And small sets leak — in a 1-of-2 multisig the
-> other member knows it was not them, so they know exactly who it was.
-> Unlinkability scales with the member count. I would rather state that than
-> claim a property I do not have."
+**💬 SAY** :
 
----
+> "The proposal account was addressed by a reference that commits to the multisig I-D — but a program can't invert a hash, and nothing re-derived it. So anyone could create their own one-member multisig with a threshold of one, approve someone else's proposal while naming their own multisig, and execute it. A five-of-nine proposal would execute on one signature from an outsider."
 
-## 8. Close (30 s)
+**💬 SAY** :
 
-> "Everything I have shown runs from a clean clone with `./scripts/demo.sh` — no
-> network, no funded account. The testnet lifecycle is `scripts/deploy-and-run.sh`
-> and the transaction hashes are in `docs/DEPLOYMENT.md`."
+> "Every individual check was doing its job. The gap was between them. The fix puts the multisig I-D into the proposal's address, so that pairing now resolves to an account nobody ever created. I redeployed, re-ran the whole lifecycle, and wrote the finding up in docs slash security dot M-D rather than quietly patching it. Two regression tests pin both halves of the attack."
+
+**💬 SAY** :
+
+> "The same pass found three documented error codes with no test behind them, and a verification script that reported accounts as missing when they were on chain. All fixed. Fifty-seven tests now."
 
 ---
 
-## Checklist before uploading
+# SCÈNE 5 — Closing (5:20 – 6:00)
 
-- [ ] Your voice, explaining — not a silent screencast
-- [ ] `RISC0_DEV_MODE=0` visible in the terminal
-- [ ] Real proof generation shown or its cost stated honestly
-- [ ] Architecture and the *why* behind decisions, not just a feature tour
-- [ ] Full end-to-end flow
-- [ ] Unlisted or public on YouTube, link added to `README.md` and the solution file
+**🎬 ACTION** : Passe sur l'ONGLET A (le repo)
+
+**💬 SAY** :
+
+> "To summarize. Two programs deployed on the public L-E-Z testnet, byte-identical to what's in the repository — you can verify that from the deployment transaction. A full two-of-three lifecycle on chain: create, propose, two approvals on the privacy path, execute. Fifty-seven tests, C-I green on Linux and macOS, a reproducible build, a Basecamp app, an S-D-K, a SPEL I-D-L, and a demo script that runs from a clean clone."
+
+**💬 SAY** :
+
+> "Repository at github dot com slash eden-b-d-one slash l-p dash zero zero zero two dash private dash multisig. The threat model, including what is deliberately *not* hidden, is in docs slash security dot M-D. Thank you for reviewing."
+
+**🎬 ACTION** : Attends 2 secondes en silence
+
+**🎬 ACTION** : Stop l'enregistrement
+
+---
+
+# 📝 Post-recording
+
+1. QuickTime → Export → 1080p mp4 → `lp-0002-submission.mp4`
+2. YouTube Studio → tap **[studio.youtube.com](https://studio.youtube.com)** → Upload → **Unlisted**
+3. **Title** : `LP-0002 Private M-of-N Multisig — Lambda Prize submission (edenbd1)`
+4. **Description** :
+
+   ```
+   Submission demo for Logos Lambda Prize LP-0002 — Private M-of-N Multisig.
+
+   A threshold multisig on the Logos Execution Zone where approvals are
+   unlinkable to members — including to the other members. The membership
+   proof is genuinely verified on chain via LEZ's privacy-preserving
+   transaction path.
+
+   Repo:
+   https://github.com/edenbd1/lp-0002-private-multisig
+
+   In that repo:
+     docs/DEPLOYMENT.md  — every transaction hash, and how to re-verify each
+     docs/security.md    — the threat model, and what is deliberately not hidden
+
+   Public testnet:
+   https://testnet.lez.logos.co
+   ```
+
+5. Reviens avec **l'URL YouTube + "OK submit la PR"** → je prépare la PR, tu la relis, puis je l'ouvre
+
+---
+
+# 🆘 Cheat sheet — prononciation
+
+- **LEZ** = "L-E-Z" (épelle)
+- **SPEL** = "spell"
+- **PDA** = "P-D-A" (épelle)
+- **RISC0** = "risk zero"
+- **msk** = "M-S-K" (épelle)
+- **env::verify** = "env verify"
+- **SHA256** = "SHA two fifty-six"
+- **M-of-N** = "M of N"
+- **IDL** = "I-D-L" (épelle)
+- **nullifier** = "NULL-ifier"
+- **edenbd1** = "eden-B-D-one"
+
+---
+
+# ⏱️ Timing récap
+
+| Scène | De | À | Durée |
+|---|---|---|---|
+| 1. Intro | 0:00 | 0:45 | 45s |
+| 2. demo.sh | 0:45 | 3:00 | 2m15 |
+| 3. La chaîne en direct | 3:00 | 4:15 | 1m15 |
+| 4. L'audit | 4:15 | 5:20 | 1m05 |
+| 5. Closing | 5:20 | 6:00 | 40s |
+| **Total** | | | **~6 min** |
+
+Entre 5 et 8 minutes c'est bon. Le brief demande une narration qui explique
+l'architecture et les décisions — pas un screencast muet. La scène 4 est ce qui
+te distingue : elle montre que tu audites ton propre travail.
+
+**Tu peux y aller. 🎬**

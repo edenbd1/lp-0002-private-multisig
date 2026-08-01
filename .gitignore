@@ -8,3 +8,7 @@ _external/
 /.testnet/
 /.wallet/
 /_external/
+
+# Basecamp app build output, and the metadata copy CMake stages for moc
+/app/build/
+/app/src/metadata.json

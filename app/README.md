@@ -42,6 +42,18 @@ Basecamp's user-plugins directory to load it.
 
 Requires Qt 6 with `Widgets Quick QuickWidgets Qml Concurrent Gui Network OpenGL`.
 
+Verified on macOS with Qt 6.11.1 and CMake 4.1.2:
+
+```bash
+cmake -B build -S . -DCMAKE_PREFIX_PATH=$(brew --prefix qt)
+cmake --build build
+```
+
+produces `build/lp_0002_multisig.dylib` with `metadata.json` and `module.json`
+beside it, the QML scene compiled in via `rcc`, and both interface IIDs present
+in the binary — `com.networkschool.logos.IComponent/1.0` and
+`com.networkschool.lp0002.MultisigPlugin/1.0`.
+
 ## Using it
 
 1. Point **Multisig folder** at a directory. If `msig` is not on `PATH`, put its

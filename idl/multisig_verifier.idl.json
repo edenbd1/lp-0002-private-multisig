@@ -76,6 +76,10 @@
             "seeds": [
               {
                 "kind": "arg",
+                "path": "multisig_id"
+              },
+              {
+                "kind": "arg",
                 "path": "proposal_ref"
               }
             ]
@@ -196,6 +200,10 @@
           "init": false,
           "pda": {
             "seeds": [
+              {
+                "kind": "arg",
+                "path": "multisig_id"
+              },
               {
                 "kind": "arg",
                 "path": "proposal_ref"
@@ -319,6 +327,10 @@
           "init": false,
           "pda": {
             "seeds": [
+              {
+                "kind": "arg",
+                "path": "multisig_id"
+              },
               {
                 "kind": "arg",
                 "path": "proposal_ref"

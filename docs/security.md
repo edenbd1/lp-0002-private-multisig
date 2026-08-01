@@ -173,6 +173,46 @@ The sequencer runs `receipt.verify(PRIVACY_PRESERVING_CIRCUIT_ID)` and has no
 `RISC0_DEV_MODE` in its environment, so acceptance implies a genuine receipt even
 if a client were in dev mode.
 
+## An audit finding, and what it cost
+
+A deep audit pass on 2026-08-01 — probing the program rather than re-reading it
+— found a **threshold bypass** in the version first deployed. It is recorded
+here rather than quietly patched, because the shape of the mistake is more
+instructive than the fix.
+
+**The bug.** The proposal account was a PDA seeded by `proposal_ref` alone.
+`proposal_ref` commits to `(multisig_id, proposal_id, action_hash)`, so it
+*contains* the multisig id — but a program cannot invert a hash, and neither
+`approve` nor `execute` ever re-derived it. Nothing tied a proposal to its
+multisig at the moment it was used.
+
+**The attack, in three steps.** Anyone may create a multisig; that is by design.
+So an attacker creates their own, with a member root containing only themselves
+and a threshold of 1. They then approve a *different* multisig's proposal while
+naming their own multisig: the membership proof is valid against their root,
+their multisig PDA really is program-owned, and a marker is minted on a proposal
+they are not a member of. Finally they execute that proposal, again naming their
+own multisig, so the threshold enforced is 1. A 5-of-9 proposal executes on one
+signature from an outsider.
+
+Every individual check was doing its job. The gap was between them.
+
+**The fix.** The proposal PDA is now seeded by `[multisig_id, proposal_ref]`.
+The multisig id is in the address as well as inside `proposal_ref`, and that
+redundancy is load-bearing: pairing a proposal with a foreign multisig now
+resolves to an account nobody ever created, and is rejected before the program
+body runs. Two regression tests pin both halves —
+`executing_a_proposal_under_a_foreign_multisig_is_rejected` and
+`approving_a_proposal_under_a_foreign_multisig_is_rejected`.
+
+**What it cost.** A new verifier ImageID, a redeployment, and a re-run of the
+whole testnet lifecycle. The earlier transaction hashes are superseded and are
+not cited anywhere as current.
+
+**What it says about the rest.** This was found by asking "what is *not*
+checked" rather than "does the check work". The other bindings were audited the
+same way afterwards; nothing comparable turned up. That is evidence, not proof.
+
 ## Residual risks and non-goals
 
 - **A malicious creator.** Whoever builds the member set knows every salt, and

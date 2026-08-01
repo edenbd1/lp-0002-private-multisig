@@ -165,7 +165,8 @@ mod multisig_verifier {
     ///   proposal on its own grants nothing; only M approvals do.
     #[instruction]
     pub fn create_proposal(
-        #[account(init, pda = arg("proposal_ref"))] proposal: AccountWithMetadata,
+        #[account(init, pda = [arg("multisig_id"), arg("proposal_ref")])]
+        proposal: AccountWithMetadata,
         #[account(pda = [arg("multisig_id"), arg("config_hash")])]
         multisig: AccountWithMetadata,
         #[account(signer)] authority: AccountWithMetadata,
@@ -223,7 +224,8 @@ mod multisig_verifier {
         approval_marker: AccountWithMetadata,
         #[account(pda = [arg("multisig_id"), arg("config_hash")])]
         multisig: AccountWithMetadata,
-        #[account(pda = arg("proposal_ref"))] proposal: AccountWithMetadata,
+        #[account(pda = [arg("multisig_id"), arg("proposal_ref")])]
+        proposal: AccountWithMetadata,
         #[account(signer)] approver: AccountWithMetadata,
         witness_words: Vec<u32>,
         multisig_id: [u8; 32],
@@ -346,7 +348,8 @@ mod multisig_verifier {
         execution_marker: AccountWithMetadata,
         #[account(pda = [arg("multisig_id"), arg("config_hash")])]
         multisig: AccountWithMetadata,
-        #[account(pda = arg("proposal_ref"))] proposal: AccountWithMetadata,
+        #[account(pda = [arg("multisig_id"), arg("proposal_ref")])]
+        proposal: AccountWithMetadata,
         #[account(signer)] executor: AccountWithMetadata,
         approvals: Vec<AccountWithMetadata>,
         multisig_id: [u8; 32],

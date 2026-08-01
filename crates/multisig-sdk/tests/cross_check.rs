@@ -78,7 +78,7 @@ fn sdk_derivations_match_core_exactly() {
         "threshold > N must be refused"
     );
     assert!(
-        p.execute_args(&[a.clone()]).is_err(),
+        p.execute_args(std::slice::from_ref(&a)).is_err(),
         "short threshold must be refused"
     );
     assert!(

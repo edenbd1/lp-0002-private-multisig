@@ -3,19 +3,22 @@
 
     ./scripts/package-lgx.py [--out app/lp-0002-multisig.lgx]
 
-WHY THIS EXISTS
+HOW IT PACKAGES
 
-The official path is `logos-module-builder`'s CMake macro inside a Nix dev
-shell, which calls `lgx create` from logos-co/logos-package. That is the right
-tool and it stays the reference. But it needs Nix, and a submission that ships
-no `.lgx` because the packager was unavailable has an empty box where a
-deliverable should be.
+If the real `lgx` from logos-co/logos-package is available, it is used —
+`$LGX_BIN`, then `~/logos/src/logos-package/build/lgx`, then `lgx` on PATH.
+That is the canonical packager and it is always preferred.
 
-So this reimplements the packaging directly. It is not guesswork: the manifest
-hash scheme is transcribed from `logos-package/src/crypto/signing.cpp`, and the
-transcription is checked against two packages built by the real tool — LP-0003's
-and LP-0005's — in `--self-test`. If the algorithm ever changes upstream, that
-check fails loudly rather than producing a package Basecamp will reject.
+Only if none is found does this fall back to writing the package directly. The
+fallback is not guesswork: the manifest hash scheme is transcribed from
+`logos-package/src/crypto/signing.cpp`, and the transcription is checked against
+two packages built by the real tool — LP-0003's and LP-0005's — before anything
+is written. Both paths were confirmed to produce **identical manifest hashes**
+for this module.
+
+Either way the metadata fields are patched in afterwards, which is what
+`nix-bundle-lgx`'s `bundle.sh` does too: `lgx add` leaves author, description,
+type and category empty because it never reads `metadata.json`.
 
 THE FORMAT, for the record
 
@@ -140,6 +143,41 @@ def self_test() -> int:
     return failures
 
 
+def find_lgx():
+    """The real packager, if this machine has one."""
+    for cand in (os.environ.get("LGX_BIN"),
+                 str(Path.home() / "logos/src/logos-package/build/lgx"),
+                 shutil.which("lgx")):
+        if cand and Path(cand).is_file() and os.access(cand, os.X_OK):
+            return cand
+    return None
+
+
+def patch_metadata(pkg: Path, meta: dict, name: str) -> dict:
+    """Fold metadata.json into the manifest, as bundle.sh does."""
+    with tarfile.open(pkg, "r:gz") as tar:
+        members = [(m, tar.extractfile(m).read() if m.isfile() else None)
+                   for m in tar.getmembers()]
+    manifest = None
+    out = []
+    for member, data in members:
+        if member.name == "manifest.json":
+            manifest = json.loads(data)
+            for key in ("author", "description", "type", "category", "dependencies"):
+                if key in meta:
+                    manifest[key] = meta[key]
+            data = json.dumps(manifest, indent=2, sort_keys=True).encode()
+            member.size = len(data)
+        out.append((member, data))
+    with tarfile.open(pkg, "w:gz", format=tarfile.GNU_FORMAT) as tar:
+        for member, data in out:
+            if data is not None:
+                tar.addfile(member, io.BytesIO(data))
+            else:
+                tar.addfile(member)
+    return manifest
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default="app/lp-0002-multisig.lgx")
@@ -181,12 +219,6 @@ def main() -> int:
         finally:
             shutil.rmtree(tmp)
 
-    print("verifying the hash algorithm against packages built by the real tool")
-    if self_test():
-        print("hash transcription no longer matches — refusing to write a package "
-              "Basecamp would reject", file=sys.stderr)
-        return 1
-
     app = ROOT / "app"
     meta = json.loads((app / "metadata.json").read_text())
     plugin_name = meta["main"]
@@ -217,14 +249,35 @@ def main() -> int:
         # from a fresh install without a separate cargo build.
         shutil.copy2(cli, vdir / "msig")
 
-        manifest = build_manifest(stage, "lp-0002-multisig", "0.0.1", meta, plugin.name)
-        (stage / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
-
         out = ROOT / args.out
         out.parent.mkdir(parents=True, exist_ok=True)
-        with tarfile.open(out, "w:gz", format=tarfile.GNU_FORMAT) as tar:
-            tar.add(stage / "manifest.json", arcname="manifest.json")
-            tar.add(stage / "variants", arcname="variants")
+        real = find_lgx()
+
+        if real:
+            print(f"packaging with the real lgx: {real}")
+            work = stage / "work"
+            work.mkdir()
+            subprocess.run([real, "create", "lp-0002-multisig"], cwd=work,
+                           check=True, capture_output=True)
+            subprocess.run([real, "add", "lp-0002-multisig.lgx",
+                            "--variant", args.variant, "--files", str(vdir),
+                            "--main", plugin.name, "--view", "qml/Main.qml", "-y"],
+                           cwd=work, check=True, capture_output=True)
+            shutil.copy2(work / "lp-0002-multisig.lgx", out)
+            manifest = patch_metadata(out, meta, "lp-0002-multisig")
+        else:
+            print("real lgx not found — writing the package directly")
+            print("verifying the hash algorithm against packages built by the real tool")
+            if self_test():
+                print("hash transcription no longer matches — refusing to write a "
+                      "package Basecamp would reject", file=sys.stderr)
+                return 1
+            manifest = build_manifest(stage, "lp-0002-multisig", "0.0.1", meta, plugin.name)
+            (stage / "manifest.json").write_text(
+                json.dumps(manifest, indent=2, sort_keys=True))
+            with tarfile.open(out, "w:gz", format=tarfile.GNU_FORMAT) as tar:
+                tar.add(stage / "manifest.json", arcname="manifest.json")
+                tar.add(stage / "variants", arcname="variants")
 
         size = out.stat().st_size
         digest = sha(out.read_bytes())

@@ -1,0 +1,27 @@
+[package]
+name = "multisig-verifier-tests"
+description = "Runs the deployed LP-0002 multisig verifier through the sequencer's own executor and requires each forgery to be rejected."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+# The exact LEZ types the sequencer feeds a program guest, pinned to the tag the
+# public testnet runs.
+lee_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", features = ["host"] }
+risc0-zkvm = { version = "3.0.5", features = ["client"] }
+risc0-binfmt = "3.0"
+multisig-core = { path = "../multisig-core" }
+serde = { workspace = true, features = ["std"] }
+sha2 = { workspace = true, features = ["std"] }
+bytemuck = "1"
+anyhow = { workspace = true }
+
+[[bin]]
+name = "noop"
+path = "src/noop.rs"
+
+[lints]
+workspace = true

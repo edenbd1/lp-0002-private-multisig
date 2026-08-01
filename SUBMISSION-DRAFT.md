@@ -154,10 +154,11 @@ honestly.
 - [x] **Basecamp app GUI with local build instructions and loadable assets.**
       `app/`, with both the `logos-module-builder` path and a standalone Qt path.
       The packaged module is committed at `app/lp-0002-multisig.lgx` (493 KB,
-      `darwin-arm64`), and `scripts/package-lgx.py --verify` recomputes its
-      manifest hashes from its contents. The packager transcribes the hash scheme
-      from `logos-package`'s `signing.cpp` and refuses to run unless it still
-      reproduces the manifests of two packages built by the real tool.
+      `darwin-arm64`), built with the **real `lgx`** from `logos-co/logos-package`
+      — the same tool `nix-bundle-lgx` drives — and it reads back with
+      `lgx manifest` and `lgx extract`. `scripts/package-lgx.py` also ships a
+      checked fallback for machines without `lgx`; both paths produce the
+      identical root hash.
 - [x] **SPEL IDL.** `idl/multisig_verifier.idl.json`, generated from source by
       `spel generate-idl`.
 

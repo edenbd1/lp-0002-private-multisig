@@ -60,14 +60,14 @@ To rebuild the on-chain programs (needs Docker and `cargo-risczero`):
 
 ### Test inventory
 
-`cargo test --workspace` runs **53** tests. Counted, so you can check the claim:
+`cargo test --workspace` runs **57** tests. Counted, so you can check the claim:
 
 | Suite | Count | What it establishes |
 |---|---:|---|
-| `multisig-core` — `approve_adversarial` | 22 | The circuit-side bindings: non-members, borrowed Merkle paths, invented roots, forged nullifiers, bait-and-switch actions, the padding sentinel, tree construction |
+| `multisig-core` — `approve_adversarial` | 25 | The circuit-side bindings: non-members, borrowed Merkle paths, invented roots, forged nullifiers, bait-and-switch actions, the padding sentinel, tree construction |
 | `multisig-verifier-tests` — `verifier_rejects` | 28 | The **built verifier binary** through the sequencer's own executor: 4 honest controls (one per instruction), 22 attacks, 2 framework-layer checks |
 | `multisig-verifier-tests` — `program_id_pin` | 2 | The verifier pins the committed membership binary, and the pin is not a placeholder |
-| `multisig-sdk` doctest | 1 | The documented API compiles and runs |
+| `multisig-sdk` — `cross_check` + doctest | 2 | Every SDK derivation equals the `multisig-core` one the chain re-derives, and the four client-side guards hold |
 
 One further test is `#[ignore]`d: it reports the measured compute cost rather
 than asserting a property. Run it with

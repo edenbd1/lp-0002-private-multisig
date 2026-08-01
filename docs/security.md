@@ -62,13 +62,24 @@ what makes the completed execution unlinkable to any member's shielded account.
 **The witness itself.**
 
 The Merkle path, the salt, the identifier and `msk` travel in the instruction
-data of a **privacy-preserving** transaction. Such a message publishes
-commitments and nullifiers and carries neither `program_id` nor
-`instruction_data`
-(`lee/state_machine/privacy_preserving_transaction/message.rs:14-24`). On the
-public path the same bytes would be published verbatim — which is why the
-membership program must never be invoked there, and is not: the verifier reaches
-it only through a `ChainedCall` inside a privacy transaction.
+data of a **privacy-preserving** transaction. The privacy `Message` struct
+(`lee/state_machine/src/privacy_preserving_transaction/message.rs`) has fields
+for public account ids, nonces, public post-states, encrypted private
+post-states, commitments, nullifiers and the validity windows — and **no
+`program_id` field and no `instruction_data` field**. On the public path the
+same bytes would be published verbatim, which is why the membership program must
+never be invoked there, and is not: the verifier reaches it only through a
+`ChainedCall` inside a privacy transaction.
+
+*Verified against a real transaction rather than asserted.* Decoding the
+`approve` transaction from the testnet run and searching its 230 kB payload:
+no member `msk`, no salt, no `account_id`, and not even the `member_root`
+appears anywhere in it. What *does* appear is the verifier's program id — eight
+times, in the `program_owner` field of the accounts carried in
+`public_post_states`. That is necessary and harmless: the whole point of the
+marker is that it exists and is owned by this program, so its owner must be
+published. Which program a multisig uses is public by design. **Which member
+approved is what has to stay hidden, and it does.**
 
 ## What is not hidden
 

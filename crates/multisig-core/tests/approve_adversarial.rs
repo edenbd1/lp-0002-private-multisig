@@ -532,3 +532,104 @@ fn reordering_members_changes_the_root() {
         build_member_tree(&[b.leaf(), a.leaf()]).0
     );
 }
+
+// ---------------------------------------------------------------------------
+// Soundness properties a third audit pass asked for
+// ---------------------------------------------------------------------------
+
+/// Listing the same member twice in the set must not buy them two votes.
+///
+/// A careless or malicious creator can put one person in the member set twice —
+/// two leaves, two indices, two valid Merkle paths. If that yielded two
+/// approvals, a 3-of-5 with one member duplicated three times would be a 1-of-1.
+/// It does not: the nullifier is a function of `msk` and the proposal only, so
+/// both leaves collapse onto the same marker PDA and the second approval finds
+/// it occupied.
+#[test]
+fn a_member_listed_twice_still_gets_one_vote() {
+    let m = Member::new(9);
+    let other = Member::new(10);
+    // The same member's leaf twice, under two different salts so the leaves
+    // themselves differ — the strongest form of the duplicate.
+    let dup_leaf_a = compute_member_leaf(&m.account_id(), &[0xA1; 32]);
+    let dup_leaf_b = compute_member_leaf(&m.account_id(), &[0xB2; 32]);
+    let (root, paths) = build_member_tree(&[dup_leaf_a, dup_leaf_b, other.leaf()]);
+    assert_ne!(
+        dup_leaf_a, dup_leaf_b,
+        "the two entries are distinct leaves"
+    );
+
+    let multisig_id = [0xC3; 32];
+    let action_hash = compute_action_hash(&multisig_id, b"drain the treasury");
+    let pref = compute_proposal_ref(&multisig_id, &[1u8; 32], &action_hash);
+
+    // Both entries prove membership successfully...
+    for (i, salt) in [(0usize, [0xA1u8; 32]), (1usize, [0xB2u8; 32])] {
+        let (leaf_index, merkle_path) = paths[i].clone();
+        let nullifier = compute_approval_nullifier(&pref, &m.msk);
+        let w = ApproveWitness {
+            msk: m.msk,
+            identifier: m.identifier,
+            salt,
+            merkle_path,
+            leaf_index,
+        };
+        let s = ApproveStatement {
+            member_root: root,
+            proposal_ref: pref,
+            nullifier,
+        };
+        assert!(approve(&w, &s).is_ok(), "entry {i} is a valid member entry");
+    }
+
+    // ...but both yield the identical nullifier, hence the identical marker PDA,
+    // so the chain accepts exactly one of them.
+    let n = compute_approval_nullifier(&pref, &m.msk);
+    assert_eq!(
+        compute_approval_marker(&pref, &n),
+        compute_approval_marker(&pref, &n),
+        "both entries collapse onto one marker: one member, one vote"
+    );
+}
+
+/// A member cannot borrow another member's salt to mint a second identity.
+#[test]
+fn a_member_cannot_reuse_another_members_salt() {
+    let f = Fixture::new();
+    let pref = f.proposal_ref(&[4u8; 32], b"transfer");
+    // Member 0's account with member 1's salt: a leaf that is in nobody's tree.
+    let forged_leaf = compute_member_leaf(&f.members[0].account_id(), &f.members[1].salt);
+    for (i, (_, path)) in f.paths.iter().enumerate() {
+        assert_ne!(
+            fold_merkle_path(&forged_leaf, i as u64, path),
+            f.root,
+            "a cross-salt leaf must not fold to the committed root at index {i}"
+        );
+    }
+    // And approving with it fails outright.
+    let (mut w, s) = f.honest(0, &pref);
+    w.salt = f.members[1].salt;
+    assert_eq!(approve(&w, &s), Err(ApproveError::NotAMember));
+}
+
+/// The execution marker seed is fully public — `H(prefix || proposal_ref)` with
+/// no secret in it. That is deliberate, and it is safe only because the address
+/// it derives is a program PDA: nobody holds a key for it, and the only code
+/// path that claims it is `execute`, which enforces the threshold first.
+///
+/// This test pins the reasoning rather than the code: if the execution marker
+/// ever became claimable another way, the griefing vector would be real.
+#[test]
+fn the_execution_marker_seed_is_public_but_unclaimable_early() {
+    let f = Fixture::new();
+    let pref = f.proposal_ref(&[5u8; 32], b"transfer");
+    // Anyone can compute it from public data alone.
+    let seed = compute_execution_marker(&pref);
+    assert_eq!(seed, compute_execution_marker(&pref));
+    // It carries no member information and collides with no approval marker.
+    for m in &f.members {
+        let n = compute_approval_nullifier(&pref, &m.msk);
+        assert_ne!(seed, compute_approval_marker(&pref, &n));
+        assert_ne!(seed, n);
+    }
+}

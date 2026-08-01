@@ -1,0 +1,7 @@
+{
+  "id_hex": "ccd1a480cdf52d79c6d720543e5f88a73027097397d626de8d4ec8ac0efe1ffe",
+  "threshold": 2,
+  "member_count": 3,
+  "member_root_hex": "04a021a4d53a635a02eeebc193f2e6a3bad302cb3b5500a066038d0753db6fc2",
+  "config_hash_hex": "af8baaf9198c0e717331834038f045c1a91ca6c80fb25159299e8bd93209f3c8"
+}

@@ -121,7 +121,13 @@ Si oui → QuickTime → Screen Recording → Démarre. Sinon → stop, prévien
 
 # SCÈNE 3 — La chaîne, en direct (3:00 – 4:15)
 
-**🎬 ACTION** : Scrolle tout en bas, sur `== 11. the live deployment`
+**🎬 ACTION** : Scrolle sur `== 11. the Basecamp package`
+
+**💬 SAY** :
+
+> "Step eleven checks the Basecamp package. The dot-l-g-x is committed, and the script recomputes its manifest hashes from its own contents — so the package is verified, not just present."
+
+**🎬 ACTION** : Scrolle tout en bas, sur `== 12. the live deployment`
 
 **💬 SAY** :
 
@@ -176,7 +182,7 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 **💬 SAY** :
 
-> "To summarize. Two programs deployed on the public L-E-Z testnet, byte-identical to what's in the repository — you can verify that from the deployment transaction. A full two-of-three lifecycle on chain: create, propose, two approvals on the privacy path, execute. Fifty-seven tests, C-I green on Linux and macOS, a reproducible build, a Basecamp app, an S-D-K, a SPEL I-D-L, and a demo script that runs from a clean clone."
+> "To summarize. Two programs deployed on the public L-E-Z testnet, byte-identical to what's in the repository — you can verify that from the deployment transaction. A full two-of-three lifecycle on chain: create, propose, two approvals on the privacy path, execute. Fifty-seven tests, C-I green on Linux and macOS, a reproducible build, a packaged Basecamp module, an S-D-K, a SPEL I-D-L, and a demo script that runs from a clean clone."
 
 **💬 SAY** :
 

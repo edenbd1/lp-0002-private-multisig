@@ -76,7 +76,7 @@ all the chain records, and all the other members can see.
 
 ## Packaged asset
 
-`app/lp-0002-multisig.lgx` (493 KB, SHA-256 `f0866b491dc112197af999c94efd263f2063162358b7710bad4299133933912b`) is the packaged module,
+`app/lp-0002-multisig.lgx` (493 KB, SHA-256 `d994384ee73f64c7c30b5cff2993a4613aba78aa23a3f3ff56a853654eb8b45f`) is the packaged module,
 carrying the `darwin-arm64` variant: the plugin dylib, the QML view, the module
 metadata, and the `msig` CLI the bridge drives. Drop it into Basecamp's
 user-plugins directory (`~/Library/Application Support/Logos/LogosBasecampDev/plugins/`
@@ -88,31 +88,37 @@ Verify the package matches its own manifest:
 python3 scripts/package-lgx.py --verify app/lp-0002-multisig.lgx
 ```
 
-### How it was packaged, and why not with Nix
+### How it was packaged
 
-The reference path is `logos-module-builder`'s `logos_module()` macro inside its
-Nix dev shell, which calls `lgx create` from
-[`logos-co/logos-package`](https://github.com/logos-co/logos-package). That
-remains the canonical tool.
+**With the real `lgx`** from
+[`logos-co/logos-package`](https://github.com/logos-co/logos-package) — the same
+tool `nix-bundle-lgx` drives inside the module-builder's Nix shell.
+`scripts/package-lgx.py` finds it at `$LGX_BIN`, then
+`~/logos/src/logos-package/build/lgx`, then on `PATH`, and calls
+`lgx create` / `lgx add`. Metadata is folded into the manifest afterwards,
+exactly as `nix-bundle-lgx`'s `bundle.sh` does, because `lgx add` never reads
+`metadata.json` and would otherwise leave author, description, type and category
+empty.
 
-This package was produced by `scripts/package-lgx.py`, which implements the same
-format directly, because Nix was not available on the build machine and shipping
-no `.lgx` was not an acceptable answer. It is not reverse-engineered by guessing:
-the manifest hash scheme is transcribed from `logos-package`'s
-`src/crypto/signing.cpp` (`computeDirectoryHash` / `computeParentDirectoryHash`),
-and **the script refuses to write a package unless that transcription still
-reproduces the manifests of two packages built by the real tool** — LP-0003's and
-LP-0005's. Run the check on its own:
+Read it back with the same tool:
 
 ```bash
-python3 scripts/package-lgx.py --self-test
+lgx manifest app/lp-0002-multisig.lgx
+lgx extract  app/lp-0002-multisig.lgx --variant darwin-arm64 --output /tmp/x
 ```
 
-If Nix is available, prefer the reference path:
+**Without `lgx` on the machine**, the script falls back to writing the package
+itself, and that fallback is checked rather than trusted: the manifest hash
+scheme is transcribed from `logos-package`'s `src/crypto/signing.cpp`
+(`computeDirectoryHash` / `computeParentDirectoryHash`), and the script refuses
+to write anything unless the transcription still reproduces the manifests of two
+packages built by the real tool. Both paths were confirmed to produce the
+**identical** root hash `abc370099b4b205cbdd323383490c00ed5bc0e1101bea8bfe0ca689f38dd9cd0`
+for this module.
 
 ```bash
-LOGOS_MODULE_BUILDER_ROOT=/path/to/logos-module-builder cmake -B build
-cmake --build build
+python3 scripts/package-lgx.py --self-test    # check the fallback transcription
+python3 scripts/package-lgx.py --verify app/lp-0002-multisig.lgx
 ```
 
 ## Files

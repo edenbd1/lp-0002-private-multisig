@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+# A rapid series of pushes should not leave older commits running. Without this,
+# every intermediate commit runs to completion and any that is mid-fix reports a
+# failure that is already obsolete by the time it lands in an inbox.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   # No mock receipts anywhere in CI.
@@ -22,7 +29,7 @@ jobs:
         # VPS. Building on both here is the only way to know it holds.
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -73,7 +80,7 @@ jobs:
     name: verifier vs sequencer executor
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 

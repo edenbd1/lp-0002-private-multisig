@@ -11,6 +11,11 @@ publish = false
 # The exact LEZ types the sequencer feeds a program guest, pinned to the tag the
 # public testnet runs.
 lee_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", features = ["host"] }
+# `client` gives `default_executor()`, which runs the guest through an `r0vm`
+# subprocess. r0vm ships with the risc0 toolchain, so it is present on any
+# machine that has run `cargo risczero`; CI installs it explicitly via rzup.
+# Enabling `prove` instead would run in-process but drags in GPU backends —
+# Metal on macOS, which needs an Xcode component most machines do not have.
 risc0-zkvm = { version = "3.0.5", features = ["client"] }
 risc0-binfmt = "3.0"
 multisig-core = { path = "../multisig-core" }

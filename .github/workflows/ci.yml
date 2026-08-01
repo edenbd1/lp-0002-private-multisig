@@ -77,6 +77,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
+      # The tests drive the guest through risc0's `r0vm`, which is how the
+      # sequencer's own executor runs it. r0vm ships with the risc0 toolchain,
+      # so it is already present on a developer machine that has built the
+      # guests; a bare runner needs it installed.
+      - name: Install r0vm
+        run: |
+          curl -L https://risczero.com/install | bash
+          echo "$HOME/.risc0/bin" >> "$GITHUB_PATH"
+          "$HOME/.risc0/bin/rzup" install r0vm 3.0.5
+      - name: Confirm r0vm is on PATH
+        run: r0vm --version
+
       - name: Programs are committed
         run: |
           test -f artifacts/programs/multisig_verifier.bin

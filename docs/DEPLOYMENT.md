@@ -14,33 +14,33 @@ the privacy-preserving path, and executed.
 | Step | Transaction |
 |---|---|
 | deploy `membership_lez` | `64098974b7d28f4facf1218e771d27c6163f7fb7ce3bd4f218df6db42ace6dde` |
-| deploy `multisig_verifier` | `dd8d0dc2206712468c163a018d40323fc953284401670ed43f9bad87f28bba69` |
-| `create_multisig` | `109d8b42922e435268c31f8ba3f474c77b6b143488ac1137a90bca122e733791` |
-| `create_proposal` | `4e0524446e074004b4f703c9d4c122c952c03a8b1cfbecbf1b987ffb18bf8fb6` |
-| `approve` (member A, **privacy tx**) | `ead4460536488d41c0f23ebc0d1b8c3074142ebd425ca085f26e91e294094486` |
-| `approve` (member B, **privacy tx**) | `c2fddecd9624fa9dd7c3734895eaf6027adbf44c49e7f8457bb0563fc9ae10b9` |
-| `execute` | `f1ccbe5145b804ec43f0579a3dc3fd482eb30029992ca2b35e460caa34b6371f` |
+| deploy `multisig_verifier` | `e24f5367521616f235acd26e3ee8937e8fc071335f187fab3ad282b6a691192f` |
+| `create_multisig` | `de22a8c917774643969fec0b566082f701867b1359f18574fc8ee390badb3cdd` |
+| `create_proposal` | `b7a4f74534cf9efc5da734c50b3c3ace7d1e7aa35aeaf86ca8f736dd566ea832` |
+| `approve` (member A, **privacy tx**) | `6e035e4e702bcd241faa2ac304bc32178193bef25d66036a8bf7b0915d716347` |
+| `approve` (member B, **privacy tx**) | `968c5d1ba1b828f93ee44a037b313f1c8c2b3ea30afb9302857b18fd8619dc55` |
+| `execute` | `5817c49ce6ab86b5349ca2d55b95662f4cf7192b89be924d1f72c74f5d0e8b74` |
 
-Multisig id `ebbb2ec23288ffbe6c8fdd2c35eac05e621a1081b07caef0265976606b3bb0f5`,
-member root `ed7da38f7f730d34dfdaaf28b08d5c16ad53b28b93367bfa732b62e21a20634c`,
-config hash `763f849ca5067a6b3dc0e163b04adad8ef413d166fc0b9c124652dc99699d34d`
+Multisig id `ccd1a480cdf52d79c6d720543e5f88a73027097397d626de8d4ec8ac0efe1ffe`,
+member root `04a021a4d53a635a02eeebc193f2e6a3bad302cb3b5500a066038d0753db6fc2`,
+config hash `af8baaf9198c0e717331834038f045c1a91ca6c80fb25159299e8bd93209f3c8`
 (which is what anchors the root *and* the threshold in the multisig's address).
 The action was `transfer 100 LEZ to the grants treasury`.
 
 ## The accounts, and what they prove
 
 All five are owned by the verifier program
-(`2878411f,0c38e26e,efaa31b0,f73b079e,3be3ccbd,6d71006e,68f5bcf5,24ee3062`).
+(the verifier ProgramId).
 Read them yourself with `./scripts/verify-onchain.sh`, or derive the addresses
 with `scripts/pda.py` and query `getAccount`.
 
 | Account | Address |
 |---|---|
-| multisig | `4nf2HZtLRKCJh6eJHcsntgCntRXktMXxUw1BCwKhFvdR` |
-| proposal | `4eWzzaDj668TCMyMC7BsWhZjVUKKm2SJ4kByThn2G9AZ` |
-| approval marker A | `3SuRQe4gpDBMic5evbtsdXTHaSCCYhqT4GuLr7TFboF2` |
-| approval marker B | `ECfwebcZyv2Vju3Fu2Q1mceu6E8yBtjLkXaGSNDS581r` |
-| execution marker | `HaHrL1NPcjy2e4HBHP4Nq7gp7BXJd57jfSvUhi3y9fjo` |
+| multisig | `chmP8jUqSHh2irhKVxBkM6GaGfLHmSq3TgCABziET3R` |
+| proposal | `GdGHweUajfx7ocZNSC87WQNeYUP3Zm4EsNUiBqA4u3Kc` |
+| approval marker A | `9q31RPufMoRe6pXcxrcuwFEJQN2Wnr2qV4HhXnV8a42r` |
+| approval marker B | `GMgP7TMKoFVimMxX7PmtbeYG1dhGTGHUDh4F1yJmc8pv` |
+| execution marker | `EsV6LpVUfR1iunep8g4etg1qTGQfzxbA1J7PjDBsFV5b` |
 
 **The two approval markers are the whole claim.** Each exists only because
 `approve` ran and claimed it; `approve` declares a `ChainedCall` to
@@ -63,7 +63,7 @@ counted them against the threshold anchored in the multisig's address.
 | Program | ImageID | ProgramId (hex) |
 |---|---|---|
 | `membership_lez` | `a48ecc5289404ad01fd6d6fd1d79eaebb8d2f0fe4f2dc2ebbc85003ee82af3d6` | `52cc8ea4,d04a4089,fdd6d61f,ebea791d,fef0d2b8,ebc22d4f,3e0085bc,d6f32ae8` |
-| `multisig_verifier` | `1f4178286ee2380cb031aaef9e073bf7bdcce33b6e00716df5bcf5686230ee24` | `2878411f,0c38e26e,efaa31b0,f73b079e,3be3ccbd,6d71006e,68f5bcf5,24ee3062` |
+| `multisig_verifier` | `cf5724b0e8dabd4a1519f8d9ea7371d69e1d7e2f6d8c931f1e4b3110150d7982` | the verifier ProgramId |
 
 Verify for yourself:
 

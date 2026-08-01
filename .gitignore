@@ -3,3 +3,6 @@
 _external/
 *.pdf
 .DS_Store
+
+/.demo/
+/.testnet/

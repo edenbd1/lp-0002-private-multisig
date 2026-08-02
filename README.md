@@ -47,7 +47,7 @@ cd lp-0002-private-multisig
 ./scripts/demo.sh
 ```
 
-No network, no funded account, no sequencer required. The demo runs the 22
+No network, no funded account, no sequencer required. The demo runs the 25
 circuit tests, the 28 adversarial tests against the built verifier binary through
 the sequencer's own executor, a full 3-of-5 lifecycle, and reports the measured
 compute cost.
@@ -108,7 +108,7 @@ sessions.
 
 | Path | What |
 |---|---|
-| `crates/multisig-core` | Shared primitives and the in-circuit approval logic. `no_std`. 22 adversarial tests |
+| `crates/multisig-core` | Shared primitives and the in-circuit approval logic. `no_std`. 25 adversarial tests |
 | `crates/membership-circuit/methods/guest-lez` | The membership proof as a native LEZ program, so the privacy circuit composes it with `env::verify` |
 | `crates/multisig-verifier-spel/methods/guest` | The on-chain verifier: `create_multisig`, `create_proposal`, `approve`, `execute` |
 | `crates/multisig-verifier-tests` | 28 adversarial tests against the built binary, through the sequencer's own executor |

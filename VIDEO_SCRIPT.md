@@ -125,7 +125,7 @@ Si oui → QuickTime → Screen Recording → Démarre. Sinon → stop, prévien
 
 **💬 SAY** :
 
-> "Step eleven checks the Basecamp package. The dot-l-g-x is committed, and the script recomputes its manifest hashes from its own contents — so the package is verified, not just present."
+> "Step eleven checks the Basecamp package. The dot-l-g-x is committed, and the script recomputes its manifest hashes from its own contents — so the package is verified, not just present. And I installed it in Basecamp zero-two-two and drove it: the module loads, and pressing Status returns the live deployment's state, two of three, ready to execute."
 
 **🎬 ACTION** : Scrolle tout en bas, sur `== 12. the live deployment`
 
@@ -174,6 +174,10 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 > "The same pass found three documented error codes with no test behind them, and a verification script that reported accounts as missing when they were on chain. All fixed. Fifty-seven tests now."
 
+**💬 SAY** :
+
+> "The same habit paid off again on the Basecamp package. Rather than call it loadable, I installed Basecamp and loaded it — and it did not work. It was built against a newer Qt than Basecamp runs, so Qt refused it; the plugin interface used an I-D of my own invention instead of Basecamp's, so the cast returned null; and my copy of that interface had one extra virtual function, which shifts every later vtable slot. Three ways to fail, none of them visible in the interface — the app tile just did nothing. All three are fixed, and the packaging script now refuses to build a package with any of them."
+
 ---
 
 # SCÈNE 5 — Closing (5:20 – 6:00)
@@ -182,7 +186,7 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 **💬 SAY** :
 
-> "To summarize. Two programs deployed on the public L-E-Z testnet, byte-identical to what's in the repository — you can verify that from the deployment transaction. A full two-of-three lifecycle on chain: create, propose, two approvals on the privacy path, execute. Fifty-seven tests, C-I green on Linux and macOS, a reproducible build, a packaged Basecamp module, an S-D-K, a SPEL I-D-L, and a demo script that runs from a clean clone."
+> "To summarize. Two programs deployed on the public L-E-Z testnet, byte-identical to what's in the repository — you can verify that from the deployment transaction. A full two-of-three lifecycle on chain: create, propose, two approvals on the privacy path, execute. Fifty-seven tests, C-I green on Linux and macOS, a reproducible build, a Basecamp module I installed and used in Basecamp rather than just shipped, an S-D-K, a SPEL I-D-L, and a demo script that runs from a clean clone."
 
 **💬 SAY** :
 
@@ -246,10 +250,10 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 |---|---|---|---|
 | 1. Intro | 0:00 | 0:45 | 45s |
 | 2. demo.sh | 0:45 | 3:00 | 2m15 |
-| 3. La chaîne en direct | 3:00 | 4:15 | 1m15 |
-| 4. L'audit | 4:15 | 5:20 | 1m05 |
-| 5. Closing | 5:20 | 6:00 | 40s |
-| **Total** | | | **~6 min** |
+| 3. La chaîne en direct | 3:00 | 4:25 | 1m25 |
+| 4. L'audit | 4:25 | 5:55 | 1m30 |
+| 5. Closing | 5:55 | 6:35 | 40s |
+| **Total** | | | **~6m35** |
 
 Entre 5 et 8 minutes c'est bon. Le brief demande une narration qui explique
 l'architecture et les décisions — pas un screencast muet. La scène 4 est ce qui

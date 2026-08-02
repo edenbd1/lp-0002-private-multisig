@@ -76,9 +76,13 @@ all the chain records, and all the other members can see.
 
 ## Packaged asset
 
-`app/lp-0002-multisig.lgx` (493 KB, SHA-256 `d994384ee73f64c7c30b5cff2993a4613aba78aa23a3f3ff56a853654eb8b45f`) is the packaged module,
-carrying the `darwin-arm64` variant: the plugin dylib, the QML view, the module
-metadata, and the `msig` CLI the bridge drives. Drop it into Basecamp's
+`app/lp-0002-multisig.lgx` (2.4 MB, SHA-256 `43608148686943f16839f5ab4b224869687b7ef386f2fd44b17c3b81ab367c03`) is the packaged
+module. It carries **two variants** — `darwin-arm64` and `linux-amd64` — each
+with the plugin library, the QML view, the module metadata, and the `msig` CLI
+the bridge drives. Basecamp selects the one matching the host.
+
+Two variants rather than one because the evaluator reviews on a Linux VPS (see
+logos-co/lambda-prize#67); a macOS-only package is one they cannot open. Drop it into Basecamp's
 user-plugins directory (`~/Library/Application Support/Logos/LogosBasecampDev/plugins/`
 on macOS) to load it.
 
@@ -87,6 +91,21 @@ Verify the package matches its own manifest:
 ```bash
 python3 scripts/package-lgx.py --verify app/lp-0002-multisig.lgx
 ```
+
+### Rebuilding the Linux variant
+
+The macOS half builds natively (above). The Linux half builds in Docker, so it
+does not depend on the host beyond having Docker:
+
+```bash
+./scripts/build-linux-variant.sh                                   # ARCH=arm64 for linux-arm64
+python3 scripts/package-lgx.py --add-variant linux-amd64:.linux-variant
+```
+
+That produces the ELF plugin and a Linux `msig`, then folds both into the
+package. The CLI matters: the bridge shells out to `msig`, so a variant carrying
+a Linux plugin next to a macOS binary would load and then fail on the first
+button press.
 
 ### How it was packaged
 

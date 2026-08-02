@@ -181,7 +181,11 @@ def patch_metadata(pkg: Path, meta: dict, name: str) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default="app/lp-0002-multisig.lgx")
-    ap.add_argument("--variant", default=VARIANT_DEFAULT)
+    ap.add_argument("--variant", default=VARIANT_DEFAULT,
+                    help="variant to build from the local artifacts")
+    ap.add_argument("--add-variant", metavar="NAME:DIR", action="append", default=[],
+                    help="fold in a variant built elsewhere, e.g. "
+                         "linux-amd64:/path/with/{so,msig}")
     ap.add_argument("--self-test", action="store_true",
                     help="only verify the hash transcription against known packages")
     ap.add_argument("--verify", metavar="LGX",
@@ -214,7 +218,8 @@ def main() -> int:
                 print("\nthe package contents do not match its manifest", file=sys.stderr)
                 return 1
             print(f"\n{args.verify}: contents match the manifest "
-                  f"({len(per)} variant, sha256 {sha(pkg.read_bytes())[:16]}…)")
+                  f"({len(per)} variant{'s' if len(per) != 1 else ''}: "
+                  f"{', '.join(sorted(per))}; sha256 {sha(pkg.read_bytes())[:16]}…)")
             return 0
         finally:
             shutil.rmtree(tmp)
@@ -251,6 +256,29 @@ def main() -> int:
 
         out = ROOT / args.out
         out.parent.mkdir(parents=True, exist_ok=True)
+        # Extra variants built on other platforms. Basecamp picks the one
+        # matching the host, so shipping only darwin-arm64 makes the package
+        # unopenable for a reviewer on Linux.
+        for spec in args.add_variant:
+            vname, vsrc = spec.split(":", 1)
+            src = Path(vsrc)
+            dst = stage / "variants" / vname
+            (dst / "qml").mkdir(parents=True)
+            libs = [f for f in src.iterdir()
+                    if f.suffix in (".so", ".dylib") or f.name.endswith(".dll")]
+            if not libs:
+                print(f"no plugin library in {src}", file=sys.stderr)
+                return 1
+            shutil.copy2(libs[0], dst / libs[0].name)
+            shutil.copy2(app / "metadata.json", dst / "metadata.json")
+            shutil.copy2(app / "qml" / "Main.qml", dst / "qml" / "Main.qml")
+            shutil.copy2(app / "qml" / "qmldir", dst / "qml" / "qmldir")
+            for cli_name in ("msig", "msig.exe"):
+                if (src / cli_name).is_file():
+                    shutil.copy2(src / cli_name, dst / cli_name)
+                    break
+            print(f"  + variant {vname} ({libs[0].name})")
+
         real = find_lgx()
 
         if real:
@@ -259,10 +287,13 @@ def main() -> int:
             work.mkdir()
             subprocess.run([real, "create", "lp-0002-multisig"], cwd=work,
                            check=True, capture_output=True)
-            subprocess.run([real, "add", "lp-0002-multisig.lgx",
-                            "--variant", args.variant, "--files", str(vdir),
-                            "--main", plugin.name, "--view", "qml/Main.qml", "-y"],
-                           cwd=work, check=True, capture_output=True)
+            for vd in sorted((stage / "variants").iterdir()):
+                lib = next(f for f in vd.iterdir()
+                           if f.suffix in (".so", ".dylib") or f.name.endswith(".dll"))
+                subprocess.run([real, "add", "lp-0002-multisig.lgx",
+                                "--variant", vd.name, "--files", str(vd),
+                                "--main", lib.name, "--view", "qml/Main.qml", "-y"],
+                               cwd=work, check=True, capture_output=True)
             shutil.copy2(work / "lp-0002-multisig.lgx", out)
             manifest = patch_metadata(out, meta, "lp-0002-multisig")
         else:
@@ -283,7 +314,7 @@ def main() -> int:
         digest = sha(out.read_bytes())
         print(f"\nwrote {args.out} ({size // 1024} KB)")
         print(f"  sha256   {digest}")
-        print(f"  variant  {args.variant}")
+        print(f"  variants {', '.join(sorted(manifest['hashes'][k].split('/')[-1] for k in manifest['hashes'] if k.startswith('variants/')) ) if False else ', '.join(sorted(k.split('/',1)[1] for k in manifest['hashes'] if k.startswith('variants/')))}")
         print(f"  root     {manifest['hashes']['root']}")
         return 0
     finally:

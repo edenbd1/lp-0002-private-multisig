@@ -20,7 +20,7 @@ if(DEFINED ENV{LOGOS_MODULE_BUILDER_ROOT})
     include($ENV{LOGOS_MODULE_BUILDER_ROOT}/cmake/LogosModule.cmake)
 
     find_package(Qt6 REQUIRED COMPONENTS
-        Widgets Quick QuickWidgets Qml Concurrent Gui Network OpenGL)
+        Widgets Quick QuickWidgets Qml Gui Network OpenGL)
     find_package(nlohmann_json REQUIRED)
     find_package(OpenSSL REQUIRED)
     find_package(Boost CONFIG REQUIRED)
@@ -38,7 +38,7 @@ if(DEFINED ENV{LOGOS_MODULE_BUILDER_ROOT})
                 src/multisig_bridge.h
                 src/multisig_bridge.cpp
         LINK_TARGETS Qt6::Widgets Qt6::Quick Qt6::QuickWidgets
-                     Qt6::Qml Qt6::Concurrent Qt6::Gui Qt6::Network Qt6::OpenGL
+                     Qt6::Qml Qt6::Gui Qt6::Network Qt6::OpenGL
                      nlohmann_json::nlohmann_json
                      OpenSSL::SSL Boost::system
     )
@@ -53,7 +53,7 @@ else()
     set(CMAKE_AUTOMOC ON)
     set(CMAKE_AUTORCC ON)
     find_package(Qt6 REQUIRED COMPONENTS
-        Core Gui Widgets Quick QuickWidgets Qml Concurrent
+        Core Gui Widgets Quick QuickWidgets Qml
     )
 
     # Qt's moc resolves Q_PLUGIN_METADATA(FILE "...") relative to the
@@ -79,7 +79,7 @@ else()
 
     target_link_libraries(lp_0002_multisig_plugin PRIVATE
         Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Quick
-        Qt6::QuickWidgets Qt6::Qml Qt6::Concurrent
+        Qt6::QuickWidgets Qt6::Qml
     )
 
     # Basecamp's plugin discovery expects <plugin>/<plugin>.<ext>,

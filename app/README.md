@@ -203,8 +203,11 @@ lgx extract  app/lp-0002-multisig.lgx --variant darwin-arm64 --output /tmp/x
 itself, and that fallback is checked rather than trusted: the manifest hash
 scheme is transcribed from `logos-package`'s `src/crypto/signing.cpp`
 (`computeDirectoryHash` / `computeParentDirectoryHash`), and the script refuses
-to write anything unless the transcription still reproduces the manifests of two
-packages built by the real tool. Both paths were confirmed to produce the
+to write anything unless the transcription still reproduces the manifest of a
+package built by the real tool. One such package ships in this repository — the
+committed `.lgx` itself — so the check runs from a clean clone rather than only
+on the machine that has the sibling submissions lying around. Both paths were
+confirmed to produce the
 **identical** root hash `618533b81b9f46f1f1f3fa785135b8d4d2506e89afc0ff449d1611fb65e3fb21`
 for this module.
 

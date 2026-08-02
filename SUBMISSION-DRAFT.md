@@ -248,8 +248,8 @@ stated as such rather than hidden behind the cycle counts.
 
 ### Supportability
 
-53 tests across four suites, counted and itemised in the README. That number
-went from 40 after an audit pass found a threshold bypass and three untested
+57 tests across four suites, counted and itemised in the README. That number
+went from 40 after two audit passes found a threshold bypass and three untested
 error codes; the finding and its cost are written up in `docs/security.md`
 rather than quietly patched. The two guest
 crates are excluded from the host workspace because they target

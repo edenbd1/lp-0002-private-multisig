@@ -115,11 +115,18 @@ def self_test() -> int:
     refs = [
         ROOT.parent / "lp-0003/app/lp-0003-airdrop.lgx",
         ROOT.parent / "lp-0005/app/lp-0005-attestation.lgx",
+        # Sibling packages only exist on the machine that built them, so from a
+        # clean clone the check would otherwise pass by having nothing to test.
+        # This module's own committed package was written by the real `lgx`
+        # too, and it ships in the repository — so there is always at least one
+        # real reference to reproduce.
+        ROOT / "app/lp-0002-multisig.lgx",
     ]
     found = [r for r in refs if r.is_file()]
     if not found:
-        print("self-test: no reference .lgx available, skipping", file=sys.stderr)
-        return 0
+        print("self-test: no reference .lgx to check against — refusing to "
+              "vouch for the transcription", file=sys.stderr)
+        return 1
     failures = 0
     for ref in found:
         tmp = Path(tempfile.mkdtemp())

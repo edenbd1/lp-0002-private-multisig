@@ -13,3 +13,7 @@ _external/
 # Basecamp app build output, and the metadata copy CMake stages for moc
 /app/build/
 /app/src/metadata.json
+
+/.linux-variant/
+/.linux-msig
+/app/build-linux/

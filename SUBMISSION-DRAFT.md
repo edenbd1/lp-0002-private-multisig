@@ -153,12 +153,13 @@ honestly.
       transport-agnostic: it opens no socket and touches no filesystem.
 - [x] **Basecamp app GUI with local build instructions and loadable assets.**
       `app/`, with both the `logos-module-builder` path and a standalone Qt path.
-      The packaged module is committed at `app/lp-0002-multisig.lgx` (493 KB,
-      `darwin-arm64`), built with the **real `lgx`** from `logos-co/logos-package`
-      — the same tool `nix-bundle-lgx` drives — and it reads back with
-      `lgx manifest` and `lgx extract`. `scripts/package-lgx.py` also ships a
-      checked fallback for machines without `lgx`; both paths produce the
-      identical root hash.
+      The packaged module is committed at `app/lp-0002-multisig.lgx` (2.4 MB),
+      built with the **real `lgx`** from `logos-co/logos-package` — the same tool
+      `nix-bundle-lgx` drives — and it passes `lgx verify`. It carries **two
+      variants**, `darwin-arm64` and `linux-amd64`, so it opens on the machine
+      the evaluator actually reviews on; the Linux half is built in Docker by
+      `scripts/build-linux-variant.sh` and the packaged Linux `msig` was run
+      inside a Linux container to confirm it works, not just that it exists.
 - [x] **SPEL IDL.** `idl/multisig_verifier.idl.json`, generated from source by
       `spel generate-idl`.
 

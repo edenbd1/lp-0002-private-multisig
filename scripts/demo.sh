@@ -113,8 +113,10 @@ cargo test -p multisig-verifier-tests --quiet -- --ignored --nocapture 2>&1 \
 
 rule "11. the Basecamp package"
 if [ -f app/lp-0002-multisig.lgx ]; then
-  echo "The committed .lgx, with its own manifest hashes recomputed from its"
-  echo "contents — so the package is checked, not just present."
+  echo "The committed .lgx carries two variants — darwin-arm64 and linux-amd64 —"
+  echo "so it opens on the machine a reviewer actually uses. Its manifest hashes"
+  echo "are recomputed from its contents below: the package is checked, not just"
+  echo "present."
   python3 scripts/package-lgx.py --verify app/lp-0002-multisig.lgx | sed 's/^/   /'
 else
   echo "app/lp-0002-multisig.lgx missing. Build it with:"

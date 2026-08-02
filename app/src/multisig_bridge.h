@@ -48,5 +48,7 @@ public:
 
 private:
     QString run(const QStringList& args);
-    QString m_cli = QStringLiteral("msig");
+    // Set in the constructor to the `msig` shipped alongside this plugin; see
+    // resolveCli() in the .cpp. Only overridden if QML calls setCliPath().
+    QString m_cli;
 };

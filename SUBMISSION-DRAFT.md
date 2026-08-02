@@ -160,6 +160,20 @@ honestly.
       the evaluator actually reviews on; the Linux half is built in Docker by
       `scripts/build-linux-variant.sh` and the packaged Linux `msig` was run
       inside a Linux container to confirm it works, not just that it exists.
+
+      **It was installed and driven in Logos Basecamp 0.2.2**, not merely
+      declared loadable: the committed package extracts into the user plugins
+      directory, the module loads (`Successfully loaded UI module`), and
+      pressing *Status* against `artifacts/testnet` returns the live
+      deployment's `2-of-3 · 2/2 READY TO EXECUTE` with both approval markers.
+      Doing that found three defects in the packaging, all fixed and all
+      described in `app/README.md`: the plugin was built against a Qt newer than
+      the one Basecamp runs, so Qt refused it outright; `Q_DECLARE_INTERFACE`
+      used a private IID instead of `com.logos.component.IComponent`, so the
+      host's `qobject_cast` returned null; and the `IComponent` declaration
+      carried an extra virtual, which shifted every later vtable slot.
+      `scripts/package-lgx.py` now refuses to package a binary with any of
+      those properties.
 - [x] **SPEL IDL.** `idl/multisig_verifier.idl.json`, generated from source by
       `spel generate-idl`.
 

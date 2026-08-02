@@ -40,24 +40,70 @@ The fallback branch produces `build/lp_0002_multisig.<so|dylib>` with
 `metadata.json` and `module.json` copied next to it. Drop that directory into
 Basecamp's user-plugins directory to load it.
 
-Requires Qt 6 with `Widgets Quick QuickWidgets Qml Concurrent Gui Network OpenGL`.
+Requires Qt 6 with `Core Gui Widgets Quick QuickWidgets Qml`.
 
-Verified on macOS with Qt 6.11.1 and CMake 4.1.2:
+### Which Qt — this is load-bearing
+
+Build against **Qt 6.9.x or older**, not against whatever Qt is newest.
+
+Qt refuses to load a plugin whose minor version is above the host's, and Logos
+Basecamp 0.2.2 ships Qt 6.9.2. A plugin built against Homebrew's current Qt
+(6.11.1) is rejected outright, with nothing in the UI to explain it — the app
+tile simply does nothing, and the reason appears only on Basecamp's stderr:
+
+```
+Failed to load UI module "lp-0002-multisig" :
+  "The plugin ... uses incompatible Qt library. (6.11.0) [release]"
+```
+
+The committed `darwin-arm64` variant is built against Qt 6.9.2, obtained without
+touching the system Qt:
 
 ```bash
-cmake -B build -S . -DCMAKE_PREFIX_PATH=$(brew --prefix qt)
+python3 -m venv /tmp/aqt && /tmp/aqt/bin/pip install aqtinstall
+/tmp/aqt/bin/aqt install-qt mac desktop 6.9.2 clang_64 --outputdir /tmp/Qt
+
+cmake -B build -S . -DCMAKE_PREFIX_PATH=/tmp/Qt/6.9.2/macos -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-produces `build/lp_0002_multisig.dylib` with `metadata.json` and `module.json`
-beside it, the QML scene compiled in via `rcc`, and both interface IIDs present
-in the binary — `com.networkschool.logos.IComponent/1.0` and
-`com.networkschool.lp0002.MultisigPlugin/1.0`.
+Official Qt builds reference their frameworks as `@rpath/QtCore.framework/...`,
+which resolves against the Qt that Basecamp bundles. A Homebrew-built plugin
+instead hardcodes `/opt/homebrew/opt/qtbase/lib/...`, so it would also fail on
+any machine without that exact Homebrew layout. The `linux-amd64` variant builds
+against Debian bookworm's Qt 6.4.2, which is below 6.9 and therefore fine.
+
+Check a build before shipping it:
+
+```bash
+otool -L build/lp_0002_multisig.dylib | grep -c /opt/homebrew   # must be 0
+otool -L build/lp_0002_multisig.dylib | grep QtCore             # must say 6.9.x
+```
+
+### The plugin interface is ABI-critical
+
+`src/plugin.h` declares `IComponent` locally so the standalone path needs no SDK
+header. Two things in that declaration are not free choices:
+
+- the interface string must be `com.logos.component.IComponent`. It is what
+  `qobject_cast<IComponent*>` compares across the plugin boundary; a private IID
+  makes the cast return null and Basecamp logs *"Plugin does not implement
+  IComponent"*.
+- the virtual functions must be exactly `~IComponent`, `createWidget`,
+  `destroyWidget`, in that order. An extra virtual — a `name()` accessor, say —
+  shifts every later vtable slot, so the host calls the wrong function through a
+  pointer that cast successfully.
+
+Both were verified against LogosBasecamp 0.2.2 by reading the secondary vtable
+its own `main_ui` plugin emits for `IComponent`.
 
 ## Using it
 
-1. Point **Multisig folder** at a directory. If `msig` is not on `PATH`, put its
-   full path in the second field.
+1. Point **Multisig folder** at a directory. The `msig` binary is found
+   automatically: the plugin resolves its own path with `dladdr` and uses the
+   CLI shipped beside it in the package, so a freshly installed `.lgx` works
+   without configuration. The second field overrides that, for running the
+   plugin out of a build tree.
 2. **Create** — pick N and M, press *New multisig*. This writes `multisig.json`
    and `members.json` and prints the member root and the config hash that anchors
    the pair on chain.
@@ -76,15 +122,42 @@ all the chain records, and all the other members can see.
 
 ## Packaged asset
 
-`app/lp-0002-multisig.lgx` (2.4 MB, SHA-256 `43608148686943f16839f5ab4b224869687b7ef386f2fd44b17c3b81ab367c03`) is the packaged
+`app/lp-0002-multisig.lgx` (2.4 MB, SHA-256 `2276d1f3f9cd9767de4afcf1613646b52d6b4c8032cc799c3dd4653a6cd5599f`) is the packaged
 module. It carries **two variants** — `darwin-arm64` and `linux-amd64` — each
 with the plugin library, the QML view, the module metadata, and the `msig` CLI
 the bridge drives. Basecamp selects the one matching the host.
 
 Two variants rather than one because the evaluator reviews on a Linux VPS (see
-logos-co/lambda-prize#67); a macOS-only package is one they cannot open. Drop it into Basecamp's
-user-plugins directory (`~/Library/Application Support/Logos/LogosBasecampDev/plugins/`
-on macOS) to load it.
+logos-co/lambda-prize#67); a macOS-only package is one they cannot open.
+
+### Installing it
+
+```bash
+lgx extract app/lp-0002-multisig.lgx --variant darwin-arm64 --output /tmp/x
+mkdir -p ~/Library/Application\ Support/Logos/LogosBasecamp/plugins/lp-0002-multisig
+cp -R /tmp/x/darwin-arm64/. ~/Library/Application\ Support/Logos/LogosBasecamp/plugins/lp-0002-multisig/
+printf darwin-arm64 > ~/Library/Application\ Support/Logos/LogosBasecamp/plugins/lp-0002-multisig/variant
+tar xzOf app/lp-0002-multisig.lgx manifest.json \
+  > ~/Library/Application\ Support/Logos/LogosBasecamp/plugins/lp-0002-multisig/manifest.json
+```
+
+On Linux the directory is `~/.local/share/Logos/LogosBasecamp/plugins/`, and the
+variant is `linux-amd64`. Restart Basecamp; the module appears in the left rail.
+
+This was run, not assumed. On **LogosBasecamp 0.2.2** (official macOS arm64
+release), the package above loads and the surface is usable:
+
+```
+App launcher clicked: "lp-0002-multisig"
+Loading UI module: "lp-0002-multisig"
+MainContainer: Added plugin dock to WorkspaceArea: "lp-0002-multisig"
+Successfully loaded UI module: "lp-0002-multisig"
+```
+
+Pointing **Multisig folder** at `artifacts/testnet` and pressing **Status**
+returns the live deployment's state — `2-of-3`, `2/2 READY TO EXECUTE`, and the
+two approval markers — with the `msig` field left empty, because the plugin
+resolves the CLI shipped inside the package.
 
 Verify the package matches its own manifest:
 
@@ -132,7 +205,7 @@ scheme is transcribed from `logos-package`'s `src/crypto/signing.cpp`
 (`computeDirectoryHash` / `computeParentDirectoryHash`), and the script refuses
 to write anything unless the transcription still reproduces the manifests of two
 packages built by the real tool. Both paths were confirmed to produce the
-**identical** root hash `abc370099b4b205cbdd323383490c00ed5bc0e1101bea8bfe0ca689f38dd9cd0`
+**identical** root hash `618533b81b9f46f1f1f3fa785135b8d4d2506e89afc0ff449d1611fb65e3fb21`
 for this module.
 
 ```bash

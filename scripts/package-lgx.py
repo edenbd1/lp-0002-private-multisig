@@ -45,6 +45,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -178,6 +179,45 @@ def patch_metadata(pkg: Path, meta: dict, name: str) -> dict:
     return manifest
 
 
+def unloadable_reason(plugin: Path):
+    """Why Basecamp would refuse this binary — or None if it would take it.
+
+    Both failures below are silent in the UI: the app tile just does nothing,
+    and the reason only reaches Basecamp's stderr. They are also easy to
+    reintroduce, since the default `brew --prefix qt` build hits both. So they
+    are checked here, at the one point every package must pass through.
+    """
+    blob = plugin.read_bytes()
+
+    # The interface string qobject_cast compares across the plugin boundary.
+    # Get it wrong and the host logs "Plugin does not implement IComponent".
+    if b"com.logos.component.IComponent" not in blob:
+        return ("no com.logos.component.IComponent interface string — check "
+                "Q_DECLARE_INTERFACE in app/src/plugin.h")
+
+    if plugin.suffix != ".dylib":
+        return None  # the checks below read Mach-O load commands
+
+    out = subprocess.run(["otool", "-L", str(plugin)],
+                         capture_output=True, text=True).stdout
+
+    # Qt refuses any plugin whose minor version exceeds the host's, and
+    # Basecamp 0.2.2 ships 6.9.2.
+    versions = re.findall(r"Qt\w+ \(compatibility version [\d.]+, "
+                          r"current version 6\.(\d+)\.", out)
+    if versions and max(int(v) for v in versions) > 9:
+        return (f"built against Qt 6.{max(int(v) for v in versions)} — Basecamp "
+                f"0.2.2 runs Qt 6.9.2 and rejects anything newer")
+
+    # Absolute Homebrew paths resolve on this machine and nowhere else; the
+    # host's bundled Qt is only reachable through @rpath.
+    if "/opt/homebrew" in out:
+        return ("links Homebrew Qt by absolute path — build against an "
+                "official Qt so the frameworks are referenced via @rpath")
+
+    return None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default="app/lp-0002-multisig.lgx")
@@ -231,9 +271,17 @@ def main() -> int:
     ext = "dylib" if sys.platform == "darwin" else "so"
     plugin = app / "build" / f"{plugin_name}.{ext}"
     if not plugin.is_file():
-        print(f"missing {plugin}. Build it first:\n"
-              f"  cd app && cmake -B build -S . -DCMAKE_PREFIX_PATH=$(brew --prefix qt) "
+        print(f"missing {plugin}. Build it first — and mind the Qt version,\n"
+              f"see app/README.md:\n"
+              f"  aqt install-qt mac desktop 6.9.2 clang_64 --outputdir /tmp/Qt\n"
+              f"  cd app && cmake -B build -S . -DCMAKE_PREFIX_PATH=/tmp/Qt/6.9.2/macos "
               f"&& cmake --build build", file=sys.stderr)
+        return 1
+
+    if (problem := unloadable_reason(plugin)):
+        print(f"refusing to package {plugin.name}: {problem}\n"
+              f"See app/README.md — 'Which Qt' and 'The plugin interface is "
+              f"ABI-critical'.", file=sys.stderr)
         return 1
 
     cli = ROOT / "target" / "release" / "msig"

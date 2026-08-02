@@ -1,10 +1,42 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 #include "multisig_bridge.h"
 
+#include <QFileInfo>
 #include <QProcess>
 #include <QStringList>
 
-MultisigBridge::MultisigBridge(QObject* parent) : QObject(parent) {}
+#include <dlfcn.h>
+
+namespace {
+
+// Where the CLI is, without being told.
+//
+// The `.lgx` ships `msig` in the same directory as this plugin, but Basecamp is
+// launched from the Finder, so it inherits a login PATH that contains neither
+// the user's cargo bin nor the module directory. Looking up a bare "msig" would
+// therefore fail on the first button press of a freshly installed package —
+// the package would load and then do nothing, which is the worst of both.
+//
+// dladdr gives us the path of the binary this code lives in, so the sibling is
+// resolvable at runtime on both macOS and Linux without hardcoding anything.
+QString resolveCli() {
+    Dl_info info{};
+    if (dladdr(reinterpret_cast<const void*>(&resolveCli), &info) && info.dli_fname) {
+        const QFileInfo self(QString::fromUtf8(info.dli_fname));
+        const QString sibling = self.absolutePath() + QStringLiteral("/msig");
+        if (QFileInfo(sibling).isExecutable()) {
+            return sibling;
+        }
+    }
+    // Developer builds run the plugin out of a build tree with no CLI beside
+    // it; there, PATH is the right answer.
+    return QStringLiteral("msig");
+}
+
+}  // namespace
+
+MultisigBridge::MultisigBridge(QObject* parent)
+    : QObject(parent), m_cli(resolveCli()) {}
 
 void MultisigBridge::setCliPath(const QString& path) { m_cli = path; }
 

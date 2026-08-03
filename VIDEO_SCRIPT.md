@@ -1,8 +1,8 @@
-# 🎬 LP-0002 — script vidéo (~9 min)
+# 🎬 LP-0002 — script vidéo (~11 min)
 
 > **⚠️ Tap les liens directement sur ton phone — ne pas copy-paste (les URLs sont longues et peuvent être tronquées au copy).**
 
-- Durée totale visée : **~9 minutes**
+- Durée totale visée : **~11 minutes**
 - Langue : English
 - `🎬 ACTION` = ce que tu fais à l'écran
 - `💬 SAY` = ce que tu lis à voix haute
@@ -62,11 +62,13 @@ P=$(cat artifacts/testnet/proposal_id)
 Tu dois voir **cinq ✅** et `all accounts present and owned by the verifier`.
 Si oui → QuickTime → Screen Recording → Démarre. Sinon → stop, préviens-moi.
 
-> **Le déploiement a changé le 3 août.** Si tu avais répété avec les anciennes
-> adresses, elles ne sont plus valides : le cycle de vie a été rejoué en entier
-> après la correction du script de déploiement. Les deux hashes de deploy sont
-> inchangés — ils sont content-addressed — les cinq autres sont nouveaux, et
-> toutes les adresses de ce script pointent déjà sur la nouvelle instance.
+> **Le verifier a été redéployé le 3 août au soir**, après qu'une relecture
+> croisée a trouvé un contournement (c'est la scène 4). Le déploiement live est
+> le binaire **corrigé**, ImageID `00286a88…`, avec le cycle de vie entièrement
+> rejoué contre lui. Si tu avais répété avec d'anciennes adresses, elles ne sont
+> plus valides — toutes celles de ce script pointent déjà sur la bonne instance,
+> et le hash de deploy du membership est inchangé parce que ce guest-là n'a pas
+> bougé.
 
 ---
 
@@ -216,7 +218,7 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 ---
 
-# SCÈNE 4 — L'audit (6:55 – 8:45)
+# SCÈNE 4 — L'audit (6:55 – 10:20)
 
 **🎬 ACTION** : Reste sur le terminal
 
@@ -236,6 +238,30 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 > "Every individual check was doing its job. The gap was between them. The fix puts the multisig I-D into the proposal's address, so that pairing now resolves to an account nobody ever created. I redeployed, re-ran the whole lifecycle, and wrote the finding up in docs slash security dot M-D rather than quietly patching it. Two regression tests pin both halves of the attack."
 
+**💬 SAY** (le beat le plus important de la vidéo — ralentis) :
+
+> "And then that fix turned out to be incomplete, which is the part I most want to tell you about."
+
+**💬 SAY** :
+
+> "I had it reviewed by someone who had not written it. They asked the same question I had asked — what is not checked — but about the fix rather than the original bug. And there was a second way in. The config hash, which is what commits to the member set and the threshold, appeared neither in the proposal reference nor in the proposal's address. And creating a multisig puts no constraint on the multisig I-D, deliberately, because anyone should be able to create one."
+
+**💬 SAY** :
+
+> "Those two facts compose. An attacker creates their own one-of-one member set *under your multisig I-D*. That's a fresh pair, so it initialises fine. Now both accounts an approval needs still resolve — their multisig, and your proposal — so they approve against their own member set, mint a marker on your proposal, and execute at threshold one. A three-of-five proposal, executed by one outsider."
+
+**💬 SAY** :
+
+> "I wrote the exploit as two tests before writing any fix, and they failed — meaning the attack succeeded against the deployed binary. That is the confirmation. The fix folds the config hash into the proposal reference *and* into the proposal's address, and I checked that each half alone still leaves a hole, so both are needed."
+
+**💬 SAY** :
+
+> "Here is why my own regression tests missed it. Both of them varied the multisig I-D. Neither held the I-D fixed and varied the config, which is exactly the axis the fix did not cover. I had tested the variant I found, not the family it belonged to. A fix verified only by the test that motivated it is a fix verified against one example."
+
+**💬 SAY** :
+
+> "So the verifier you just watched me read off the chain is the corrected one, redeployed today, with the whole lifecycle re-run against it. The write-up is in the security doc, next to the first finding, including why the first fix was not enough."
+
 **💬 SAY** :
 
 > "The same pass found three documented error codes with no test behind them, and a verification script that reported accounts as missing when they were on chain. All fixed. Sixty-one tests now."
@@ -250,13 +276,17 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 ---
 
-# SCÈNE 5 — Closing (8:45 – 9:25)
+# SCÈNE 5 — Closing (10:20 – 11:00)
 
 **🎬 ACTION** : Passe sur l'ONGLET A (le repo)
 
 **💬 SAY** :
 
 > "To summarize. Two programs deployed on the public L-E-Z testnet, byte-identical to what's in the repository — you can verify that from the deployment transaction. A full two-of-three lifecycle on chain: create, propose, two approvals on the privacy path, execute. Sixty-one tests, C-I green on Linux and macOS, a reproducible build, a Basecamp module I installed and used in Basecamp rather than just shipped, an S-D-K, a SPEL I-D-L, and a demo script that runs from a clean clone."
+
+**💬 SAY** :
+
+> "If there is one thing I would want you to take from this, it is not the feature list. It is that every claim in it is one I tried to break first, and twice I succeeded. The security doc has both findings written up, including the one where my own fix was not enough."
 
 **💬 SAY** :
 
@@ -322,9 +352,9 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 | 2. demo.sh | 0:45 | 3:00 | 2m15 |
 | **2bis. Une vraie preuve** | 3:00 | 5:30 | **2m30** |
 | 3. La chaîne en direct | 5:30 | 6:55 | 1m25 |
-| 4. L'audit | 6:55 | 8:45 | 1m50 |
-| 5. Closing | 8:45 | 9:25 | 40s |
-| **Total** | | | **~9m25** |
+| 4. L'audit | 6:55 | 10:20 | 3m25 |
+| 5. Closing | 10:20 | 11:00 | 40s |
+| **Total** | | | **~11 min** |
 
 **Le brief n'impose aucune durée.** Vérifié dans les *Evaluation Policies* du
 dépôt λPrize : ce qu'il exige, c'est une narration où tu expliques ce que tu as

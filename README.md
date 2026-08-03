@@ -73,6 +73,21 @@ wall clock. Needs a `logos-execution-zone` checkout (`LEZ_SRC`, default
 The same script runs in CI on a schedule — see
 [`.github/workflows/e2e-local-sequencer.yml`](.github/workflows/e2e-local-sequencer.yml).
 
+Before pushing, run what CI runs:
+
+```bash
+./scripts/preflight.sh
+```
+
+It is the same four commands `.github/workflows/ci.yml` uses, not an
+approximation of them — `fmt --check`, `clippy --all-targets -- -D warnings`,
+build, test. Wire it up as a pre-push hook with:
+
+```bash
+printf '#!/usr/bin/env bash\nexec "$(git rev-parse --show-toplevel)/scripts/preflight.sh"\n' \
+  > .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+```
+
 To rebuild the on-chain programs (needs Docker and `cargo-risczero`):
 
 ```bash

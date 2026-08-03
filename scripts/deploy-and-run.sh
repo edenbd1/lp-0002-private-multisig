@@ -83,6 +83,17 @@ read_args() {
   done < <(xargs -n1 printf '%s\n' < "$1")
 }
 
+# Pull the submitted transaction hash out of a spel transcript.
+#
+# Not the first 64-hex string in it: spel prints the resolved accounts first,
+# and an account id is also 64 hex. Grepping loosely picks up the authority's
+# id, then wait_tx polls for a hash that is not a transaction and burns its
+# full ten-minute budget before reporting TIMEOUT on a step that actually
+# succeeded. Anchor on the label spel prints instead.
+tx_hash_from() {
+  grep -oE 'tx_hash: [0-9a-f]{64}' "$1" | awk '{print $2}' | head -1
+}
+
 confirmed() {
   curl -s -m 20 -X POST "$RPC" -H 'Content-Type: application/json' \
     -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getTransaction\",\"params\":[\"$1\"]}" \
@@ -120,7 +131,7 @@ read_args "$WORK/create.args"
 "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" \
   -- create_multisig --authority "Public/$SIGNER" "${ARGS[@]}" \
   2>&1 | tee "$WORK/create.out" | tail -3
-CREATE_TX=$(grep -oE '[0-9a-f]{64}' "$WORK/create.out" | head -1)
+CREATE_TX=$(tx_hash_from "$WORK/create.out")
 [ -n "$CREATE_TX" ] && wait_tx "$CREATE_TX" "create_multisig"
 
 echo "[4/6] publish a proposal"
@@ -132,7 +143,7 @@ read_args "$WORK/prop.args"
 "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" \
   -- create_proposal --authority "Public/$SIGNER" "${ARGS[@]}" \
   2>&1 | tee "$WORK/prop.out" | tail -3
-PROP_TX=$(grep -oE '[0-9a-f]{64}' "$WORK/prop.out" | head -1)
+PROP_TX=$(tx_hash_from "$WORK/prop.out")
 [ -n "$PROP_TX" ] && wait_tx "$PROP_TX" "create_proposal"
 
 echo "[5/6] gather $THRESHOLD approvals on the privacy-preserving path"
@@ -150,7 +161,7 @@ for i in $(seq 0 $((THRESHOLD-1))); do
   "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" --bin-membership "$MEMBERSHIP" \
     -- approve --approver "Private/$APPROVER" "${ARGS[@]}" \
     2>&1 | tee "$WORK/approve_$i.out" | tail -3
-  TX=$(grep -oE '[0-9a-f]{64}' "$WORK/approve_$i.out" | head -1)
+  TX=$(tx_hash_from "$WORK/approve_$i.out")
   [ -n "$TX" ] && wait_tx "$TX" "approve:member_$i"
 done
 
@@ -174,7 +185,7 @@ read_args "$WORK/exec.args"
 "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" \
   -- execute --executor "Public/$SIGNER" --approvals "$MARKERS" "${ARGS[@]}" \
   2>&1 | tee "$WORK/exec.out" | tail -3
-EXEC_TX=$(grep -oE '[0-9a-f]{64}' "$WORK/exec.out" | head -1)
+EXEC_TX=$(tx_hash_from "$WORK/exec.out")
 [ -n "$EXEC_TX" ] && wait_tx "$EXEC_TX" "execute"
 
 echo

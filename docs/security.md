@@ -241,6 +241,50 @@ clean `cargo risczero build` reproduces `cf5724b0…` exactly — see
 [`DEPLOYMENT.md`](DEPLOYMENT.md), which also shows the deployed bytes hashing to
 the deployment transaction id.
 
+## A second audit finding: the same class, the incomplete fix
+
+The threshold bypass above was fixed on 2026-08-01 by seeding the proposal PDA
+with `[multisig_id, proposal_ref]`. A cross-review on 2026-08-03 showed that fix
+closed one variant and left another, and the surviving one is worse.
+
+**What was still wrong.** `config_hash` appeared in neither `proposal_ref` nor
+the proposal account's address. `create_multisig` places no ownership constraint
+on `multisig_id` — deliberately, since anyone may create a multisig. Those two
+facts compose: an attacker creates their own **1-of-1 config under the victim's
+`multisig_id`**, which is a fresh `(id, config_hash)` pair and therefore
+initialises fine. Then both accounts an approval needs still resolve — the
+multisig PDA `[victim_id, attacker_config]` because they created it, and the
+proposal PDA `[victim_id, victim_proposal_ref]` because the seeds did not
+mention the config. Approve against their own member root, mint a marker on the
+victim's proposal, execute at threshold 1. **A 3-of-5 proposal executes on one
+outsider's approval.**
+
+**Why the first fix and its tests missed it.** The regression tests written on
+2026-08-01 both varied `multisig_id` — one used `[0xEE; 32]`, the other kept the
+honest member root. Neither held `multisig_id` fixed while varying the config,
+which is the axis the fix did not cover. The tests confirmed the variant that
+had been found rather than probing the family it belonged to.
+
+**The fix.** `config_hash` is now folded into `proposal_ref` *and* into the
+proposal PDA's seeds. Both are needed, and each alone leaves a hole:
+
+- Seeds only: the attacker cannot approve on the victim's proposal, but a
+  proposal of their own under the same `(multisig_id, proposal_id, action)`
+  would still produce the *same* `proposal_ref`, so their markers land in the
+  victim's marker address space and `execute` would count them.
+- `proposal_ref` only: marker addresses separate, but `approve` takes
+  `proposal_ref` opaquely and never re-derives it, so an attacker naming the
+  victim's ref with their own config still resolves both accounts.
+
+Together, a proposal belongs to one `(member_root, threshold)`, and naming any
+other config resolves to an account nobody ever created.
+
+**What it says about the rest.** The first audit asked what the program does not
+check. This one came from someone else asking the same question about the fix.
+That is the honest lesson: a fix verified only by the test that motivated it is
+a fix verified against one example. The two new regression tests hold
+`multisig_id` constant and vary the config, which is the axis that was blind.
+
 ## Residual risks and non-goals
 
 - **A malicious creator.** Whoever builds the member set knows every salt, and

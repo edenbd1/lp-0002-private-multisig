@@ -80,6 +80,10 @@
               },
               {
                 "kind": "arg",
+                "path": "config_hash"
+              },
+              {
+                "kind": "arg",
                 "path": "proposal_ref"
               }
             ]
@@ -203,6 +207,10 @@
               {
                 "kind": "arg",
                 "path": "multisig_id"
+              },
+              {
+                "kind": "arg",
+                "path": "config_hash"
               },
               {
                 "kind": "arg",
@@ -330,6 +338,10 @@
               {
                 "kind": "arg",
                 "path": "multisig_id"
+              },
+              {
+                "kind": "arg",
+                "path": "config_hash"
               },
               {
                 "kind": "arg",

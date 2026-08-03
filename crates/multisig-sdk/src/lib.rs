@@ -265,7 +265,7 @@ impl Proposal {
             config_hash: multisig.config_hash,
             proposal_id,
             action_hash,
-            proposal_ref: compute_proposal_ref(&multisig.id, &proposal_id, &action_hash),
+            proposal_ref: compute_proposal_ref(&multisig.id, &multisig.config_hash, &proposal_id, &action_hash),
             threshold: multisig.threshold,
             member_root: multisig.member_root,
         }

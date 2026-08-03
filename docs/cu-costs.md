@@ -83,9 +83,25 @@ laptop, and the second did not. Take 179 s as the testnet figure and 360 s as
 what contention costs — both are in that run's `lifecycle.tsv`, and neither is
 rounded in this document's favour.
 
-Proving itself is identical everywhere; what testnet adds is block time and
-network latency per submission, and a wallet polling window that can expire
-before a privacy transaction lands even though the transaction is fine.
+**And on a CI runner, far more.** The scheduled e2e workflow measured
+**1264 s** for its single approval on a standard GitHub `ubuntu-latest` runner —
+roughly eight times the laptop figure, for the same proof of the same circuit.
+Proving is CPU-bound and does not parallelise past the cores it is given, so the
+honest way to read every number here is *per machine*:
+
+| Where | One approval |
+|---|---:|
+| Apple silicon laptop, local sequencer | **149-154 s** |
+| Apple silicon laptop, public testnet | **179 s** (360 s under CPU contention) |
+| GitHub `ubuntu-latest`, local sequencer | **1264 s** |
+
+Quoting one of these as "the" proving time would be picking the flattering one.
+A member on a laptop waits about two and a half minutes; a shared CI runner
+takes twenty.
+
+What testnet adds on top of proving is block time and network latency per
+submission, plus a wallet polling window that can expire before a privacy
+transaction lands even though the transaction is fine.
 
 ## A note on the revision
 

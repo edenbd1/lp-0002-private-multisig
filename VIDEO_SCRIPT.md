@@ -191,7 +191,7 @@ proving réel, à l'écran, sans coupure.
 
 **💬 SAY** (pendant le proving — prends ton temps, laisse des silences) :
 
-> "This is the part the brief asks to see. R-I-S-C zero dev mode is zero — no mock receipts, no shortcut. This is a real Risc0 proof being generated on this laptop, right now, and it takes about two and a half minutes."
+> "This is the part the brief asks to see. R-I-S-C zero dev mode is zero — no mock receipts, no shortcut. This is a real Risc0 proof being generated on this laptop, right now, and it takes about two and a half minutes. On a shared C-I runner the same proof takes twenty, which is why the benchmark in the repo is stated per machine rather than as one number."
 
 **💬 SAY** :
 

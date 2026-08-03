@@ -64,6 +64,25 @@ cargo build --release --quiet -p multisig-cli
 mkdir -p "$WORK"
 : > "$LOG"
 
+# Read a `*.args` file into the ARGS array, one shell word per element.
+#
+# The CLI quotes its values, which it has to: an action is
+# `--action 'transfer 100 LEZ to the grants treasury'`, four words in one
+# argument. Interpolating the file unquoted splits that into four arguments;
+# interpolating it quoted makes the whole file one argument. Both are wrong,
+# and the first fails confusingly — the quotes arrive as literal characters and
+# spel reports a 32-byte field as "66 bytes", counting the two apostrophes.
+#
+# xargs applies the quoting rules the file was written in, which is exactly the
+# parse we want. Kept as a function so all four call sites share it, since the
+# bug was invisible until every one of them had been written the wrong way.
+read_args() {
+  ARGS=()
+  while IFS= read -r a; do
+    [ -n "$a" ] && ARGS+=("$a")
+  done < <(xargs -n1 printf '%s\n' < "$1")
+}
+
 confirmed() {
   curl -s -m 20 -X POST "$RPC" -H 'Content-Type: application/json' \
     -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getTransaction\",\"params\":[\"$1\"]}" \
@@ -97,9 +116,9 @@ MSIG_ID=$(python3 -c "import os;print(os.urandom(32).hex())")
 "$CLI" create-multisig-args --dir "$WORK" --out "$WORK/create.args" >/dev/null
 
 echo "[3/6] commit the multisig on chain"
-# shellcheck disable=SC2046
+read_args "$WORK/create.args"
 "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" \
-  -- create_multisig --authority "Public/$SIGNER" $(tr '\n' ' ' < "$WORK/create.args") \
+  -- create_multisig --authority "Public/$SIGNER" "${ARGS[@]}" \
   2>&1 | tee "$WORK/create.out" | tail -3
 CREATE_TX=$(grep -oE '[0-9a-f]{64}' "$WORK/create.out" | head -1)
 [ -n "$CREATE_TX" ] && wait_tx "$CREATE_TX" "create_multisig"
@@ -109,9 +128,9 @@ PROP_ID=$(python3 -c "import os;print(os.urandom(32).hex())")
 ACTION="transfer 100 LEZ to the grants treasury"
 "$CLI" propose --dir "$WORK" --proposal-id "$PROP_ID" --action "$ACTION"
 "$CLI" create-proposal-args --dir "$WORK" --proposal-id "$PROP_ID" --out "$WORK/prop.args" >/dev/null
-# shellcheck disable=SC2046
+read_args "$WORK/prop.args"
 "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" \
-  -- create_proposal --authority "Public/$SIGNER" $(tr '\n' ' ' < "$WORK/prop.args") \
+  -- create_proposal --authority "Public/$SIGNER" "${ARGS[@]}" \
   2>&1 | tee "$WORK/prop.out" | tail -3
 PROP_TX=$(grep -oE '[0-9a-f]{64}' "$WORK/prop.out" | head -1)
 [ -n "$PROP_TX" ] && wait_tx "$PROP_TX" "create_proposal"
@@ -127,9 +146,9 @@ for i in $(seq 0 $((THRESHOLD-1))); do
   "$WALLET_BIN" account sync-private >/dev/null 2>&1 || true
   # One approver account per approval — see the APPROVERS note above.
   APPROVER="${APPROVER_LIST[$i]}"
-  # shellcheck disable=SC2046
+  read_args "$WORK/approve_$i.args"
   "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" --bin-membership "$MEMBERSHIP" \
-    -- approve --approver "Private/$APPROVER" $(tr '\n' ' ' < "$WORK/approve_$i.args") \
+    -- approve --approver "Private/$APPROVER" "${ARGS[@]}" \
     2>&1 | tee "$WORK/approve_$i.out" | tail -3
   TX=$(grep -oE '[0-9a-f]{64}' "$WORK/approve_$i.out" | head -1)
   [ -n "$TX" ] && wait_tx "$TX" "approve:member_$i"
@@ -151,10 +170,9 @@ while read -r seed; do
   ADDR=$(python3 scripts/pda.py "$VERIFIER" "$seed")
   MARKERS="${MARKERS:+$MARKERS,}$ADDR"
 done < "$WORK/exec.markers"
-# shellcheck disable=SC2046,SC2086
+read_args "$WORK/exec.args"
 "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" \
-  -- execute --executor "Public/$SIGNER" --approvals "$MARKERS" \
-  $(tr '\n' ' ' < "$WORK/exec.args") \
+  -- execute --executor "Public/$SIGNER" --approvals "$MARKERS" "${ARGS[@]}" \
   2>&1 | tee "$WORK/exec.out" | tail -3
 EXEC_TX=$(grep -oE '[0-9a-f]{64}' "$WORK/exec.out" | head -1)
 [ -n "$EXEC_TX" ] && wait_tx "$EXEC_TX" "execute"

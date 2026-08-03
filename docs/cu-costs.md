@@ -12,14 +12,14 @@ cargo test -p multisig-verifier-tests -- --ignored --nocapture
 
 ## Results
 
-Verifier ImageID `cf5724b0e8dabd4a1519f8d9ea7371d69e1d7e2f6d8c931f1e4b3110150d7982`.
+Verifier ImageID `00286a889dabd8c3d7fdfb058c5935f5d46172946249c98da73953e3f136ed5d`.
 
 | Instruction | Segments | User cycles | Proving cycles | Share of the public budget |
 |---|---:|---:|---:|---:|
-| `approve` | 1 | 336,790 | 524,288 | 1.56 % |
-| `execute` (M=1) | 1 | 266,907 | 524,288 | 1.56 % |
-| `execute` (M=3) | 1 | 363,002 | 524,288 | 1.56 % |
-| `execute` (M=5) | 1 | 460,781 | 524,288 | 1.56 % |
+| `approve` | 1 | 336,937 | 524,288 | 1.56 % |
+| `execute` (M=1) | 1 | 267,306 | 524,288 | 1.56 % |
+| `execute` (M=3) | 1 | 363,354 | 524,288 | 1.56 % |
+| `execute` (M=5) | 1 | 461,446 | 524,288 | 1.56 % |
 
 `create_multisig` and `create_proposal` do strictly less work than `execute`
 (M=1) — a hash, a comparison, and a PDA claim — and are bounded by it.
@@ -76,19 +76,26 @@ Reproduce it with:
 ./scripts/e2e-local-sequencer.sh          # 2-of-3, about eight minutes total
 ```
 
-**Against the public testnet, expect more.** Proving is identical, but block
-time and network latency are added on top of every submission, and the wallet's
-polling window can expire before a privacy transaction lands even though the
-transaction is fine. The local figure is the honest measure of the *proving*
-cost; the testnet figure measures the testnet.
+**Against the public testnet, measured too.** The 2026-08-03 redeploy recorded
+**360 s** and **179 s** for its two approvals. The gap between them is not the
+chain: the first ran while an unrelated Risc0 proof was saturating the same
+laptop, and the second did not. Take 179 s as the testnet figure and 360 s as
+what contention costs — both are in that run's `lifecycle.tsv`, and neither is
+rounded in this document's favour.
+
+Proving itself is identical everywhere; what testnet adds is block time and
+network latency per submission, and a wallet polling window that can expire
+before a privacy transaction lands even though the transaction is fine.
 
 ## A note on the revision
 
 These numbers are for the verifier *after* the proposal PDA was reseeded to
-`[multisig_id, proposal_ref]` (see `docs/security.md`). The extra seed costs one
-more SHA-256 in the address derivation SPEL performs before the body runs, which
-is the ~1,100-cycle difference from the pre-fix measurements. It changes nothing
-material: every instruction still fits one segment at 1.56 % of the budget.
+`[multisig_id, config_hash, proposal_ref]` and `config_hash` was folded into
+`proposal_ref` (see [`security.md`](security.md)). The extra seed costs one more
+SHA-256 in the address derivation SPEL performs before the body runs — about
+150-650 cycles depending on the instruction, visible in the numbers above and
+material to nothing: every instruction still fits one segment at 1.56 % of the
+budget.
 
 ## Method note
 

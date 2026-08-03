@@ -113,7 +113,7 @@ Si oui → QuickTime → Screen Recording → Démarre. Sinon → stop, prévien
 
 **💬 SAY** :
 
-> "Twenty-five adversarial tests on the circuit logic — non-members, borrowed Merkle paths, invented member sets, forged nullifiers. Then twenty-eight more against the *built binary*, run through the sequencer's own executor. Same executor, same input order, same thirty-two megabyte session limit the chain applies. A rejection you see there is the rejection the chain performs. Plus two that pin the verifier to the exact membership binary it chains to, so it can't be swapped."
+> "Twenty-five adversarial tests on the circuit logic — non-members, borrowed Merkle paths, invented member sets, forged nullifiers. Then thirty more against the *built binary*, run through the sequencer's own executor. Same executor, same input order, same thirty-two megabyte session limit the chain applies. A rejection you see there is the rejection the chain performs. Plus two that pin the verifier to the exact membership binary it chains to, so it can't be swapped."
 
 **🎬 ACTION** : Scrolle sur `== 6.` puis `== 7.`
 
@@ -207,7 +207,7 @@ proving réel, à l'écran, sans coupure.
 
 ```bash
 curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json' \
- -d '{"jsonrpc":"2.0","id":1,"method":"getAccount","params":["BxU7zsMUVQpy6tgusJxAMHLTEizugaZo8yqVH9K1Da6D"]}'
+ -d '{"jsonrpc":"2.0","id":1,"method":"getAccount","params":["yyNX12APVKBCh9yJyR98rG7qyM8mrfBda8m34AC115N"]}'
 ```
 
 **💬 SAY** :
@@ -238,7 +238,7 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 **💬 SAY** :
 
-> "The same pass found three documented error codes with no test behind them, and a verification script that reported accounts as missing when they were on chain. All fixed. Fifty-nine tests now."
+> "The same pass found three documented error codes with no test behind them, and a verification script that reported accounts as missing when they were on chain. All fixed. Sixty-one tests now."
 
 **💬 SAY** :
 
@@ -256,7 +256,7 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 **💬 SAY** :
 
-> "To summarize. Two programs deployed on the public L-E-Z testnet, byte-identical to what's in the repository — you can verify that from the deployment transaction. A full two-of-three lifecycle on chain: create, propose, two approvals on the privacy path, execute. Fifty-nine tests, C-I green on Linux and macOS, a reproducible build, a Basecamp module I installed and used in Basecamp rather than just shipped, an S-D-K, a SPEL I-D-L, and a demo script that runs from a clean clone."
+> "To summarize. Two programs deployed on the public L-E-Z testnet, byte-identical to what's in the repository — you can verify that from the deployment transaction. A full two-of-three lifecycle on chain: create, propose, two approvals on the privacy path, execute. Sixty-one tests, C-I green on Linux and macOS, a reproducible build, a Basecamp module I installed and used in Basecamp rather than just shipped, an S-D-K, a SPEL I-D-L, and a demo script that runs from a clean clone."
 
 **💬 SAY** :
 

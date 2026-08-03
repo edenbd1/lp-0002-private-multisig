@@ -1,24 +1,21 @@
 # Deployment
 
-> ## ⚠️ The deployment below is superseded and must not be relied on
+> ## Redeployed 2026-08-03, after a bypass found by cross-review
 >
-> A cross-review on 2026-08-03 found a **threshold and membership bypass** in the
-> verifier that was live at the time, and it is confirmed against that binary:
-> `config_hash` appeared in neither `proposal_ref` nor the proposal account's
-> address, and `create_multisig` places no ownership constraint on `multisig_id`
-> — by design, anyone may create a multisig. So an outsider could create their
-> own 1-of-1 config **under a victim's multisig id**, approve the victim's
-> proposal against their own member set, and execute a 3-of-5 on that single
-> approval.
+> The verifier that was live until 2026-08-03 carried a **threshold and
+> membership bypass**: `config_hash` appeared in neither `proposal_ref` nor the
+> proposal account's address, and `create_multisig` places no ownership
+> constraint on `multisig_id` — by design, anyone may create a multisig. An
+> outsider could therefore create a 1-of-1 config **under a victim's multisig
+> id**, approve the victim's proposal against their own member set, and execute
+> a 3-of-5 on that single approval.
 >
-> The fix folds `config_hash` into `proposal_ref` *and* into the proposal PDA's
-> seeds, so a proposal now belongs to a specific `(member_root, threshold)` and
-> naming any other config resolves to an account nobody created. Two regression
-> tests reproduce both halves of the attack against the built binary.
->
-> **The verifier has not yet been redeployed.** Every transaction hash, PDA and
-> ImageID on this page belongs to the vulnerable build and is kept only so the
-> history is auditable. See [`security.md`](security.md) for the write-up.
+> Everything on this page is the **fixed** build: verifier ImageID
+> `00286a88…`, redeployed, and the whole lifecycle re-run against it. The
+> previous deployment is gone from this page on purpose — it was evidence for a
+> program that could be bypassed. The finding, why the earlier fix missed this
+> variant, and the two regression tests that reproduce it are in
+> [`security.md`](security.md).
 
 ## Status
 
@@ -34,12 +31,12 @@ the privacy-preserving path, and executed.
 | Step | Transaction | On the explorer |
 |---|---|---|
 | deploy `membership_lez` | `64098974b7d28f4facf1218e771d27c6163f7fb7ce3bd4f218df6db42ace6dde` | [link](https://explorer.testnet.lez.logos.co/transaction/64098974b7d28f4facf1218e771d27c6163f7fb7ce3bd4f218df6db42ace6dde) |
-| deploy `multisig_verifier` | `e24f5367521616f235acd26e3ee8937e8fc071335f187fab3ad282b6a691192f` | [link](https://explorer.testnet.lez.logos.co/transaction/e24f5367521616f235acd26e3ee8937e8fc071335f187fab3ad282b6a691192f) |
-| `create_multisig` | `8bb3a9ac860ad2ce5ef62498526b0560be00287e87e4fdc5361ed759a6c55a44` | not indexed |
-| `create_proposal` | `0647f7aa93e6a3bf2fff3bb4348e5242f83462e7d44b1bfdcae1cf6e2acc2cf7` | not indexed |
-| `approve` (member A, **privacy tx**) | `a0634e1f25c688666cc7b0e10f655ecd070da56bbd4c585afce5d9b1bca717ae` | not indexed |
-| `approve` (member B, **privacy tx**) | `a7981c1bd0691eec13aefb0e428c14215634909aaa8722c25c451a9ceee5ab14` | not indexed |
-| `execute` | `6704964e716c0f3f4c628148796696bdc0cdd15680c52f844717719fdbc6aa63` | not indexed |
+| deploy `multisig_verifier` | `78a68aa2b0bdcc5c99778fdfa52469f6b367c36f28489f4a40418873dd9ab1ca` | [link](https://explorer.testnet.lez.logos.co/transaction/78a68aa2b0bdcc5c99778fdfa52469f6b367c36f28489f4a40418873dd9ab1ca) |
+| `create_multisig` | `09e8245d8673dd2de0621f3e843822cba30f5297c87a7224da950c093f5fd60e` | not indexed |
+| `create_proposal` | `88698af7fd639229563b22f59ca00d3d5e5f30baea20677ca82e611add7c17f5` | not indexed |
+| `approve` (member A, **privacy tx**) | `0b0a13dd39b57222d0d641863061db81e925b7f21c635701139f73f7d0a356a7` | not indexed |
+| `approve` (member B, **privacy tx**) | `ff22f4c33bce23f6454be09872f14fae8672ea334d6cfda66270d4d8a09259b7` | not indexed |
+| `execute` | `18d428af895cd992899cbbec0ad5eb326e7cf0388f985c609ac510f05cba3e98` | not indexed |
 
 ### Why five of them say "not indexed"
 
@@ -75,9 +72,9 @@ re-runs the whole lifecycle. The two deployment hashes come back identical,
 because a deployment hash is `SHA256(borsh(bytecode))` and the binaries are
 committed; the five lifecycle hashes are signed with a nonce and will be new.
 
-Multisig id `1f7ca59e9166e80795493001f7279c65ed20dde793dbf37c950942916d3a4d7b`,
-member root `d10f1a74d0b1c900e01a2eac06a81fbc0519670504d1ea028a0b702a70b4dc19`,
-config hash `ae9dc36a1c32543afa070f690709d8a915c8c3963df4ad79f9c4e0c986ff9a13`
+Multisig id `e0ea615c1179270ea9fbc0c7c7978bac79996f7e154501b8c8683e092646ca2e`,
+member root `1ae4233b5c8c256948196373b0c0169efce584a8cab1236e45f3c140caf0428e`,
+config hash `1ae8ce6b1135b9e01f89cd1d200ef6bd6e9e8e29fe44d115cb86ea566991269f`
 (which is what anchors the root *and* the threshold in the multisig's address).
 The action was `transfer 100 LEZ to the grants treasury`.
 
@@ -90,11 +87,11 @@ with `scripts/pda.py` and query `getAccount`.
 
 | Account | Address |
 |---|---|
-| multisig | `DoZLeq2VcPspGmdGv4DSNnGPgBSarNqqT6J36gwrMFVi` |
-| proposal | `9LxiJeiuepNjFz18XnT8Sv2tEreYBW9KxyVhcdbTL7Az` |
-| approval marker A | `BxU7zsMUVQpy6tgusJxAMHLTEizugaZo8yqVH9K1Da6D` |
-| approval marker B | `2dXpEQSxP3rQED4kJ6Sc51QaCQgetzXCQNrk6hXNJxHf` |
-| execution marker | `4bb23EUGVGPWcABciHCQe1dzaV5ebNxMn5umraPh6Fzn` |
+| multisig | `9GwWLZThKirW56FPWTCpXPhZ1gTrEy7HYuk5jerQvUTR` |
+| proposal | `2G8eAKAgTR7JjkDrzioPc4nJmHDx3MgK5Kk9xDaH6LHN` |
+| approval marker A | `yyNX12APVKBCh9yJyR98rG7qyM8mrfBda8m34AC115N` |
+| approval marker B | `BWGfzw5EescKdS53nkawCQdkhu5koW2LfXPCFnS45Vrn` |
+| execution marker | `DXGgrR6R52Et4wjNDQyLeSxtvStpj69xGNC2ZKv4kuWc` |
 
 **The two approval markers are the whole claim.** Each exists only because
 `approve` ran and claimed it; `approve` declares a `ChainedCall` to
@@ -117,7 +114,7 @@ counted them against the threshold anchored in the multisig's address.
 | Program | ImageID | ProgramId (hex) |
 |---|---|---|
 | `membership_lez` | `a48ecc5289404ad01fd6d6fd1d79eaebb8d2f0fe4f2dc2ebbc85003ee82af3d6` | `52cc8ea4,d04a4089,fdd6d61f,ebea791d,fef0d2b8,ebc22d4f,3e0085bc,d6f32ae8` |
-| `multisig_verifier` | `cf5724b0e8dabd4a1519f8d9ea7371d69e1d7e2f6d8c931f1e4b3110150d7982` | the verifier ProgramId |
+| `multisig_verifier` | `00286a889dabd8c3d7fdfb058c5935f5d46172946249c98da73953e3f136ed5d` | the verifier ProgramId |
 
 Verify for yourself:
 
@@ -128,7 +125,7 @@ spel program-id artifacts/programs/multisig_verifier.bin
 
 **The build is reproducible.** Rebuilding the verifier guest from a clean
 `cargo risczero build` reproduces ImageID
-`cf5724b0e8dabd4a1519f8d9ea7371d69e1d7e2f6d8c931f1e4b3110150d7982` exactly —
+`00286a889dabd8c3d7fdfb058c5935f5d46172946249c98da73953e3f136ed5d` exactly —
 checked, not assumed. That matters because the ImageID *is* the program's
 identity on chain: an evaluator who rebuilds and gets the same id knows the
 committed binary is the source in this repository, compiled.

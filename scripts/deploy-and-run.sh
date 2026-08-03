@@ -195,7 +195,8 @@ PROP_TX=$(tx_hash_from "$WORK/prop.out")
 [ -n "$PROP_TX" ] && wait_tx "$PROP_TX" "create_proposal"
 
 echo "[5/6] gather $THRESHOLD approvals on the privacy-preserving path"
-echo "      each is a real proof composed on chain; ~150 s apiece, timed below"
+echo "      each is a real proof composed on chain; ~150 s on a laptop and"
+echo "      ~20 min on a shared CI runner. Timed below, per machine."
 for i in $(seq 0 $((THRESHOLD-1))); do
   echo "-- member $i"
   # Timed, because "proof generation time" is a required benchmark and a number

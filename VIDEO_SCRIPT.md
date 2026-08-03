@@ -1,8 +1,8 @@
-# 🎬 LP-0002 — script vidéo (~6 min)
+# 🎬 LP-0002 — script vidéo (~7 min)
 
 > **⚠️ Tap les liens directement sur ton phone — ne pas copy-paste (les URLs sont longues et peuvent être tronquées au copy).**
 
-- Durée totale visée : **~6 minutes**
+- Durée totale visée : **~7 minutes**
 - Langue : English
 - `🎬 ACTION` = ce que tu fais à l'écran
 - `💬 SAY` = ce que tu lis à voix haute
@@ -61,6 +61,12 @@ P=$(cat artifacts/testnet/proposal_id)
 
 Tu dois voir **cinq ✅** et `all accounts present and owned by the verifier`.
 Si oui → QuickTime → Screen Recording → Démarre. Sinon → stop, préviens-moi.
+
+> **Le déploiement a changé le 3 août.** Si tu avais répété avec les anciennes
+> adresses, elles ne sont plus valides : le cycle de vie a été rejoué en entier
+> après la correction du script de déploiement. Les deux hashes de deploy sont
+> inchangés — ils sont content-addressed — les cinq autres sont nouveaux, et
+> toutes les adresses de ce script pointent déjà sur la nouvelle instance.
 
 ---
 
@@ -129,7 +135,7 @@ Si oui → QuickTime → Screen Recording → Démarre. Sinon → stop, prévien
 
 ---
 
-# SCÈNE 3 — La chaîne, en direct (3:00 – 4:15)
+# SCÈNE 3 — La chaîne, en direct (3:00 – 4:25)
 
 **🎬 ACTION** : Scrolle sur `== 11. the Basecamp package`
 
@@ -151,7 +157,7 @@ Si oui → QuickTime → Screen Recording → Démarre. Sinon → stop, prévien
 
 ```bash
 curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json' \
- -d '{"jsonrpc":"2.0","id":1,"method":"getAccount","params":["9q31RPufMoRe6pXcxrcuwFEJQN2Wnr2qV4HhXnV8a42r"]}'
+ -d '{"jsonrpc":"2.0","id":1,"method":"getAccount","params":["BxU7zsMUVQpy6tgusJxAMHLTEizugaZo8yqVH9K1Da6D"]}'
 ```
 
 **💬 SAY** :
@@ -160,7 +166,7 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 ---
 
-# SCÈNE 4 — L'audit (4:15 – 5:20)
+# SCÈNE 4 — L'audit (4:25 – 6:15)
 
 **🎬 ACTION** : Reste sur le terminal
 
@@ -188,9 +194,13 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 > "The same habit paid off again on the Basecamp package. Rather than call it loadable, I installed Basecamp and loaded it — and it did not work. It was built against a newer Qt than Basecamp runs, so Qt refused it; the plugin interface used an I-D of my own invention instead of Basecamp's, so the cast returned null; and my copy of that interface had one extra virtual function, which shifts every later vtable slot. Three ways to fail, none of them visible in the interface — the app tile just did nothing. All three are fixed, and the packaging script now refuses to build a package with any of them."
 
+**💬 SAY** :
+
+> "And once more on the deployment script. My own documentation tells you to run it if the testnet is reset — which happened to another submission in July. I finally ran it end to end, and found it never could have worked: it pasted its arguments into the command line with the quotes still attached, so the chain saw a thirty-two-byte field as sixty-six. The live deployment had been produced by hand. It works now, and the run that produced what you just verified on chain is the script's own output."
+
 ---
 
-# SCÈNE 5 — Closing (5:20 – 6:00)
+# SCÈNE 5 — Closing (6:15 – 6:55)
 
 **🎬 ACTION** : Passe sur l'ONGLET A (le repo)
 
@@ -261,9 +271,9 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 | 1. Intro | 0:00 | 0:45 | 45s |
 | 2. demo.sh | 0:45 | 3:00 | 2m15 |
 | 3. La chaîne en direct | 3:00 | 4:25 | 1m25 |
-| 4. L'audit | 4:25 | 5:55 | 1m30 |
-| 5. Closing | 5:55 | 6:35 | 40s |
-| **Total** | | | **~6m35** |
+| 4. L'audit | 4:25 | 6:15 | 1m50 |
+| 5. Closing | 6:15 | 6:55 | 40s |
+| **Total** | | | **~7 min** |
 
 Entre 5 et 8 minutes c'est bon. Le brief demande une narration qui explique
 l'architecture et les décisions — pas un screencast muet. La scène 4 est ce qui

@@ -153,15 +153,15 @@ with `getTransaction` against `https://testnet.lez.logos.co`.
 |---|---|
 | deploy `membership_lez` | `64098974b7d28f4facf1218e771d27c6163f7fb7ce3bd4f218df6db42ace6dde` |
 | deploy `multisig_verifier` | `e24f5367521616f235acd26e3ee8937e8fc071335f187fab3ad282b6a691192f` |
-| `create_multisig` | `de22a8c917774643969fec0b566082f701867b1359f18574fc8ee390badb3cdd` |
-| `create_proposal` | `b7a4f74534cf9efc5da734c50b3c3ace7d1e7aa35aeaf86ca8f736dd566ea832` |
-| `approve` (member A, **privacy tx**) | `6e035e4e702bcd241faa2ac304bc32178193bef25d66036a8bf7b0915d716347` |
-| `approve` (member B, **privacy tx**) | `968c5d1ba1b828f93ee44a037b313f1c8c2b3ea30afb9302857b18fd8619dc55` |
-| `execute` | `5817c49ce6ab86b5349ca2d55b95662f4cf7192b89be924d1f72c74f5d0e8b74` |
+| `create_multisig` | `8bb3a9ac860ad2ce5ef62498526b0560be00287e87e4fdc5361ed759a6c55a44` |
+| `create_proposal` | `0647f7aa93e6a3bf2fff3bb4348e5242f83462e7d44b1bfdcae1cf6e2acc2cf7` |
+| `approve` (member A, **privacy tx**) | `a0634e1f25c688666cc7b0e10f655ecd070da56bbd4c585afce5d9b1bca717ae` |
+| `approve` (member B, **privacy tx**) | `a7981c1bd0691eec13aefb0e428c14215634909aaa8722c25c451a9ceee5ab14` |
+| `execute` | `6704964e716c0f3f4c628148796696bdc0cdd15680c52f844717719fdbc6aa63` |
 
-The two approval markers — `9q31RPufMoRe6pXcxrcuwFEJQN2Wnr2qV4HhXnV8a42r` and
-`GMgP7TMKoFVimMxX7PmtbeYG1dhGTGHUDh4F1yJmc8pv` — and the execution marker
-`EsV6LpVUfR1iunep8g4etg1qTGQfzxbA1J7PjDBsFV5b` are all owned by the verifier
+The two approval markers — `BxU7zsMUVQpy6tgusJxAMHLTEizugaZo8yqVH9K1Da6D` and
+`2dXpEQSxP3rQED4kJ6Sc51QaCQgetzXCQNrk6hXNJxHf` — and the execution marker
+`4bb23EUGVGPWcABciHCQe1dzaV5ebNxMn5umraPh6Fzn` are all owned by the verifier
 program. Neither approval marker could exist without a membership proof having
 been verified on chain, and neither names a member.
 

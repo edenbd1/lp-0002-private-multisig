@@ -15,11 +15,11 @@ the privacy-preserving path, and executed.
 |---|---|---|
 | deploy `membership_lez` | `64098974b7d28f4facf1218e771d27c6163f7fb7ce3bd4f218df6db42ace6dde` | [link](https://explorer.testnet.lez.logos.co/transaction/64098974b7d28f4facf1218e771d27c6163f7fb7ce3bd4f218df6db42ace6dde) |
 | deploy `multisig_verifier` | `e24f5367521616f235acd26e3ee8937e8fc071335f187fab3ad282b6a691192f` | [link](https://explorer.testnet.lez.logos.co/transaction/e24f5367521616f235acd26e3ee8937e8fc071335f187fab3ad282b6a691192f) |
-| `create_multisig` | `de22a8c917774643969fec0b566082f701867b1359f18574fc8ee390badb3cdd` | not indexed |
-| `create_proposal` | `b7a4f74534cf9efc5da734c50b3c3ace7d1e7aa35aeaf86ca8f736dd566ea832` | not indexed |
-| `approve` (member A, **privacy tx**) | `6e035e4e702bcd241faa2ac304bc32178193bef25d66036a8bf7b0915d716347` | not indexed |
-| `approve` (member B, **privacy tx**) | `968c5d1ba1b828f93ee44a037b313f1c8c2b3ea30afb9302857b18fd8619dc55` | not indexed |
-| `execute` | `5817c49ce6ab86b5349ca2d55b95662f4cf7192b89be924d1f72c74f5d0e8b74` | not indexed |
+| `create_multisig` | `8bb3a9ac860ad2ce5ef62498526b0560be00287e87e4fdc5361ed759a6c55a44` | not indexed |
+| `create_proposal` | `0647f7aa93e6a3bf2fff3bb4348e5242f83462e7d44b1bfdcae1cf6e2acc2cf7` | not indexed |
+| `approve` (member A, **privacy tx**) | `a0634e1f25c688666cc7b0e10f655ecd070da56bbd4c585afce5d9b1bca717ae` | not indexed |
+| `approve` (member B, **privacy tx**) | `a7981c1bd0691eec13aefb0e428c14215634909aaa8722c25c451a9ceee5ab14` | not indexed |
+| `execute` | `6704964e716c0f3f4c628148796696bdc0cdd15680c52f844717719fdbc6aa63` | not indexed |
 
 ### Why five of them say "not indexed"
 
@@ -55,9 +55,9 @@ re-runs the whole lifecycle. The two deployment hashes come back identical,
 because a deployment hash is `SHA256(borsh(bytecode))` and the binaries are
 committed; the five lifecycle hashes are signed with a nonce and will be new.
 
-Multisig id `ccd1a480cdf52d79c6d720543e5f88a73027097397d626de8d4ec8ac0efe1ffe`,
-member root `04a021a4d53a635a02eeebc193f2e6a3bad302cb3b5500a066038d0753db6fc2`,
-config hash `af8baaf9198c0e717331834038f045c1a91ca6c80fb25159299e8bd93209f3c8`
+Multisig id `1f7ca59e9166e80795493001f7279c65ed20dde793dbf37c950942916d3a4d7b`,
+member root `d10f1a74d0b1c900e01a2eac06a81fbc0519670504d1ea028a0b702a70b4dc19`,
+config hash `ae9dc36a1c32543afa070f690709d8a915c8c3963df4ad79f9c4e0c986ff9a13`
 (which is what anchors the root *and* the threshold in the multisig's address).
 The action was `transfer 100 LEZ to the grants treasury`.
 
@@ -70,11 +70,11 @@ with `scripts/pda.py` and query `getAccount`.
 
 | Account | Address |
 |---|---|
-| multisig | `chmP8jUqSHh2irhKVxBkM6GaGfLHmSq3TgCABziET3R` |
-| proposal | `GdGHweUajfx7ocZNSC87WQNeYUP3Zm4EsNUiBqA4u3Kc` |
-| approval marker A | `9q31RPufMoRe6pXcxrcuwFEJQN2Wnr2qV4HhXnV8a42r` |
-| approval marker B | `GMgP7TMKoFVimMxX7PmtbeYG1dhGTGHUDh4F1yJmc8pv` |
-| execution marker | `EsV6LpVUfR1iunep8g4etg1qTGQfzxbA1J7PjDBsFV5b` |
+| multisig | `DoZLeq2VcPspGmdGv4DSNnGPgBSarNqqT6J36gwrMFVi` |
+| proposal | `9LxiJeiuepNjFz18XnT8Sv2tEreYBW9KxyVhcdbTL7Az` |
+| approval marker A | `BxU7zsMUVQpy6tgusJxAMHLTEizugaZo8yqVH9K1Da6D` |
+| approval marker B | `2dXpEQSxP3rQED4kJ6Sc51QaCQgetzXCQNrk6hXNJxHf` |
+| execution marker | `4bb23EUGVGPWcABciHCQe1dzaV5ebNxMn5umraPh6Fzn` |
 
 **The two approval markers are the whole claim.** Each exists only because
 `approve` ran and claimed it; `approve` declares a `ChainedCall` to

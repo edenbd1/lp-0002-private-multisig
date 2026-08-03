@@ -1,7 +1,7 @@
 {
-  "id_hex": "ccd1a480cdf52d79c6d720543e5f88a73027097397d626de8d4ec8ac0efe1ffe",
+  "id_hex": "1f7ca59e9166e80795493001f7279c65ed20dde793dbf37c950942916d3a4d7b",
   "threshold": 2,
   "member_count": 3,
-  "member_root_hex": "04a021a4d53a635a02eeebc193f2e6a3bad302cb3b5500a066038d0753db6fc2",
-  "config_hash_hex": "af8baaf9198c0e717331834038f045c1a91ca6c80fb25159299e8bd93209f3c8"
+  "member_root_hex": "d10f1a74d0b1c900e01a2eac06a81fbc0519670504d1ea028a0b702a70b4dc19",
+  "config_hash_hex": "ae9dc36a1c32543afa070f690709d8a915c8c3963df4ad79f9c4e0c986ff9a13"
 }

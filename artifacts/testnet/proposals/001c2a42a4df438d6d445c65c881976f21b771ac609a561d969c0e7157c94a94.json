@@ -1,0 +1,18 @@
+{
+  "proposal_id_hex": "001c2a42a4df438d6d445c65c881976f21b771ac609a561d969c0e7157c94a94",
+  "action": "transfer 100 LEZ to the grants treasury",
+  "action_hash_hex": "a08d504cc97f5be38362baefa8cb2e2085613e3cec4510b96b7e9b0be8b6176b",
+  "proposal_ref_hex": "74f7fa65504ee3ca98e203b3b09c5d0aab400a4d2cbba538527b6ccbb960219c",
+  "approvals": [
+    {
+      "nullifier_hex": "14f392baa5213bfd28748afb6ea22d8d9d51f04b7d800b0d3d1c178512b5d2fb",
+      "marker_seed_hex": "dde58946f03837bbcbb35fcc840293699589c1de397b2f364be146352faad83b",
+      "member_index": 0
+    },
+    {
+      "nullifier_hex": "ecfeb78ca1ab9ed1555fd7a163c2133e13570fcd63aa1ddc3fdf3e7e3a7d1c8b",
+      "marker_seed_hex": "54123d449da4b90bcde4b3f4fb665b64b01d3ebc95e85f2d602695b04a1ecd70",
+      "member_index": 1
+    }
+  ]
+}

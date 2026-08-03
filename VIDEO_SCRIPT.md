@@ -36,12 +36,13 @@ ferme Slack/Discord/notifications, fenêtre terminal en plein écran.
 > **Pas d'onglet block explorer.** Deux raisons distinctes, garde-les en tête au
 > cas où on te pose la question :
 >
-> 1. **L'explorer n'indexe que les déploiements de programmes.** Vérifié : nos
->    deux liens de deploy s'affichent en entier, mais les cinq transactions du
->    cycle de vie renvoient exactement la même page vide qu'un hash inexistant —
->    alors que `getTransaction` les retourne toutes. C'est un trou de l'indexeur,
->    pas un problème de notre soumission ; le même a été signalé sur la #64 en
->    juillet.
+> 1. **L'explorer n'indexe pas nos cinq transactions de cycle de vie.** Vérifié :
+>    nos deux liens de deploy s'affichent en entier, les cinq autres renvoient
+>    exactement la même page vide qu'un hash *inexistant* — alors que
+>    `getTransaction` les retourne toutes. Sa couverture est irrégulière, pas
+>    absente : des transactions publiques d'autres soumissions s'affichent, elles.
+>    C'est donc l'indexeur, pas la chaîne, et le même trou a été signalé sur la
+>    #64 en juillet.
 > 2. **Une approbation ne serait de toute façon pas indexable.** Une transaction
 >    privacy ne publie ni `program_id` ni `instruction_data` — c'est la propriété
 >    de confidentialité qui fonctionne, pas un bug.

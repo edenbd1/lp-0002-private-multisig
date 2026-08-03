@@ -43,7 +43,7 @@ fn sdk_derivations_match_core_exactly() {
     assert_eq!(p.action_hash(), ah, "SDK action_hash != core");
     assert_eq!(
         p.proposal_ref(),
-        compute_proposal_ref(&[0xA0; 32], &[0x11; 32], &ah),
+        compute_proposal_ref(&[0xA0; 32], &ms.config_hash(), &[0x11; 32], &ah),
         "SDK proposal_ref != core"
     );
     assert_eq!(

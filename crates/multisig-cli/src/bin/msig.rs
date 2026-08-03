@@ -300,10 +300,11 @@ fn create_multisig_args(dir: &Path, out: &Path) -> Result<()> {
 fn propose(dir: &Path, proposal_id: &str, action: &str) -> Result<()> {
     let ms: MultisigFile = read_json(&dir.join("multisig.json"))?;
     let multisig_id = hex32(&ms.id_hex)?;
+    let config_hash = hex32(&ms.config_hash_hex)?;
     let pid = hex32(proposal_id)?;
 
     let action_hash = compute_action_hash(&multisig_id, action.as_bytes());
-    let proposal_ref = compute_proposal_ref(&multisig_id, &pid, &action_hash);
+    let proposal_ref = compute_proposal_ref(&multisig_id, &config_hash, &pid, &action_hash);
 
     let path = proposal_path(dir, proposal_id);
     if path.exists() {

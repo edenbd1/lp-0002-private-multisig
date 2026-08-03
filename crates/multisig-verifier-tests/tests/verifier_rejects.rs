@@ -164,11 +164,23 @@ fn session(
     default_executor().execute(b.build()?, elf)
 }
 
+/// Require the call to be refused, by the program's own code or by SPEL's
+/// address validation before the body runs.
+///
+/// A `PdaMismatch` on `proposal` counts, and it counts as *better* than the
+/// code. Once `config_hash` is a seed of the proposal account, naming a config
+/// the proposal does not belong to resolves to an address nobody ever created —
+/// so the forgery stops being something the program checks and rejects, and
+/// becomes something that cannot be expressed. Several of these tests used to
+/// see `5002`/`5003`; they now see the address check, one layer earlier, and
+/// that is the fix working rather than the test weakening.
 fn assert_rejected(err: anyhow::Error, code: u32, keyword: &str) {
     let msg = format!("{err:#}").to_lowercase();
+    let by_code = msg.contains(&code.to_string()) || msg.contains(keyword);
+    let by_address = msg.contains("pdamismatch");
     assert!(
-        msg.contains(&code.to_string()) || msg.contains(keyword),
-        "expected rejection {code} ({keyword}), got: {msg}"
+        by_code || by_address,
+        "expected rejection {code} ({keyword}) or an address mismatch, got: {msg}"
     );
 }
 
@@ -211,7 +223,8 @@ impl Fixture {
         let config_hash = compute_config_hash(&member_root, threshold);
         let proposal_id = [0x11; 32];
         let action_hash = compute_action_hash(&multisig_id, b"transfer 100 to the treasury");
-        let proposal_ref = compute_proposal_ref(&multisig_id, &proposal_id, &action_hash);
+        let proposal_ref =
+            compute_proposal_ref(&multisig_id, &config_hash, &proposal_id, &action_hash);
 
         let members = raw
             .into_iter()
@@ -246,7 +259,10 @@ impl Fixture {
     fn proposal_account(&self, anchored: bool) -> AccountWithMetadata {
         // Seeded by [multisig_id, proposal_ref]: the multisig_id in the address
         // is what stops a proposal being paired with a foreign multisig.
-        let id = public_pda(&self.verifier, &[self.multisig_id, self.proposal_ref]);
+        let id = public_pda(
+            &self.verifier,
+            &[self.multisig_id, self.config_hash, self.proposal_ref],
+        );
         if anchored {
             owned_by(self.verifier, id)
         } else {
@@ -591,7 +607,8 @@ fn an_approval_marker_from_another_proposal_is_rejected() {
 
     // A second proposal under the same multisig, and member 0's marker on it.
     let other_action = compute_action_hash(&f.multisig_id, b"a different action entirely");
-    let other_ref = compute_proposal_ref(&f.multisig_id, &f.proposal_id, &other_action);
+    let other_ref =
+        compute_proposal_ref(&f.multisig_id, &f.config_hash, &f.proposal_id, &other_action);
     let other_nullifier = compute_approval_nullifier(&other_ref, &f.members[0].0);
     let other_marker = compute_approval_marker(&other_ref, &other_nullifier);
 
@@ -817,7 +834,10 @@ fn create_proposal_accounts(
     multisig_anchored: bool,
 ) -> Vec<AccountWithMetadata> {
     vec![
-        uninitialised(public_pda(&f.verifier, &[f.multisig_id, proposal_ref])),
+        uninitialised(public_pda(
+            &f.verifier,
+            &[f.multisig_id, f.config_hash, proposal_ref],
+        )),
         f.multisig_account(multisig_anchored),
         signer([0xA2; 32]),
     ]
@@ -963,7 +983,8 @@ fn an_approval_marker_from_another_multisig_is_rejected() {
     // Same member, same proposal id, same action bytes — different multisig.
     let other_msig = [0xB0; 32];
     let other_action = compute_action_hash(&other_msig, b"transfer 100 to the treasury");
-    let other_ref = compute_proposal_ref(&other_msig, &f.proposal_id, &other_action);
+    let other_ref =
+        compute_proposal_ref(&other_msig, &f.config_hash, &f.proposal_id, &other_action);
     let other_nullifier = compute_approval_nullifier(&other_ref, &f.members[0].0);
     let other_marker = compute_approval_marker(&other_ref, &other_nullifier);
 
@@ -1172,5 +1193,129 @@ fn approving_a_proposal_under_a_foreign_multisig_is_rejected() {
     assert!(
         msg.contains("pdamismatch") && msg.contains("proposal"),
         "expected the proposal address to be rejected, got: {msg}"
+    );
+}
+
+// ── The variant the first fix did not close ──────────────────────────────────
+//
+// Seeding the proposal PDA with `[multisig_id, proposal_ref]` closed the case
+// where the attacker names a *different* multisig id. It does not close the case
+// where they name the *same* one under a config of their own, because
+// `config_hash` appears in neither `proposal_ref` nor the proposal's address.
+//
+// `create_multisig` places no constraint on `multisig_id` — by design, anyone
+// may create a multisig — so an attacker can create a second config under a
+// victim's id, and both PDAs still resolve.
+
+/// The attacker's own one-member set, built exactly as `Fixture::new` builds
+/// the honest one.
+fn attacker_set() -> ([u8; 32], [u8; 32], u128, [u8; 32], u64, Vec<[u8; 32]>) {
+    let msk = [0x99; 32];
+    let identifier = 999u128;
+    let salt = [0x77; 32];
+    let aid = derive_account_id(&derive_npk(&msk), identifier);
+    let leaf = compute_member_leaf(&aid, &salt);
+    let (root, paths) = build_member_tree(&[leaf]);
+    let (leaf_index, siblings) = paths[0].clone();
+    (root, msk, identifier, salt, leaf_index, siblings)
+}
+
+#[test]
+fn approving_under_a_second_config_of_the_same_multisig_id_is_rejected() {
+    let elf = elf();
+    let pid = program_id(&elf);
+    let f = Fixture::new(&pid); // honest 3-of-5
+    let (a_root, a_msk, a_id, a_salt, a_leaf_index, a_siblings) = attacker_set();
+
+    let a_threshold = 1u32;
+    let a_config = compute_config_hash(&a_root, a_threshold);
+    // The victim's proposal, untouched.
+    let nullifier = compute_approval_nullifier(&f.proposal_ref, &a_msk);
+    let marker_seed = compute_approval_marker(&f.proposal_ref, &nullifier);
+
+    let instruction = ApproveInstruction {
+        witness: ApproveWitness {
+            msk: a_msk,
+            identifier: a_id,
+            salt: a_salt,
+            merkle_path: a_siblings,
+            leaf_index: a_leaf_index,
+        },
+        statement: ApproveStatement {
+            member_root: a_root,
+            proposal_ref: f.proposal_ref,
+            nullifier,
+        },
+    };
+    let ix = VerifierInstruction::Approve {
+        witness_words: risc0_zkvm::serde::to_vec(&instruction).expect("encode witness"),
+        multisig_id: f.multisig_id, // the VICTIM's id
+        config_hash: a_config,      // the ATTACKER's config
+        member_root: a_root,
+        threshold: a_threshold,
+        proposal_ref: f.proposal_ref, // the VICTIM's proposal
+        nullifier,
+        approval_marker_seed: marker_seed,
+    };
+    let accounts = vec![
+        uninitialised(public_pda(&pid, &[marker_seed])),
+        // The attacker's multisig, which they really did create under the
+        // victim's id: `create_multisig` allows it.
+        owned_by(pid, public_pda(&pid, &[f.multisig_id, a_config])),
+        f.proposal_account(true),
+        signer([0xE2; 32]),
+    ];
+
+    let err = run(&elf, &pid, accounts, &ix).expect_err(
+        "an outsider must not mint an approval marker on someone else's proposal \
+         by naming a member set of their own under the same multisig id",
+    );
+    let msg = format!("{err:#}").to_lowercase();
+    assert!(
+        msg.contains("pdamismatch") || msg.contains("500"),
+        "expected a rejection tying the proposal to its config, got: {msg}"
+    );
+}
+
+#[test]
+fn executing_under_a_second_config_of_the_same_multisig_id_is_rejected() {
+    let elf = elf();
+    let pid = program_id(&elf);
+    let f = Fixture::new(&pid); // honest 3-of-5
+    let (a_root, a_msk, _, _, _, _) = attacker_set();
+
+    let a_threshold = 1u32;
+    let a_config = compute_config_hash(&a_root, a_threshold);
+    let nullifier = compute_approval_nullifier(&f.proposal_ref, &a_msk);
+    let marker_seed = compute_approval_marker(&f.proposal_ref, &nullifier);
+
+    let ix = VerifierInstruction::Execute {
+        multisig_id: f.multisig_id, // the VICTIM's id
+        config_hash: a_config,      // threshold 1, the attacker's
+        member_root: a_root,
+        threshold: a_threshold,
+        proposal_ref: f.proposal_ref, // the VICTIM's 3-of-5 proposal
+        approval_nullifiers: vec![nullifier],
+        execution_marker_seed: compute_execution_marker(&f.proposal_ref),
+    };
+    let accounts = vec![
+        uninitialised(public_pda(
+            &pid,
+            &[compute_execution_marker(&f.proposal_ref)],
+        )),
+        owned_by(pid, public_pda(&pid, &[f.multisig_id, a_config])),
+        f.proposal_account(true),
+        signer([0xE3; 32]),
+        owned_by(pid, public_pda(&pid, &[marker_seed])),
+    ];
+
+    let err = run(&elf, &pid, accounts, &ix).expect_err(
+        "a 3-of-5 proposal must not execute on one outsider approval just because \
+         the attacker created a 1-of-1 config under the same multisig id",
+    );
+    let msg = format!("{err:#}").to_lowercase();
+    assert!(
+        msg.contains("pdamismatch") || msg.contains("500"),
+        "expected a rejection tying the proposal to its config, got: {msg}"
     );
 }

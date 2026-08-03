@@ -165,7 +165,7 @@ mod multisig_verifier {
     ///   proposal on its own grants nothing; only M approvals do.
     #[instruction]
     pub fn create_proposal(
-        #[account(init, pda = [arg("multisig_id"), arg("proposal_ref")])]
+        #[account(init, pda = [arg("multisig_id"), arg("config_hash"), arg("proposal_ref")])]
         proposal: AccountWithMetadata,
         #[account(pda = [arg("multisig_id"), arg("config_hash")])]
         multisig: AccountWithMetadata,
@@ -184,7 +184,7 @@ mod multisig_verifier {
         }
 
         let expected =
-            multisig_core::compute_proposal_ref(&multisig_id, &proposal_id, &action_hash);
+            multisig_core::compute_proposal_ref(&multisig_id, &config_hash, &proposal_id, &action_hash);
         if expected != proposal_ref {
             return Err(SpelError::custom(
                 E_PROPOSAL_REF_MISMATCH,
@@ -224,7 +224,7 @@ mod multisig_verifier {
         approval_marker: AccountWithMetadata,
         #[account(pda = [arg("multisig_id"), arg("config_hash")])]
         multisig: AccountWithMetadata,
-        #[account(pda = [arg("multisig_id"), arg("proposal_ref")])]
+        #[account(pda = [arg("multisig_id"), arg("config_hash"), arg("proposal_ref")])]
         proposal: AccountWithMetadata,
         #[account(signer)] approver: AccountWithMetadata,
         witness_words: Vec<u32>,
@@ -348,7 +348,7 @@ mod multisig_verifier {
         execution_marker: AccountWithMetadata,
         #[account(pda = [arg("multisig_id"), arg("config_hash")])]
         multisig: AccountWithMetadata,
-        #[account(pda = [arg("multisig_id"), arg("proposal_ref")])]
+        #[account(pda = [arg("multisig_id"), arg("config_hash"), arg("proposal_ref")])]
         proposal: AccountWithMetadata,
         #[account(signer)] executor: AccountWithMetadata,
         approvals: Vec<AccountWithMetadata>,

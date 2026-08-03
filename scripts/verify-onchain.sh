@@ -31,6 +31,20 @@ PROPOSAL_JSON="$WORK/proposals/$PROP_ID.json"
 [ -f "$PROPOSAL_JSON" ] || { echo "no local record at $PROPOSAL_JSON" >&2; exit 1; }
 [ -f "$VERIFIER" ] || { echo "missing $VERIFIER — run ./scripts/build-programs.sh" >&2; exit 1; }
 
+# Fail loudly on a missing prerequisite rather than quietly deriving the wrong
+# addresses. Without `spel` this script cannot read the verifier's ProgramId,
+# every PDA comes out wrong, and it reports a perfectly healthy deployment as
+# "accounts missing" — a false negative, and the worst possible one, because
+# this is the check you run before trusting the deployment.
+for tool in spel python3 curl; do
+  command -v "$tool" >/dev/null || {
+    echo "missing \`$tool\`, which this script needs to derive addresses." >&2
+    echo "Every PDA would be wrong and the report would be a false negative," >&2
+    echo "so it stops here instead. Put it on PATH and re-run." >&2
+    exit 2
+  }
+done
+
 PROPOSAL_REF=$(python3 -c "import json;print(json.load(open('$PROPOSAL_JSON'))['proposal_ref_hex'])")
 CONFIG_HASH=$(python3 -c "import json;print(json.load(open('$WORK/multisig.json'))['config_hash_hex'])")
 MSIG_ID=$(python3 -c "import json;print(json.load(open('$WORK/multisig.json'))['id_hex'])")

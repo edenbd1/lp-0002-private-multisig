@@ -1,8 +1,8 @@
-# 🎬 LP-0002 — script vidéo (~11 min)
+# 🎬 LP-0002 — script vidéo (~8 min)
 
 > **⚠️ Tap les liens directement sur ton phone — ne pas copy-paste (les URLs sont longues et peuvent être tronquées au copy).**
 
-- Durée totale visée : **~11 minutes**
+- Durée totale visée : **~8 minutes**
 - Langue : English
 - `🎬 ACTION` = ce que tu fais à l'écran
 - `💬 SAY` = ce que tu lis à voix haute
@@ -17,12 +17,21 @@
 
 ## Terminal
 
-**🎬 ACTION** :
+**🎬 ACTION** — colle **ce bloc complet** (une seule fois, avant de filmer).
+C'est de la config, pas intéressant à l'écran :
 
 ```bash
 cd /Users/eden/data/ns.com/lp-0002
+export PATH="$HOME/.cargo/bin:$HOME/.risc0/bin:$PATH"
+export DYLD_FALLBACK_FRAMEWORK_PATH=/Library/Developer/CommandLineTools/Library/Frameworks
 clear
 ```
+
+> **Pourquoi ces deux `export`.** `verify-onchain.sh` lit le ProgramId du
+> binaire avec `spel` ; sans lui sur le `PATH` il dérive de mauvaises adresses.
+> Le `DYLD_…` est pour le wallet LEZ, qui lie Python 3.9. Les deux ont été
+> testés depuis un shell vierge : sans eux, la scène 2bis casse et le pré-vol te
+> ferait annuler l'enregistrement pour rien.
 
 Agrandis la police (⌘+ plusieurs fois — le texte doit être lisible en 1080p),
 ferme Slack/Discord/notifications, fenêtre terminal en plein écran.
@@ -70,9 +79,29 @@ Si oui → QuickTime → Screen Recording → Démarre. Sinon → stop, prévien
 > et le hash de deploy du membership est inchangé parce que ce guest-là n'a pas
 > bougé.
 
+## 📋 Les 4 commandes à taper à l'écran, dans l'ordre
+
+Toutes relatives au dépôt — le bloc de config ci-dessus t'y a déjà mis. Chacune
+a été relancée depuis un shell vierge avant que ce script te soit donné.
+
+```bash
+# Pré-vol (AVANT d'enregistrer) — doit afficher cinq ✅
+./scripts/verify-onchain.sh artifacts/testnet $(cat artifacts/testnet/proposal_id)
+
+# Scène 2 — 5 secondes
+./scripts/demo.sh
+
+# Scène 2bis — ~4 minutes, dont ~2min30 de proving réel à l'écran
+MEMBERS=2 THRESHOLD=1 ./scripts/e2e-local-sequencer.sh
+
+# Scène 3 — la chaîne brute, un marqueur d'approbation
+curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json' \
+ -d '{"jsonrpc":"2.0","id":1,"method":"getAccount","params":["yyNX12APVKBCh9yJyR98rG7qyM8mrfBda8m34AC115N"]}'
+```
+
 ---
 
-# SCÈNE 1 — Intro (0:00 – 0:45)
+# SCÈNE 1 — Intro (0:00 – 0:35)
 
 **🎬 ACTION** : Terminal vide
 
@@ -82,15 +111,11 @@ Si oui → QuickTime → Screen Recording → Démarre. Sinon → stop, prévien
 
 **💬 SAY** :
 
-> "A threshold multisig where members hold shielded accounts. When M members approve, the chain records that the threshold was met — and nothing about which members met it. Not to outside observers, and, the part I care most about, not to the other members either. The brief asks for exactly that: without revealing identity to on-chain observers *or other members*."
-
-**💬 SAY** :
-
-> "The membership proof is genuinely verified on chain, and everything is live on the public L-E-Z testnet. Let me show you."
+> "A threshold multisig where members hold shielded accounts. When M members approve, the chain records that the threshold was met — and nothing about which members met it. Not to outside observers, and, the part I care most about, not to the other members either. That is what the brief asks for: without revealing identity to on-chain observers *or other members*. The membership proof is genuinely verified on chain, and it is all live on the public L-E-Z testnet. Let me show you."
 
 ---
 
-# SCÈNE 2 — Le demo (0:45 – 3:00)
+# SCÈNE 2 — Le demo (0:35 – 2:10)
 
 **🎬 ACTION** : Tape lentement :
 
@@ -117,11 +142,11 @@ Si oui → QuickTime → Screen Recording → Démarre. Sinon → stop, prévien
 
 > "Twenty-five adversarial tests on the circuit logic — non-members, borrowed Merkle paths, invented member sets, forged nullifiers. Then thirty more against the *built binary*, run through the sequencer's own executor. Same executor, same input order, same thirty-two megabyte session limit the chain applies. A rejection you see there is the rejection the chain performs. Plus two that pin the verifier to the exact membership binary it chains to, so it can't be swapped."
 
-**🎬 ACTION** : Scrolle sur `== 6.` puis `== 7.`
+**🎬 ACTION** : Scrolle sur `== 6.` et `== 7.`
 
 **💬 SAY** :
 
-> "Step six: a member tries to approve twice and is refused. Step seven: someone tries to swap the action under the same proposal id, and that's refused too. That second one matters — if approvals were scoped to a proposal id alone, you could collect signatures for a harmless action and then execute a malicious one under the same id."
+> "A member approving twice is refused. And someone swapping the action under the same proposal id is refused too — which matters, because if approvals were scoped to a proposal id alone you could collect signatures for a harmless action and execute a malicious one under the same id."
 
 **🎬 ACTION** : Scrolle sur `== 9. what an observer sees` — **ralentis ici**
 
@@ -137,7 +162,7 @@ Si oui → QuickTime → Screen Recording → Démarre. Sinon → stop, prévien
 
 ---
 
-# SCÈNE 2bis — Une vraie preuve, en direct (3:00 – 5:30)
+# SCÈNE 2bis — Une vraie preuve, en direct (2:10 – 4:45)
 
 > **⚠️ Cette scène est OBLIGATOIRE.** Le brief l'exige mot pour mot : *« the
 > recording must show terminal output (including proof generation) to confirm
@@ -187,7 +212,7 @@ proving réel, à l'écran, sans coupure.
 
 ---
 
-# SCÈNE 3 — La chaîne, en direct (5:30 – 6:55)
+# SCÈNE 3 — La chaîne, en direct (4:45 – 5:55)
 
 **🎬 ACTION** : Scrolle sur `== 11. the Basecamp package`
 
@@ -218,7 +243,7 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 ---
 
-# SCÈNE 4 — L'audit (6:55 – 10:20)
+# SCÈNE 4 — L'audit (5:55 – 7:40)
 
 **🎬 ACTION** : Reste sur le terminal
 
@@ -228,55 +253,31 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 **💬 SAY** :
 
-> "After the first version was deployed, I ran an adversarial audit — writing tests that try to *break* the program rather than confirm it works. It found a threshold bypass in my own code."
+> "After the first version was deployed, I audited it by writing tests that try to *break* the program rather than confirm it works. It found a threshold bypass in my own code: an outsider could create their own one-of-one multisig, approve someone else's proposal while naming it, and execute a five-of-nine on one signature. I fixed it, redeployed, and wrote it up."
 
-**💬 SAY** :
-
-> "The proposal account was addressed by a reference that commits to the multisig I-D — but a program can't invert a hash, and nothing re-derived it. So anyone could create their own one-member multisig with a threshold of one, approve someone else's proposal while naming their own multisig, and execute it. A five-of-nine proposal would execute on one signature from an outsider."
-
-**💬 SAY** :
-
-> "Every individual check was doing its job. The gap was between them. The fix puts the multisig I-D into the proposal's address, so that pairing now resolves to an account nobody ever created. I redeployed, re-ran the whole lifecycle, and wrote the finding up in docs slash security dot M-D rather than quietly patching it. Two regression tests pin both halves of the attack."
-
-**💬 SAY** (le beat le plus important de la vidéo — ralentis) :
+**💬 SAY** (le beat qui compte — ralentis) :
 
 > "And then that fix turned out to be incomplete, which is the part I most want to tell you about."
 
 **💬 SAY** :
 
-> "I had it reviewed by someone who had not written it. They asked the same question I had asked — what is not checked — but about the fix rather than the original bug. And there was a second way in. The config hash, which is what commits to the member set and the threshold, appeared neither in the proposal reference nor in the proposal's address. And creating a multisig puts no constraint on the multisig I-D, deliberately, because anyone should be able to create one."
+> "I had it reviewed by someone who had not written it. They asked the same question about the fix that I had asked about the bug — what is *not* checked. The config hash, which commits to the member set and the threshold, appeared neither in the proposal reference nor in the proposal's address. And creating a multisig puts no constraint on the multisig I-D, deliberately, because anyone should be able to create one."
 
 **💬 SAY** :
 
-> "Those two facts compose. An attacker creates their own one-of-one member set *under your multisig I-D*. That's a fresh pair, so it initialises fine. Now both accounts an approval needs still resolve — their multisig, and your proposal — so they approve against their own member set, mint a marker on your proposal, and execute at threshold one. A three-of-five proposal, executed by one outsider."
+> "Those two compose. An attacker creates a one-of-one member set *under your multisig I-D* — a fresh pair, so it initialises fine. Both accounts an approval needs still resolve. They approve against their own member set and execute your three-of-five at threshold one."
 
 **💬 SAY** :
 
-> "I wrote the exploit as two tests before writing any fix, and they failed — meaning the attack succeeded against the deployed binary. That is the confirmation. The fix folds the config hash into the proposal reference *and* into the proposal's address, and I checked that each half alone still leaves a hole, so both are needed."
+> "I wrote the exploit as two tests before writing any fix, and they failed — meaning the attack succeeded against the deployed binary. That's the confirmation. And here is why my own regression tests had missed it: both of them varied the multisig I-D. Neither held it fixed and varied the config, which is exactly the axis the first fix did not cover. I had tested the variant I found, not the family it belonged to."
 
 **💬 SAY** :
 
-> "Here is why my own regression tests missed it. Both of them varied the multisig I-D. Neither held the I-D fixed and varied the config, which is exactly the axis the fix did not cover. I had tested the variant I found, not the family it belonged to. A fix verified only by the test that motivated it is a fix verified against one example."
-
-**💬 SAY** :
-
-> "So the verifier you just watched me read off the chain is the corrected one, redeployed today, with the whole lifecycle re-run against it. The write-up is in the security doc, next to the first finding, including why the first fix was not enough."
-
-**💬 SAY** :
-
-> "The same pass found three documented error codes with no test behind them, and a verification script that reported accounts as missing when they were on chain. All fixed. Sixty-one tests now."
-
-**💬 SAY** :
-
-> "The same habit paid off again on the Basecamp package. Rather than call it loadable, I installed Basecamp and loaded it — and it did not work. It was built against a newer Qt than Basecamp runs, so Qt refused it; the plugin interface used an I-D of my own invention instead of Basecamp's, so the cast returned null; and my copy of that interface had one extra virtual function, which shifts every later vtable slot. Three ways to fail, none of them visible in the interface — the app tile just did nothing. All three are fixed, and the packaging script now refuses to build a package with any of them."
-
-**💬 SAY** :
-
-> "And once more on the deployment script. My own documentation tells you to run it if the testnet is reset — which happened to another submission in July. I finally ran it end to end, and found it never could have worked: it pasted its arguments into the command line with the quotes still attached, so the chain saw a thirty-two-byte field as sixty-six. The live deployment had been produced by hand. It works now, and the run that produced what you just verified on chain is the script's own output."
+> "The verifier you just watched me read off the chain is the corrected one, redeployed today. The same habit caught two more things worth a sentence each: the Basecamp package did not actually load until I installed Basecamp and tried it, and the deployment script my own docs point you at had never run end to end. Both fixed, both written up."
 
 ---
 
-# SCÈNE 5 — Closing (10:20 – 11:00)
+# SCÈNE 5 — Closing (7:40 – 8:10)
 
 **🎬 ACTION** : Passe sur l'ONGLET A (le repo)
 
@@ -348,13 +349,24 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 | Scène | De | À | Durée |
 |---|---|---|---|
-| 1. Intro | 0:00 | 0:45 | 45s |
-| 2. demo.sh | 0:45 | 3:00 | 2m15 |
-| **2bis. Une vraie preuve** | 3:00 | 5:30 | **2m30** |
-| 3. La chaîne en direct | 5:30 | 6:55 | 1m25 |
-| 4. L'audit | 6:55 | 10:20 | 3m25 |
-| 5. Closing | 10:20 | 11:00 | 40s |
-| **Total** | | | **~11 min** |
+| 1. Intro | 0:00 | 0:35 | 35s |
+| 2. demo.sh | 0:35 | 2:10 | 1m35 |
+| **2bis. Une vraie preuve** | 2:10 | 4:45 | **2m35** |
+| 3. La chaîne en direct | 4:45 | 5:55 | 1m10 |
+| 4. L'audit | 5:55 | 7:40 | 1m45 |
+| 5. Closing | 7:40 | 8:10 | 30s |
+| **Total** | | | **~8 min** |
+
+> **Où sont passées les 3 minutes.** La scène 4 racontait quatre trouvailles
+> séparées ; elle en raconte une seule, celle qui porte — l'audit, le correctif,
+> et la relecture croisée qui a montré qu'il était incomplet. Les autres tiennent
+> en une phrase. Rien n'a été retiré du dépôt, seulement du récit.
+>
+> **Si tu veux descendre à ~6 minutes**, la seule marge restante est le proving
+> de la scène 2bis : accélère-le ×4 en post-prod, terminal continu visible, sans
+> coupure. Le brief demande de *voir* la génération de preuve, pas de la subir en
+> temps réel — mais en temps réel il n'y a aucune ambiguïté, donc c'est ton
+> arbitrage.
 
 **Le brief n'impose aucune durée.** Vérifié dans les *Evaluation Policies* du
 dépôt λPrize : ce qu'il exige, c'est une narration où tu expliques ce que tu as

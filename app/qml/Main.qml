@@ -153,7 +153,7 @@ Rectangle {
                     }
                 }
                 Label {
-                    text: "Submit the emitted arguments with spel on the privacy-preserving path. Proving takes upwards of ten minutes; the approval is a real Risc0 proof that LEZ's privacy circuit verifies on chain."
+                    text: "Submit the emitted arguments with spel on the privacy-preserving path. Proving takes about two and a half minutes; the approval is a real Risc0 proof that LEZ's privacy circuit verifies on chain."
                     color: "#6b7076"
                     font.pixelSize: 11
                     wrapMode: Text.WordWrap

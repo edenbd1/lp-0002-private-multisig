@@ -134,11 +134,27 @@ honestly.
       account.** `execute` consumes marker addresses and is signed by an executor
       who need not be a member at all.
 - [x] **Proof generation runs client-side on a standard laptop.** Approvals are
-      built by `msig approve-args` and proved locally; ~10 minutes per approval.
+      built by `msig approve-args` and proved locally; **149 s and 154 s** for the
+      two approvals of a measured 2-of-3 run, timed by the script itself.
 - [x] **A reference integration on LEZ testnet.** A 2-of-3 multisig created, a
       proposal published, two approvals gathered on the privacy-preserving path,
       and executed against the fixed verifier. Seven transactions, all live; see
       [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+      **What "threshold-gated action" means here**, since the criterion offers
+      *treasury transfer or parameter change* as examples and it is fair to ask
+      which one this is. The gated action is `transfer 100 LEZ to the grants
+      treasury`, bound into `proposal_ref` by its hash, and what the chain gates
+      is the **right to act on it**: the execution marker PDA comes into
+      existence only when M distinct secret-bound nullifiers resolve to markers
+      the verifier owns, and it can never be produced any other way. Performing
+      the transfer is one CPI away and deliberately out of scope — a multisig is
+      an authorisation primitive, and coupling it to one action type would make
+      it a treasury program instead. Any program can gate on that marker: it is
+      a PDA at a derivable address, owned by the verifier, whose existence *is*
+      the proof that the threshold was met. The submission demonstrates the
+      part the prize is about — reaching the threshold privately — rather than
+      re-implementing a transfer that LEZ already has.
 
       One thing to flag before you click, because it would otherwise look like
       dead links: **the explorer renders the two program deployments and none of
@@ -196,7 +212,7 @@ honestly.
       fails in microseconds rather than after minutes of proving.
 - [x] **A partial set of approvals is preserved and resumable across client
       restarts.** Every approval is recorded in `proposals/<id>.json` before the
-      command returns. This is not incidental: proving takes ten minutes an
+      command returns. This is not incidental: proving takes minutes, not an
       approval, so a real threshold *is* gathered across sessions and days.
 - [x] **Deterministic, documented error codes.** Thirteen, `5001`–`5013`, in
       [`docs/error-codes.md`](docs/error-codes.md), each mapped to the attack it
@@ -214,14 +230,29 @@ honestly.
 
 - [x] **Deployed and tested on LEZ devnet/testnet.** Both programs deployed;
       full lifecycle run and independently re-verifiable over JSON-RPC.
-- [x] **E2E integration tests against a LEZ sequencer, in CI.**
+- [x] **E2E integration tests run against a LEZ sequencer (standalone mode), in
+      CI.** Two layers, because they answer different questions.
       `multisig-verifier-tests` runs the built binary through the sequencer's own
-      executor — same executor, same input order, same 32M session limit — and
-      runs on every push.
+      **executor** on every push — same executor, same input order, same 32M
+      session limit — which is what makes 28 adversarial rejections cheap enough
+      to gate a commit. On top of that,
+      [`.github/workflows/e2e-local-sequencer.yml`](.github/workflows/e2e-local-sequencer.yml)
+      starts the actual `sequencer_service` binary in **standalone mode** and
+      drives the whole lifecycle against it over JSON-RPC. It is scheduled
+      rather than per-push because it builds the LEZ workspace and then
+      generates a real proof; both are CI, and only one of them can be fast.
 - [x] **CI green on the default branch.** Ubuntu and macOS both.
-- [x] **README documents end-to-end usage.**
-- [x] **Reproducible demo script working with `RISC0_DEV_MODE=0`.**
-      `scripts/demo.sh`, from a clean clone, no network or funded account needed.
+- [x] **README documents end-to-end usage** — deployment steps, program
+      addresses, and step-by-step instructions for both the CLI and the Basecamp
+      app, the latter verified on LogosBasecamp 0.2.2.
+- [x] **Reproducible demo script working against a real local sequencer with
+      `RISC0_DEV_MODE=0`.** `scripts/e2e-local-sequencer.sh` starts a real
+      standalone sequencer, funds a throwaway wallet from its genesis vault,
+      deploys both programs onto that fresh chain, and runs create → propose →
+      *real Risc0 approvals* → execute, then reads the five resulting accounts
+      back off it. Nothing mocked, `RISC0_DEV_MODE=0` throughout, about eight
+      minutes for a 2-of-3. `scripts/demo.sh` remains the five-second tour for
+      readers who want the rejections and the cost table without a sequencer.
 - [ ] **Recorded narrated video demo.** ⚠️ **Not yet recorded.** Script prepared
       at `VIDEO_SCRIPT.md`.
 
@@ -254,9 +285,19 @@ trust the CLI's verdict, and the docs say so.
 ### Performance
 
 `approve` at 1.56 % of the public compute budget, with headroom to ~524k user
-cycles before a second segment. Wall-clock is dominated entirely by proving,
-~10 minutes per approval, which is the real constraint on a lifecycle run and is
-stated as such rather than hidden behind the cycle counts.
+cycles before a second segment. Wall-clock is dominated entirely by proving:
+**149 s and 154 s** for the two approvals of a 2-of-3 run against a local
+standalone sequencer, timed by `scripts/deploy-and-run.sh` itself rather than
+estimated, and written into `lifecycle.tsv` alongside the transaction hashes.
+Both numbers are in [`docs/cu-costs.md`](docs/cu-costs.md) with the machine they
+were taken on.
+
+That figure is a correction. This submission previously said "~10 minutes per
+approval" in six places, carried over from an early estimate that no one had
+gone back and measured. Measuring it was part of closing the "proof generation
+time benchmark" requirement, and it turned out the estimate was four times too
+pessimistic — which is worth stating plainly, because a benchmark nobody
+re-runs is just a claim.
 
 ### Supportability
 

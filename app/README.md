@@ -122,7 +122,7 @@ all the chain records, and all the other members can see.
 
 ## Packaged asset
 
-`app/lp-0002-multisig.lgx` (2.4 MB, SHA-256 `2276d1f3f9cd9767de4afcf1613646b52d6b4c8032cc799c3dd4653a6cd5599f`) is the packaged
+`app/lp-0002-multisig.lgx` (2.4 MB, SHA-256 `ac1ab5459c5ced6557fce67745403906fd73fff4ca40d22e5d0f574df2f7c0e2`) is the packaged
 module. It carries **two variants** — `darwin-arm64` and `linux-amd64` — each
 with the plugin library, the QML view, the module metadata, and the `msig` CLI
 the bridge drives. Basecamp selects the one matching the host.
@@ -208,7 +208,7 @@ package built by the real tool. One such package ships in this repository — th
 committed `.lgx` itself — so the check runs from a clean clone rather than only
 on the machine that has the sibling submissions lying around. Both paths were
 confirmed to produce the
-**identical** root hash `618533b81b9f46f1f1f3fa785135b8d4d2506e89afc0ff449d1611fb65e3fb21`
+**identical** root hash `746d307387df124f8d55ade28d3acbd31bfcb2a421f6b3640597c43638a6b88f`
 for this module.
 
 ```bash

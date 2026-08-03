@@ -1,0 +1,94 @@
+name: e2e vs local sequencer
+
+# The full lifecycle against a REAL LEZ sequencer in standalone mode, with
+# RISC0_DEV_MODE=0 — deploy, create, propose, a real Risc0 approval, execute,
+# then read the resulting accounts back off that chain.
+#
+# Separate from the main CI workflow on purpose. That one is a few minutes and
+# gates every push; this one builds the whole logos-execution-zone workspace and
+# then generates an actual proof, so it runs on a schedule and on demand rather
+# than blocking a push. Both are CI; only one of them can be fast.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 04:20 UTC daily. Nothing depends on the hour; it is off-peak for runners.
+    - cron: '20 4 * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/deploy-and-run.sh'
+      - 'scripts/e2e-local-sequencer.sh'
+      - 'artifacts/programs/**'
+      - 'idl/**'
+      - '.github/workflows/e2e-local-sequencer.yml'
+
+concurrency:
+  group: e2e-local-sequencer-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The revision this was developed and verified against. Floating HEAD would
+  # turn an upstream change into a red build here with no change of ours.
+  LEZ_REV: a58fbce
+  CARGO_TERM_COLOR: always
+
+jobs:
+  e2e:
+    name: lifecycle vs standalone sequencer
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out logos-execution-zone
+        run: |
+          git clone --filter=blob:none https://github.com/logos-blockchain/logos-execution-zone _external/lez
+          git -C _external/lez checkout "$LEZ_REV"
+          echo "LEZ at $(git -C _external/lez rev-parse --short HEAD)"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # The LEZ workspace is large and its build dominates this job. Keyed on
+      # the pinned revision, so it is a cache hit on every run until LEZ_REV
+      # changes.
+      - name: Cache the LEZ build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            _external/lez/target
+          key: lez-${{ runner.os }}-${{ env.LEZ_REV }}-${{ hashFiles('_external/lez/Cargo.lock') }}
+          restore-keys: lez-${{ runner.os }}-${{ env.LEZ_REV }}-
+
+      - name: Install r0vm
+        run: |
+          curl -L https://risczero.com/install | bash
+          echo "$HOME/.risc0/bin" >> "$GITHUB_PATH"
+          "$HOME/.risc0/bin/rzup" install r0vm 3.0.5
+
+      - name: Install spel
+        run: |
+          cargo install --git https://github.com/logos-co/spel --locked spel-cli || \
+          cargo install spel-cli --locked
+
+      - name: Build the standalone sequencer and the wallet
+        working-directory: _external/lez
+        run: |
+          cargo build --release --features standalone -p sequencer_service
+          cargo build --release -p wallet
+
+      - name: Full lifecycle against it
+        env:
+          RISC0_DEV_MODE: 0
+        run: |
+          # One approval rather than two: the integration surface is identical
+          # and the proof is the expensive part. A reviewer wanting the 2-of-3
+          # shape runs the same script without MEMBERS/THRESHOLD set.
+          MEMBERS=2 THRESHOLD=1 ./scripts/e2e-local-sequencer.sh
+
+      - name: Sequencer log on failure
+        if: failure()
+        run: |
+          find /tmp -name 'sequencer.log' -newermt '-2 hours' -exec tail -100 {} \; 2>/dev/null || true

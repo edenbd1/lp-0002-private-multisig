@@ -163,7 +163,7 @@ It deploys both programs, creates a multisig, publishes a proposal, gathers
 transaction hash is appended to `.testnet/lifecycle.tsv`.
 
 **Budget several hours.** Proving one approval with `RISC0_DEV_MODE=0` takes
-upwards of ten minutes; the run is dominated entirely by proving. Set `MEMBERS`
+about two and a half minutes; the run is dominated entirely by proving. Set `MEMBERS`
 and `THRESHOLD` to shrink it.
 
 > The wallet may print `Transaction NOT confirmed` for a privacy-preserving

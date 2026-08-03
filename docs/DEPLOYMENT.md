@@ -26,14 +26,17 @@ the privacy-preserving path, and executed.
 **All seven are live.** `getTransaction` returns every one of them; the last
 column is about the explorer's indexer, not about the chain.
 
-The explorer currently renders program deployments and not much else. That is
-observable independently of this submission: a transaction hash that cannot
-exist and a lifecycle transaction that provably does both return the identical
-2416-byte page shell, while the two deployments above return the full
-transaction with the bytecode inline. The same gap was reported on
+What was measured, rather than assumed: the two deployment URLs return the full
+transaction with the bytecode inline, and the other five return exactly the same
+2416-byte page shell that a hash which *cannot exist* returns. Identical byte
+counts, so the explorer is not saying "this transaction is empty" — it is saying
+it has no record of the hash at all, while `getTransaction` returns it.
+
+The indexer's coverage is uneven rather than absent: other submissions' public
+transactions do render. The same gap was reported on
 [logos-co/lambda-prize#64](https://github.com/logos-co/lambda-prize/pull/64) in
-July for a different submission's transactions, which `getTransaction` also
-returned.
+July for transactions `getTransaction` also returned, so it is not specific to
+this submission and is not something a resubmission would fix.
 
 So do not judge these by clicking. Check any hash directly:
 

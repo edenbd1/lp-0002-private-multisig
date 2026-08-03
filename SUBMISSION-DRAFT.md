@@ -141,15 +141,16 @@ honestly.
       [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
       One thing to flag before you click, because it would otherwise look like
-      dead links: **the explorer only renders the two program deployments.** The
-      five lifecycle transactions are on chain — `getTransaction` returns each —
-      but the explorer's indexer does not show them, the same gap reported on
-      #64 in July. It is checkable without trusting me: a hash that cannot exist
-      and a lifecycle hash that provably does return byte-identical page shells,
-      while the two deployment links render fully. `docs/DEPLOYMENT.md` gives a
-      one-line `curl` per hash, and `./scripts/verify-onchain.sh` does the
-      stronger check — it reads the five accounts the lifecycle created and
-      confirms the verifier program owns them.
+      dead links: **the explorer renders the two program deployments and none of
+      the five lifecycle transactions.** All seven are on chain —
+      `getTransaction` returns each. Checkable without trusting me: a hash that
+      *cannot exist* and a lifecycle hash that provably does return byte-identical
+      page shells, while the two deployment links render in full. The same gap
+      was reported on #64 in July for transactions the RPC also returned, so it
+      is the indexer rather than the chain. `docs/DEPLOYMENT.md` gives a one-line
+      `curl` per hash, and `./scripts/verify-onchain.sh` does the stronger check —
+      it reads the five accounts the lifecycle created and confirms the verifier
+      program owns them, which no transaction lookup can fake.
 - [x] **At least 1 multisig instance on testnet with a proposal submitted,
       approved by threshold, and executed.** Multisig
       `chmP8jUqSHh2irhKVxBkM6GaGfLHmSq3TgCABziET3R`, proposal

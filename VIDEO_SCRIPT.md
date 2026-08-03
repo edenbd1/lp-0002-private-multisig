@@ -238,7 +238,7 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 **💬 SAY** :
 
-> "The same pass found three documented error codes with no test behind them, and a verification script that reported accounts as missing when they were on chain. All fixed. Fifty-seven tests now."
+> "The same pass found three documented error codes with no test behind them, and a verification script that reported accounts as missing when they were on chain. All fixed. Fifty-nine tests now."
 
 **💬 SAY** :
 
@@ -256,7 +256,7 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 **💬 SAY** :
 
-> "To summarize. Two programs deployed on the public L-E-Z testnet, byte-identical to what's in the repository — you can verify that from the deployment transaction. A full two-of-three lifecycle on chain: create, propose, two approvals on the privacy path, execute. Fifty-seven tests, C-I green on Linux and macOS, a reproducible build, a Basecamp module I installed and used in Basecamp rather than just shipped, an S-D-K, a SPEL I-D-L, and a demo script that runs from a clean clone."
+> "To summarize. Two programs deployed on the public L-E-Z testnet, byte-identical to what's in the repository — you can verify that from the deployment transaction. A full two-of-three lifecycle on chain: create, propose, two approvals on the privacy path, execute. Fifty-nine tests, C-I green on Linux and macOS, a reproducible build, a Basecamp module I installed and used in Basecamp rather than just shipped, an S-D-K, a SPEL I-D-L, and a demo script that runs from a clean clone."
 
 **💬 SAY** :
 

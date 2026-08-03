@@ -1831,6 +1831,7 @@ dependencies = [
  "risc0-zkvm",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

@@ -301,7 +301,7 @@ re-runs is just a claim.
 
 ### Supportability
 
-57 tests across four suites, counted and itemised in the README. That number
+59 tests across five suites, counted and itemised in the README. That number
 went from 40 after two audit passes found a threshold bypass and three untested
 error codes; the finding and its cost are written up in `docs/security.md`
 rather than quietly patched. The two guest
@@ -312,11 +312,31 @@ binary. CI runs on Ubuntu and macOS, and a dedicated job fails if
 `MEMBERSHIP_LEZ_PROGRAM_ID` drifts from the committed membership binary, since
 that constant is what stops a chained call from reaching an unaudited program.
 
+## Write-up, by the topics the brief names
+
+The Submission Requirements ask for a write-up covering six specific things, and
+the Scope section adds a seventh. Rather than leave them to be hunted for:
+
+| Required topic | Where |
+|---|---|
+| **Threshold proof scheme** | *Approach* above — membership against an anchored Merkle root, proved in a Risc0 guest, composed on chain by LEZ's privacy circuit via `env::verify` |
+| **Nullifier design** | *Making M markers mean M distinct members* above, and bindings 4–7 in [`docs/security.md`](docs/security.md) |
+| **LEZ account model compatibility** — specifically the **nonce** and **`program_owner`** constraints | [`docs/lez-account-model.md`](docs/lez-account-model.md), in full. Short version: the nonce constraint never binds on membership because a member is a Merkle leaf and not an account this program touches; it binds one level up, on the account that *submits*, which is unrelated to the member and may be a relayer. `program_owner` is load-bearing rather than an obstacle — it is how an uninitialised PDA is detectable, which is what makes a forged member set unrepresentable instead of merely refused |
+| **Trusted setup** | **None.** Risc0 is a STARK-based, transparent proving system: there is no structured reference string, no ceremony, and no toxic waste to trust or destroy. The only trusted parameters are the two program ImageIDs, and those are content-addressed — [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) shows a clean rebuild reproducing `cf5724b0…` exactly, so an evaluator who rebuilds gets the same identity or knows something is wrong |
+| **Security assumptions** | [`docs/security.md`](docs/security.md) — three adversaries in increasing order of knowledge, ending at the insider, which is the interesting one |
+| **Known limitations** | [`docs/security.md`](docs/security.md), *What is not hidden* and *Residual risks and non-goals* — timing correlation, small anonymity sets, and a 1-of-2 multisig hiding nothing from its other member |
+| **Integration instructions** | [`README.md`](README.md) — the CLI lifecycle, the Basecamp walkthrough, and [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for deployment |
+| **Proof generation time and gas cost benchmarks** | [`docs/cu-costs.md`](docs/cu-costs.md) — per-instruction CU, and per-approval wall clock measured by the lifecycle script itself |
+
 ## Supporting Materials
 
 - [`docs/security.md`](docs/security.md) — threat model, what is hidden from
   whom, what is deliberately public, residual risks
-- [`docs/error-codes.md`](docs/error-codes.md)
+- [`docs/lez-account-model.md`](docs/lez-account-model.md) — the nonce and
+  `program_owner` constraints, which are the incompatibility this prize exists
+  to solve
+- [`docs/error-codes.md`](docs/error-codes.md) — all 13 codes, the attack each
+  stops, and the test behind it
 - [`docs/cu-costs.md`](docs/cu-costs.md)
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 - Narrated demo video: ⚠️ pending — script at `VIDEO_SCRIPT.md`

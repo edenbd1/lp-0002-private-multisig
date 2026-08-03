@@ -189,6 +189,19 @@ honestly.
       `scripts/build-linux-variant.sh` and the packaged Linux `msig` was run
       inside a Linux container to confirm it works, not just that it exists.
 
+      **The Linux variant is load-tested against Basecamp's own Qt, not just
+      built.** Basecamp ships an `x86_64.AppImage` in the same 0.2.2 release;
+      extracted, it bundles the same Qt 6.9.2 as macOS. Running what Basecamp's
+      PluginLoader runs — `QPluginLoader::instance()` then
+      `qobject_cast<IComponent*>` — linked against *that* Qt gives
+      `SUCCESS: loaded + cast to IComponent`. The harness was shown able to
+      fail: a real Qt plugin with a different IID gives `CAST FAILED`. Basecamp
+      itself also boots on Linux with the package installed, reaching
+      `Logos Core started successfully!` and scanning the plugins directory.
+      What is *not* claimed is the click: a UI app's widget loads on click, and
+      headless there is nothing to click, so that half was exercised on macOS.
+      Method in [`app/README.md`](app/README.md).
+
       **It was installed and driven in Logos Basecamp 0.2.2**, not merely
       declared loadable: the committed package extracts into the user plugins
       directory, the module loads (`Successfully loaded UI module`), and

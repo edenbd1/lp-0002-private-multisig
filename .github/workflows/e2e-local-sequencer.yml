@@ -69,9 +69,17 @@ jobs:
           "$HOME/.risc0/bin/rzup" install r0vm 3.0.5
 
       - name: Install spel
+        # The crate is named `spel`, in a directory called `spel-cli`, and it is
+        # not published to crates.io — so this is a clone and a --path install,
+        # exactly as spel's own README documents. Pinned for the same reason
+        # LEZ is: an upstream change should not turn this red on its own.
         run: |
-          cargo install --git https://github.com/logos-co/spel --locked spel-cli || \
-          cargo install spel-cli --locked
+          git clone --depth 1 https://github.com/logos-co/spel /tmp/spel
+          git -C /tmp/spel fetch --depth 1 origin 0cb7e09 && git -C /tmp/spel checkout 0cb7e09
+          cargo install --path /tmp/spel/spel-cli --locked
+          # `spel --help` exits 1, so check the binary is on PATH instead of
+          # gating on its status and failing the step over nothing.
+          command -v spel
 
       - name: Build the standalone sequencer and the wallet
         working-directory: _external/lez

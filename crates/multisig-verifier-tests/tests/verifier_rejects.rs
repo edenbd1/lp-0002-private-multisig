@@ -607,8 +607,12 @@ fn an_approval_marker_from_another_proposal_is_rejected() {
 
     // A second proposal under the same multisig, and member 0's marker on it.
     let other_action = compute_action_hash(&f.multisig_id, b"a different action entirely");
-    let other_ref =
-        compute_proposal_ref(&f.multisig_id, &f.config_hash, &f.proposal_id, &other_action);
+    let other_ref = compute_proposal_ref(
+        &f.multisig_id,
+        &f.config_hash,
+        &f.proposal_id,
+        &other_action,
+    );
     let other_nullifier = compute_approval_nullifier(&other_ref, &f.members[0].0);
     let other_marker = compute_approval_marker(&other_ref, &other_nullifier);
 

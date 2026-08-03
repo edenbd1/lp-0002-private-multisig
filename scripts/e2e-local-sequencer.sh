@@ -149,14 +149,27 @@ done
 [ "${bal:-0}" -gt 0 ] 2>/dev/null || die "vault claim did not land"
 
 say "[4/5] one private account per approval"
-APPROVERS=""
+# Diff the account list around each creation instead of taking the tail of it.
+#
+# `account list` prints a derivation tree — `/`, `/0`, `/0/0`, `/1` — so a newly
+# created account can appear in the middle. Taking the last N lines picks by
+# display order, which is not creation order, and on a wallet with history that
+# silently selects *already spent* accounts. A privacy transaction consumes its
+# submitter's commitment, so the run would then fail deep in the lifecycle with
+# "Invalid account_identities length" after minutes of proving.
+list_private() {
+  wallet_run account list </dev/null 2>/dev/null \
+    | grep -oE 'Private/[1-9A-HJ-NP-Za-km-z]+' | sed 's|Private/||' | sort
+}
+APPROVER_LIST=()
 for _ in $(seq 1 "$THRESHOLD"); do
+  before=$(list_private)
   wallet_run account new private </dev/null >/dev/null 2>&1 || die "could not create a private account"
+  fresh=$(comm -13 <(printf '%s\n' "$before") <(list_private) | head -1)
+  [ -n "$fresh" ] || die "account new private produced nothing new"
+  APPROVER_LIST+=("$fresh")
 done
-# The newest THRESHOLD private accounts, in creation order.
-APPROVERS=$(wallet_run account list </dev/null 2>/dev/null \
-  | grep -oE 'Private/[1-9A-HJ-NP-Za-km-z]+' | sed 's|Private/||' | tail -n "$THRESHOLD" | paste -sd, -)
-[ -n "$APPROVERS" ] || die "no private accounts to approve with"
+APPROVERS=$(IFS=,; echo "${APPROVER_LIST[*]}")
 echo "  $APPROVERS"
 
 say "[5/5] the lifecycle, against that sequencer"

@@ -48,7 +48,7 @@ cd lp-0002-private-multisig
 ```
 
 No network, no funded account, no sequencer required. The demo runs the 25
-circuit tests, the 28 adversarial tests against the built verifier binary through
+circuit tests, the 30 adversarial tests against the built verifier binary through
 the sequencer's own executor, a full 3-of-5 lifecycle, and reports the measured
 compute cost.
 
@@ -81,12 +81,12 @@ To rebuild the on-chain programs (needs Docker and `cargo-risczero`):
 
 ### Test inventory
 
-`cargo test --workspace` runs **59** tests. Counted, so you can check the claim:
+`cargo test --workspace` runs **61** tests. Counted, so you can check the claim:
 
 | Suite | Count | What it establishes |
 |---|---:|---|
 | `multisig-core` — `approve_adversarial` | 25 | The circuit-side bindings: non-members, borrowed Merkle paths, invented roots, forged nullifiers, bait-and-switch actions, the padding sentinel, tree construction |
-| `multisig-verifier-tests` — `verifier_rejects` | 28 | The **built verifier binary** through the sequencer's own executor: 4 honest controls (one per instruction), 22 attacks, 2 framework-layer checks |
+| `multisig-verifier-tests` — `verifier_rejects` | 30 | The **built verifier binary** through the sequencer's own executor: 4 honest controls (one per instruction), 22 attacks, 2 framework-layer checks |
 | `multisig-verifier-tests` — `program_id_pin` | 2 | The verifier pins the committed membership binary, and the pin is not a placeholder |
 | `multisig-sdk` — `cross_check` + doctest | 2 | Every SDK derivation equals the `multisig-core` one the chain re-derives, and the four client-side guards hold |
 | `multisig-cli` — `resumable` | 2 | Through the **built binary**, one process per step: a partial set of approvals survives client restarts, and a non-member is refused in milliseconds instead of after two and a half minutes of proving |
@@ -231,16 +231,16 @@ with `getTransaction` against `https://testnet.lez.logos.co`.
 | Step | Transaction |
 |---|---|
 | deploy `membership_lez` | `64098974b7d28f4facf1218e771d27c6163f7fb7ce3bd4f218df6db42ace6dde` |
-| deploy `multisig_verifier` | `e24f5367521616f235acd26e3ee8937e8fc071335f187fab3ad282b6a691192f` |
-| `create_multisig` | `8bb3a9ac860ad2ce5ef62498526b0560be00287e87e4fdc5361ed759a6c55a44` |
-| `create_proposal` | `0647f7aa93e6a3bf2fff3bb4348e5242f83462e7d44b1bfdcae1cf6e2acc2cf7` |
-| `approve` (member A, **privacy tx**) | `a0634e1f25c688666cc7b0e10f655ecd070da56bbd4c585afce5d9b1bca717ae` |
-| `approve` (member B, **privacy tx**) | `a7981c1bd0691eec13aefb0e428c14215634909aaa8722c25c451a9ceee5ab14` |
-| `execute` | `6704964e716c0f3f4c628148796696bdc0cdd15680c52f844717719fdbc6aa63` |
+| deploy `multisig_verifier` | `78a68aa2b0bdcc5c99778fdfa52469f6b367c36f28489f4a40418873dd9ab1ca` |
+| `create_multisig` | `09e8245d8673dd2de0621f3e843822cba30f5297c87a7224da950c093f5fd60e` |
+| `create_proposal` | `88698af7fd639229563b22f59ca00d3d5e5f30baea20677ca82e611add7c17f5` |
+| `approve` (member A, **privacy tx**) | `0b0a13dd39b57222d0d641863061db81e925b7f21c635701139f73f7d0a356a7` |
+| `approve` (member B, **privacy tx**) | `ff22f4c33bce23f6454be09872f14fae8672ea334d6cfda66270d4d8a09259b7` |
+| `execute` | `18d428af895cd992899cbbec0ad5eb326e7cf0388f985c609ac510f05cba3e98` |
 
-The two approval markers — `BxU7zsMUVQpy6tgusJxAMHLTEizugaZo8yqVH9K1Da6D` and
-`2dXpEQSxP3rQED4kJ6Sc51QaCQgetzXCQNrk6hXNJxHf` — and the execution marker
-`4bb23EUGVGPWcABciHCQe1dzaV5ebNxMn5umraPh6Fzn` are all owned by the verifier
+The two approval markers — `yyNX12APVKBCh9yJyR98rG7qyM8mrfBda8m34AC115N` and
+`BWGfzw5EescKdS53nkawCQdkhu5koW2LfXPCFnS45Vrn` — and the execution marker
+`DXGgrR6R52Et4wjNDQyLeSxtvStpj69xGNC2ZKv4kuWc` are all owned by the verifier
 program. Neither approval marker could exist without a membership proof having
 been verified on chain, and neither names a member.
 
@@ -252,7 +252,7 @@ Full detail, including how to re-verify each one yourself, in
 | Program | ImageID |
 |---|---|
 | `membership_lez` | `a48ecc5289404ad01fd6d6fd1d79eaebb8d2f0fe4f2dc2ebbc85003ee82af3d6` |
-| `multisig_verifier` | `cf5724b0e8dabd4a1519f8d9ea7371d69e1d7e2f6d8c931f1e4b3110150d7982` |
+| `multisig_verifier` | `00286a889dabd8c3d7fdfb058c5935f5d46172946249c98da73953e3f136ed5d` |
 
 The verifier pins the membership program id as a constant, so a chained call can
 only ever reach the audited binary. `./scripts/build-programs.sh --check` fails if

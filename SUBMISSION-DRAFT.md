@@ -169,9 +169,9 @@ honestly.
       program owns them, which no transaction lookup can fake.
 - [x] **At least 1 multisig instance on testnet with a proposal submitted,
       approved by threshold, and executed.** Multisig
-      `DoZLeq2VcPspGmdGv4DSNnGPgBSarNqqT6J36gwrMFVi`, proposal
-      `9LxiJeiuepNjFz18XnT8Sv2tEreYBW9KxyVhcdbTL7Az`, execution marker
-      `4bb23EUGVGPWcABciHCQe1dzaV5ebNxMn5umraPh6Fzn` — all owned by the verifier.
+      `9GwWLZThKirW56FPWTCpXPhZ1gTrEy7HYuk5jerQvUTR`, proposal
+      `2G8eAKAgTR7JjkDrzioPc4nJmHDx3MgK5Kk9xDaH6LHN`, execution marker
+      `DXGgrR6R52Et4wjNDQyLeSxtvStpj69xGNC2ZKv4kuWc` — all owned by the verifier.
       Re-verify with `./scripts/verify-onchain.sh`.
 - [x] **Full documentation and a clean public repository.**
 
@@ -301,7 +301,7 @@ re-runs is just a claim.
 
 ### Supportability
 
-59 tests across five suites, counted and itemised in the README. That number
+61 tests across five suites, counted and itemised in the README. That number
 went from 40 after two audit passes found a threshold bypass and three untested
 error codes; the finding and its cost are written up in `docs/security.md`
 rather than quietly patched. The two guest

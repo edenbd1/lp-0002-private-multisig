@@ -1212,8 +1212,9 @@ fn approving_a_proposal_under_a_foreign_multisig_is_rejected() {
 // victim's id, and both PDAs still resolve.
 
 /// The attacker's own one-member set, built exactly as `Fixture::new` builds
-/// the honest one.
-fn attacker_set() -> ([u8; 32], [u8; 32], u128, [u8; 32], u64, Vec<[u8; 32]>) {
+/// the honest one. Returns the root and the single member, reusing `TestMember`
+/// rather than widening the tuple.
+fn attacker_set() -> ([u8; 32], TestMember) {
     let msk = [0x99; 32];
     let identifier = 999u128;
     let salt = [0x77; 32];
@@ -1221,7 +1222,7 @@ fn attacker_set() -> ([u8; 32], [u8; 32], u128, [u8; 32], u64, Vec<[u8; 32]>) {
     let leaf = compute_member_leaf(&aid, &salt);
     let (root, paths) = build_member_tree(&[leaf]);
     let (leaf_index, siblings) = paths[0].clone();
-    (root, msk, identifier, salt, leaf_index, siblings)
+    (root, (msk, identifier, salt, leaf_index, siblings))
 }
 
 #[test]
@@ -1229,7 +1230,7 @@ fn approving_under_a_second_config_of_the_same_multisig_id_is_rejected() {
     let elf = elf();
     let pid = program_id(&elf);
     let f = Fixture::new(&pid); // honest 3-of-5
-    let (a_root, a_msk, a_id, a_salt, a_leaf_index, a_siblings) = attacker_set();
+    let (a_root, (a_msk, a_id, a_salt, a_leaf_index, a_siblings)) = attacker_set();
 
     let a_threshold = 1u32;
     let a_config = compute_config_hash(&a_root, a_threshold);
@@ -1286,7 +1287,7 @@ fn executing_under_a_second_config_of_the_same_multisig_id_is_rejected() {
     let elf = elf();
     let pid = program_id(&elf);
     let f = Fixture::new(&pid); // honest 3-of-5
-    let (a_root, a_msk, _, _, _, _) = attacker_set();
+    let (a_root, (a_msk, ..)) = attacker_set();
 
     let a_threshold = 1u32;
     let a_config = compute_config_hash(&a_root, a_threshold);

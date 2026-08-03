@@ -159,6 +159,72 @@ returns the live deployment's state — `2-of-3`, `2/2 READY TO EXECUTE`, and th
 two approval markers — with the `msig` field left empty, because the plugin
 resolves the CLI shipped inside the package.
 
+### The `linux-amd64` half, verified on Linux
+
+The Linux variant exists because the evaluator reviews on a Linux VPS, so
+shipping it on static checks alone would have been the same inference this
+document criticises elsewhere. It is checked against the real thing.
+
+**Basecamp has a Linux build**, which is not obvious: the `logos-co/logos-basecamp`
+0.2.2 release carries `LogosBasecamp-Desktop-v0.2.2-d41a72-x86_64.AppImage`
+alongside the macOS `.dmg`. Everything below runs in `--platform linux/amd64`
+containers on an arm64 Mac — no VM.
+
+Extract it by computing the squashfs offset **from the ELF header**, not by
+scanning for the `hsqs` magic, which false-positives inside the payload:
+
+```bash
+SHOFF=$(readelf -h "$F" | awk '/Start of section headers/{print $5}')
+SHENT=$(readelf -h "$F" | awk '/Size of section headers/{print $5}')
+SHNUM=$(readelf -h "$F" | awk '/Number of section headers/{print $5}')
+unsquashfs -o $((SHOFF+SHENT*SHNUM)) -d squashfs-root "$F"
+```
+
+Basecamp Linux bundles the **same Qt 6.9.2** as macOS, under
+`squashfs-root/usr/lib`. The `linux-amd64` plugin is built on Debian bookworm's
+Qt 6.4.2, which is under that ceiling.
+
+**The decisive check** reproduces what Basecamp's `PluginLoader` does —
+`QPluginLoader::instance()` then `qobject_cast<IComponent*>` — linked against
+Basecamp's own Qt rather than the distribution's:
+
+```bash
+LD_LIBRARY_PATH=squashfs-root/usr/lib \
+QT_PLUGIN_PATH=squashfs-root/usr/lib/qt/plugins \
+QT_QPA_PLATFORM=offscreen \
+  ./harness lp_0002_multisig.so
+```
+
+```
+Qt runtime 6.9.2
+declared IID: com.logos.component.IComponent
+SUCCESS: loaded + cast to IComponent (what Basecamp does)
+```
+
+That result is only worth something if the harness can fail, so it was shown to:
+one of Basecamp's own Qt platform plugins — a genuine Qt plugin with a different
+IID — gives `CAST FAILED`, and a wrong-architecture file gives `LOAD FAILED`.
+
+**Basecamp itself also boots on Linux** with the plugin installed under
+`~/.local/share/Logos/LogosBasecamp/plugins/`: `LogosBasecamp version 0.2.2`,
+`Logos Core started successfully!`, the three core modules loaded, then
+`setUserUiPluginsDirectory` and `getInstalledUiPlugins` against the directory
+holding this package. Three things are needed to get that far and each fails
+confusingly without: glibc ≥ 2.39, so `ubuntu:24.04` and not `debian:bookworm`
+(2.36, which dies with `GLIBC_2.38 not found`); a pty, because Basecamp's
+`LogRedirector` throws on a regular-file stdout, so `script -qefc "AppRun" log`;
+and a current QEMU (`docker run --privileged tonistiigi/binfmt --install amd64`)
+or its core module dies on an emulated `eventfd` with `boost::asio: Bad file
+descriptor`.
+
+**What is deliberately not claimed.** A UI app does not appear in the startup
+module list — it is a tile in the App Manager, and `Successfully loaded UI
+module` is printed on click. Headless, there is nothing to click. So the Linux
+evidence is: the load contract passes against Basecamp's own Qt, and Basecamp
+boots and scans the directory this package is installed in. The click itself was
+exercised on macOS, where the same plugin source and the same interface produce
+`Successfully loaded UI module` and a working surface.
+
 Verify the package matches its own manifest:
 
 ```bash

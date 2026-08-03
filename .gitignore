@@ -5,8 +5,12 @@ _external/
 .DS_Store
 
 /.demo/
-/.testnet/
-/.testnet2/
+# Every testnet working directory, present and future. Enumerating them by name
+# is how .testnet3/ got committed one commit after .testnet2/ was removed for
+# carrying member secret keys: the rule was correct and the next directory was
+# simply not in it. A working directory holds members.json, so the glob is the
+# only version of this rule that stays true.
+/.testnet*/
 /.wallet/
 /_external/
 

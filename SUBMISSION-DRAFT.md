@@ -153,9 +153,9 @@ honestly.
       program owns them, which no transaction lookup can fake.
 - [x] **At least 1 multisig instance on testnet with a proposal submitted,
       approved by threshold, and executed.** Multisig
-      `chmP8jUqSHh2irhKVxBkM6GaGfLHmSq3TgCABziET3R`, proposal
-      `GdGHweUajfx7ocZNSC87WQNeYUP3Zm4EsNUiBqA4u3Kc`, execution marker
-      `EsV6LpVUfR1iunep8g4etg1qTGQfzxbA1J7PjDBsFV5b` — all owned by the verifier.
+      `DoZLeq2VcPspGmdGv4DSNnGPgBSarNqqT6J36gwrMFVi`, proposal
+      `9LxiJeiuepNjFz18XnT8Sv2tEreYBW9KxyVhcdbTL7Az`, execution marker
+      `4bb23EUGVGPWcABciHCQe1dzaV5ebNxMn5umraPh6Fzn` — all owned by the verifier.
       Re-verify with `./scripts/verify-onchain.sh`.
 - [x] **Full documentation and a clean public repository.**
 

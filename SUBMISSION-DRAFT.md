@@ -139,6 +139,17 @@ honestly.
       proposal published, two approvals gathered on the privacy-preserving path,
       and executed against the fixed verifier. Seven transactions, all live; see
       [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+      One thing to flag before you click, because it would otherwise look like
+      dead links: **the explorer only renders the two program deployments.** The
+      five lifecycle transactions are on chain — `getTransaction` returns each —
+      but the explorer's indexer does not show them, the same gap reported on
+      #64 in July. It is checkable without trusting me: a hash that cannot exist
+      and a lifecycle hash that provably does return byte-identical page shells,
+      while the two deployment links render fully. `docs/DEPLOYMENT.md` gives a
+      one-line `curl` per hash, and `./scripts/verify-onchain.sh` does the
+      stronger check — it reads the five accounts the lifecycle created and
+      confirms the verifier program owns them.
 - [x] **At least 1 multisig instance on testnet with a proposal submitted,
       approved by threshold, and executed.** Multisig
       `chmP8jUqSHh2irhKVxBkM6GaGfLHmSq3TgCABziET3R`, proposal

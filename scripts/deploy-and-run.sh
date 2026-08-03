@@ -29,8 +29,9 @@
 # whose proving outruns its polling window; the transaction lands anyway. This
 # script checks getTransaction, not the CLI's verdict.
 #
-# Budget: proving an approval takes over ten minutes. A 3-of-5 run is a couple
-# of hours. Run it in a session you can leave alone.
+# Budget: an approval is a real proof, measured at 149-154 s per approval on an
+# M-series laptop against a local sequencer. Public testnet adds block time and
+# network latency on top. The script prints its own per-approval wall clock.
 
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -94,6 +95,25 @@ tx_hash_from() {
   grep -oE 'tx_hash: [0-9a-f]{64}' "$1" | awk '{print $2}' | head -1
 }
 
+# Run the wallet with the framework path it needs, set on its own exec.
+#
+# The v0.2.0 wallet links Python 3.9 and dies with
+# `Library not loaded: @rpath/Python3.framework/... no LC_RPATH's found`
+# unless DYLD_FALLBACK_FRAMEWORK_PATH points at the CommandLineTools frameworks.
+# Exporting that in a calling shell is not enough: macOS System Integrity
+# Protection strips every DYLD_* variable when bash execs another script, so a
+# wrapper script's export never reaches a wallet invoked from the script it
+# calls. Setting it on the wallet's own exec survives, because the wallet is not
+# a protected binary.
+#
+# This cost an hour of a deploy failing with SIGABRT and no message, because the
+# output was going to /dev/null.
+WALLET_ENV=()
+if [ "$(uname)" = "Darwin" ]; then
+  WALLET_ENV=(env "DYLD_FALLBACK_FRAMEWORK_PATH=${DYLD_FALLBACK_FRAMEWORK_PATH:-/Library/Developer/CommandLineTools/Library/Frameworks}")
+fi
+wallet_run() { "${WALLET_ENV[@]}" "$WALLET_BIN" "$@"; }
+
 confirmed() {
   curl -s -m 20 -X POST "$RPC" -H 'Content-Type: application/json' \
     -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getTransaction\",\"params\":[\"$1\"]}" \
@@ -115,11 +135,39 @@ b=open(sys.argv[1],'rb').read()
 print(hashlib.sha256(struct.pack('<I',len(b))+b).hexdigest())" "$1"
 }
 
+# Deploy one program, retrying until the chain says it is there.
+#
+# `wallet deploy-program` reports nothing useful: it exits 0 and prints nothing
+# whether it worked or not, and it sometimes dies with SIGABRT while reading
+# stdin, which is why stdin is pinned to /dev/null here rather than inherited.
+# Neither its exit code nor its output can be trusted, so the only real test is
+# `getTransaction` on the content-addressed hash — and the only sane response to
+# a failed attempt is another attempt. Discarding the output entirely, as this
+# did before, turned a dead deploy into a ten-minute silent timeout.
+deploy() { # file label
+  local hash; hash=$(deploy_hash "$1")
+  if confirmed "$hash"; then
+    echo "  already on chain  $2  $hash"
+    printf '%s\t%s\n' "$2" "$hash" >> "$LOG"
+    return 0
+  fi
+  local attempt
+  for attempt in 1 2 3; do
+    wallet_run deploy-program "$1" </dev/null > "$WORK/deploy_$2.out" 2>&1
+    for _ in $(seq 1 12); do
+      confirmed "$hash" && { echo "  deployed  $2  $hash"; printf '%s\t%s\n' "$2" "$hash" >> "$LOG"; return 0; }
+      sleep 5
+    done
+    echo "  attempt $attempt did not land for $2, retrying" >&2
+  done
+  echo "  FAILED to deploy $2 after 3 attempts; wallet output:" >&2
+  tail -5 "$WORK/deploy_$2.out" >&2
+  return 1
+}
+
 echo "[1/6] deploy both programs (content-addressed, so this is idempotent)"
-"$WALLET_BIN" deploy-program "$MEMBERSHIP" >/dev/null 2>&1 || true
-"$WALLET_BIN" deploy-program "$VERIFIER"   >/dev/null 2>&1 || true
-wait_tx "$(deploy_hash "$MEMBERSHIP")" "deploy:membership_lez"
-wait_tx "$(deploy_hash "$VERIFIER")"   "deploy:multisig_verifier"
+deploy "$MEMBERSHIP" "deploy:membership_lez" || exit 1
+deploy "$VERIFIER"   "deploy:multisig_verifier" || exit 1
 
 echo "[2/6] build a ${THRESHOLD}-of-${MEMBERS} member set"
 MSIG_ID=$(python3 -c "import os;print(os.urandom(32).hex())")
@@ -147,14 +195,17 @@ PROP_TX=$(tx_hash_from "$WORK/prop.out")
 [ -n "$PROP_TX" ] && wait_tx "$PROP_TX" "create_proposal"
 
 echo "[5/6] gather $THRESHOLD approvals on the privacy-preserving path"
-echo "      each is a real proof composed on chain; budget ten minutes apiece"
+echo "      each is a real proof composed on chain; ~150 s apiece, timed below"
 for i in $(seq 0 $((THRESHOLD-1))); do
   echo "-- member $i"
+  # Timed, because "proof generation time" is a required benchmark and a number
+  # the script measures beats a number the README remembers.
+  T_WITNESS_START=$(date +%s)
   "$CLI" approve-args --dir "$WORK" --proposal-id "$PROP_ID" --member "$i" \
     --out "$WORK/approve_$i.args" | sed 's/^/   /'
   # Re-sync before each approval: a privacy transaction spends commitments, and
   # a stale view produces a proof the sequencer drops.
-  "$WALLET_BIN" account sync-private >/dev/null 2>&1 || true
+  wallet_run account sync-private </dev/null >/dev/null 2>&1 || true
   # One approver account per approval — see the APPROVERS note above.
   APPROVER="${APPROVER_LIST[$i]}"
   read_args "$WORK/approve_$i.args"
@@ -163,6 +214,10 @@ for i in $(seq 0 $((THRESHOLD-1))); do
     2>&1 | tee "$WORK/approve_$i.out" | tail -3
   TX=$(tx_hash_from "$WORK/approve_$i.out")
   [ -n "$TX" ] && wait_tx "$TX" "approve:member_$i"
+  T_APPROVE_END=$(date +%s)
+  printf '   approval %d: %ds wall clock (witness + proof + submit + confirm)\n' \
+    "$i" "$((T_APPROVE_END - T_WITNESS_START))"
+  printf 'timing:approve:member_%s\t%ss\n' "$i" "$((T_APPROVE_END - T_WITNESS_START))" >> "$LOG"
 done
 
 echo "[6/6] execute"

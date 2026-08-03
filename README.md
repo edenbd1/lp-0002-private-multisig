@@ -52,6 +52,27 @@ circuit tests, the 28 adversarial tests against the built verifier binary throug
 the sequencer's own executor, a full 3-of-5 lifecycle, and reports the measured
 compute cost.
 
+### Against a real sequencer
+
+`demo.sh` is fast because it drives the sequencer's *executor* in-process. That
+is the same code the chain runs, but it is not the same claim as "works against
+a sequencer". This makes that one:
+
+```bash
+./scripts/e2e-local-sequencer.sh
+```
+
+It starts the actual `sequencer_service` binary in standalone mode, points a
+throwaway wallet at it, and drives the whole lifecycle over JSON-RPC — deploy,
+create, propose, gather a threshold of **real Risc0 approvals** with
+`RISC0_DEV_MODE=0`, execute — then reads the resulting accounts back off that
+local chain. About eight minutes for a 2-of-3; it prints its own per-approval
+wall clock. Needs a `logos-execution-zone` checkout (`LEZ_SRC`, default
+`_external/lez`) and builds the sequencer once.
+
+The same script runs in CI on a schedule — see
+[`.github/workflows/e2e-local-sequencer.yml`](.github/workflows/e2e-local-sequencer.yml).
+
 To rebuild the on-chain programs (needs Docker and `cargo-risczero`):
 
 ```bash
@@ -102,6 +123,59 @@ Partial approvals are recorded in `ms/proposals/<id>.json` as they are generated
 so a threshold can be gathered across restarts, days, and separate member
 sessions.
 
+### The same lifecycle from the Basecamp app
+
+The GUI is the CLI: every button runs an `msig` subcommand, so the two cannot
+compute different commitments. Verified on **LogosBasecamp 0.2.2**.
+
+1. **Install the module.** The package is committed at
+   `app/lp-0002-multisig.lgx` and carries a `darwin-arm64` and a `linux-amd64`
+   variant. Extract the one matching your host into Basecamp's user plugins
+   directory:
+
+   ```bash
+   lgx extract app/lp-0002-multisig.lgx --variant darwin-arm64 --output /tmp/x
+   D=~/Library/Application\ Support/Logos/LogosBasecamp/plugins/lp-0002-multisig
+   mkdir -p "$D" && cp -R /tmp/x/darwin-arm64/. "$D/"
+   printf darwin-arm64 > "$D/variant"
+   tar xzOf app/lp-0002-multisig.lgx manifest.json > "$D/manifest.json"
+   ```
+
+   On Linux the directory is `~/.local/share/Logos/LogosBasecamp/plugins/` and
+   the variant is `linux-amd64`. Restart Basecamp; the module appears in the
+   left rail. Full notes, including why the Qt version and the plugin interface
+   are load-bearing, are in [app/README.md](app/README.md).
+
+2. **Open it** — click the tile. The `msig` CLI ships inside the package and the
+   plugin resolves it from its own directory, so the *msig binary* field stays
+   empty unless you are running out of a build tree.
+
+3. **Point *Multisig folder*** at a directory. `artifacts/testnet` is the live
+   deployment; any directory made by `msig new-multisig` also works.
+
+4. **Create** — set members and threshold, press *New multisig*. Writes
+   `multisig.json` and `members.json` and prints the member root and the config
+   hash that anchors the pair on chain.
+
+5. **Propose** — enter a proposal id and the action text, press *Bind*.
+   Re-binding the same id to a different action is refused, and the message
+   explains why.
+
+6. **Approve** — pick a member index, or paste a member's own secret, and press
+   *Build approval*. The `.args` file it writes is submitted with `spel` on the
+   privacy-preserving path; proving takes about two and a half minutes
+   (measured — see [docs/cu-costs.md](docs/cu-costs.md)).
+
+7. **Status** — shows how many approvals have been gathered, and the marker
+   addresses. Against `artifacts/testnet` it reports the live
+   `2-of-3 · 2/2 READY TO EXECUTE`. It reads the resumable state file, so it
+   survives a Basecamp restart.
+
+8. **Build execution** — emits the execution arguments once the threshold is met.
+
+The approval list shows marker addresses, never member names, because that is
+all the chain records and all the other members can see.
+
 ---
 
 ## Layout
@@ -124,7 +198,11 @@ sessions.
   from whom, what is deliberately public, and the residual risks
 - [docs/error-codes.md](docs/error-codes.md) — every rejection, the attack it
   stops, the test that proves it
-- [docs/cu-costs.md](docs/cu-costs.md) — measured compute cost per instruction
+- **[docs/lez-account-model.md](docs/lez-account-model.md)** — how the nonce and
+  `program_owner` constraints are handled, which is the incompatibility this
+  prize exists to solve
+- [docs/cu-costs.md](docs/cu-costs.md) — measured compute cost per instruction,
+  and measured proof generation time
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — deployed program ids, transaction
   hashes, and how to verify them independently
 - [app/README.md](app/README.md) — building and loading the Basecamp app

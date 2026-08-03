@@ -1,8 +1,8 @@
-# 🎬 LP-0002 — script vidéo (~7 min)
+# 🎬 LP-0002 — script vidéo (~9 min)
 
 > **⚠️ Tap les liens directement sur ton phone — ne pas copy-paste (les URLs sont longues et peuvent être tronquées au copy).**
 
-- Durée totale visée : **~7 minutes**
+- Durée totale visée : **~9 minutes**
 - Langue : English
 - `🎬 ACTION` = ce que tu fais à l'écran
 - `💬 SAY` = ce que tu lis à voix haute
@@ -135,7 +135,57 @@ Si oui → QuickTime → Screen Recording → Démarre. Sinon → stop, prévien
 
 ---
 
-# SCÈNE 3 — La chaîne, en direct (3:00 – 4:25)
+# SCÈNE 2bis — Une vraie preuve, en direct (3:00 – 5:30)
+
+> **⚠️ Cette scène est OBLIGATOIRE.** Le brief l'exige mot pour mot : *« the
+> recording must show terminal output (including proof generation) to confirm
+> `RISC0_DEV_MODE=0` was active »*. `demo.sh` affiche la variable mais ne prouve
+> rien — il dure cinq secondes. Sans cette scène la vidéo rate un critère nommé.
+
+**🎬 ACTION** : Lance, dans le même terminal :
+
+```bash
+MEMBERS=2 THRESHOLD=1 ./scripts/e2e-local-sequencer.sh
+```
+
+**💬 SAY** (pendant que ça démarre) :
+
+> "That five-second demo ran the verifier through the sequencer's executor. Same code the chain runs, but in process — so let me show you the other thing, against a real sequencer. This starts the actual sequencer binary in standalone mode, on localhost, on a chain that did not exist a second ago."
+
+**🎬 ACTION** : Attends `[1/5]`, `[2/5]`, `[3/5]` — environ 30 secondes.
+
+**💬 SAY** :
+
+> "It's funding a throwaway account from the genesis vault, and deploying both programs onto that fresh chain. Notice the deployment hashes — they're the same two hashes as on the public testnet, because a deployment hash is the hash of the bytecode. Same binaries, same identity, wherever you put them."
+
+**🎬 ACTION** : Quand `[5/6] gather 1 approvals` apparaît, **arrête-toi et
+laisse tourner**. C'est le cœur de la scène : environ **deux minutes trente** de
+proving réel, à l'écran, sans coupure.
+
+**💬 SAY** (pendant le proving — prends ton temps, laisse des silences) :
+
+> "This is the part the brief asks to see. R-I-S-C zero dev mode is zero — no mock receipts, no shortcut. This is a real Risc0 proof being generated on this laptop, right now, and it takes about two and a half minutes."
+
+**💬 SAY** :
+
+> "What's being proved is membership: that the secret behind a nullifier owns a leaf under the committed member root. And it's declared as a chained call, so when this lands, L-E-Z's privacy circuit composes it with a real env-verify and the sequencer checks that receipt against the pinned circuit I-D. That composition is the whole reason this is on the privacy path and not the public one."
+
+**🎬 ACTION** : Quand la ligne `approval 0: 1XXs wall clock` s'affiche, **montre-la**.
+
+**💬 SAY** :
+
+> "There's the measurement. The script times its own approvals and writes the number next to the transaction hash, so the benchmark comes out of the run that produced the evidence — not out of my memory. A hundred and fifty seconds, and it doesn't grow with the member set."
+
+**🎬 ACTION** : Laisse arriver `execute`, puis les ✅ et
+`e2e against a real local sequencer: PASS`.
+
+**💬 SAY** :
+
+> "Executed, and then it reads the accounts back off that local chain: the multisig, the proposal, the approval marker, the execution marker — all owned by the verifier program. That is a full lifecycle against a real sequencer, from an empty chain, with real proofs."
+
+---
+
+# SCÈNE 3 — La chaîne, en direct (5:30 – 6:55)
 
 **🎬 ACTION** : Scrolle sur `== 11. the Basecamp package`
 
@@ -166,7 +216,7 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 ---
 
-# SCÈNE 4 — L'audit (4:25 – 6:15)
+# SCÈNE 4 — L'audit (6:55 – 8:45)
 
 **🎬 ACTION** : Reste sur le terminal
 
@@ -200,7 +250,7 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 ---
 
-# SCÈNE 5 — Closing (6:15 – 6:55)
+# SCÈNE 5 — Closing (8:45 – 9:25)
 
 **🎬 ACTION** : Passe sur l'ONGLET A (le repo)
 
@@ -270,13 +320,21 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 |---|---|---|---|
 | 1. Intro | 0:00 | 0:45 | 45s |
 | 2. demo.sh | 0:45 | 3:00 | 2m15 |
-| 3. La chaîne en direct | 3:00 | 4:25 | 1m25 |
-| 4. L'audit | 4:25 | 6:15 | 1m50 |
-| 5. Closing | 6:15 | 6:55 | 40s |
-| **Total** | | | **~7 min** |
+| **2bis. Une vraie preuve** | 3:00 | 5:30 | **2m30** |
+| 3. La chaîne en direct | 5:30 | 6:55 | 1m25 |
+| 4. L'audit | 6:55 | 8:45 | 1m50 |
+| 5. Closing | 8:45 | 9:25 | 40s |
+| **Total** | | | **~9m25** |
 
-Entre 5 et 8 minutes c'est bon. Le brief demande une narration qui explique
-l'architecture et les décisions — pas un screencast muet. La scène 4 est ce qui
-te distingue : elle montre que tu audites ton propre travail.
+**Le brief n'impose aucune durée.** Vérifié dans les *Evaluation Policies* du
+dépôt λPrize : ce qu'il exige, c'est une narration où tu expliques ce que tu as
+construit et pourquoi, l'architecture, les décisions d'implémentation, et le
+flux complet de bout en bout — « a silent screencast without explanation is not
+sufficient ». Neuf minutes qui montrent une vraie preuve valent mieux que six
+qui la sautent.
+
+Deux scènes portent la soumission : la **2bis**, parce que le brief exige
+explicitement de voir la génération de preuve avec `RISC0_DEV_MODE=0` à
+l'écran ; et la **4**, parce qu'elle montre que tu audites ton propre travail.
 
 **Tu peux y aller. 🎬**

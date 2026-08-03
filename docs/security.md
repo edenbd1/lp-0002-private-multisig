@@ -228,6 +228,19 @@ not cited anywhere as current.
 checked" rather than "does the check work". The other bindings were audited the
 same way afterwards; nothing comparable turned up. That is evidence, not proof.
 
+## Trusted setup
+
+**There is none.** Risc0 is STARK-based and transparent: no structured reference
+string, no ceremony, no toxic waste. Nothing in this system's security depends
+on a parameter that someone had to generate honestly and then forget.
+
+What *is* trusted is smaller and checkable: the two program ImageIDs. Those are
+content-addressed, so an evaluator who rebuilds from source either gets the same
+identity or learns immediately that the committed binary is not the source. A
+clean `cargo risczero build` reproduces `cf5724b0…` exactly — see
+[`DEPLOYMENT.md`](DEPLOYMENT.md), which also shows the deployed bytes hashing to
+the deployment transaction id.
+
 ## Residual risks and non-goals
 
 - **A malicious creator.** Whoever builds the member set knows every salt, and

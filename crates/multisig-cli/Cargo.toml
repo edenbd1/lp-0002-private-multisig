@@ -24,3 +24,6 @@ path = "src/bin/msig.rs"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+tempfile = "3"

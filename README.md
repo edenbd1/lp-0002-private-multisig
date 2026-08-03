@@ -81,7 +81,7 @@ To rebuild the on-chain programs (needs Docker and `cargo-risczero`):
 
 ### Test inventory
 
-`cargo test --workspace` runs **57** tests. Counted, so you can check the claim:
+`cargo test --workspace` runs **59** tests. Counted, so you can check the claim:
 
 | Suite | Count | What it establishes |
 |---|---:|---|
@@ -89,6 +89,7 @@ To rebuild the on-chain programs (needs Docker and `cargo-risczero`):
 | `multisig-verifier-tests` — `verifier_rejects` | 28 | The **built verifier binary** through the sequencer's own executor: 4 honest controls (one per instruction), 22 attacks, 2 framework-layer checks |
 | `multisig-verifier-tests` — `program_id_pin` | 2 | The verifier pins the committed membership binary, and the pin is not a placeholder |
 | `multisig-sdk` — `cross_check` + doctest | 2 | Every SDK derivation equals the `multisig-core` one the chain re-derives, and the four client-side guards hold |
+| `multisig-cli` — `resumable` | 2 | Through the **built binary**, one process per step: a partial set of approvals survives client restarts, and a non-member is refused in milliseconds instead of after two and a half minutes of proving |
 
 One further test is `#[ignore]`d: it reports the measured compute cost rather
 than asserting a property. Run it with

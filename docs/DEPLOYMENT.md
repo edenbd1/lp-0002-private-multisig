@@ -11,15 +11,46 @@ Every hash below is live; re-check any of them with `getTransaction` against
 A **2-of-3** multisig: created, a proposal published, two approvals gathered on
 the privacy-preserving path, and executed.
 
-| Step | Transaction |
-|---|---|
-| deploy `membership_lez` | `64098974b7d28f4facf1218e771d27c6163f7fb7ce3bd4f218df6db42ace6dde` |
-| deploy `multisig_verifier` | `e24f5367521616f235acd26e3ee8937e8fc071335f187fab3ad282b6a691192f` |
-| `create_multisig` | `de22a8c917774643969fec0b566082f701867b1359f18574fc8ee390badb3cdd` |
-| `create_proposal` | `b7a4f74534cf9efc5da734c50b3c3ace7d1e7aa35aeaf86ca8f736dd566ea832` |
-| `approve` (member A, **privacy tx**) | `6e035e4e702bcd241faa2ac304bc32178193bef25d66036a8bf7b0915d716347` |
-| `approve` (member B, **privacy tx**) | `968c5d1ba1b828f93ee44a037b313f1c8c2b3ea30afb9302857b18fd8619dc55` |
-| `execute` | `5817c49ce6ab86b5349ca2d55b95662f4cf7192b89be924d1f72c74f5d0e8b74` |
+| Step | Transaction | On the explorer |
+|---|---|---|
+| deploy `membership_lez` | `64098974b7d28f4facf1218e771d27c6163f7fb7ce3bd4f218df6db42ace6dde` | [link](https://explorer.testnet.lez.logos.co/transaction/64098974b7d28f4facf1218e771d27c6163f7fb7ce3bd4f218df6db42ace6dde) |
+| deploy `multisig_verifier` | `e24f5367521616f235acd26e3ee8937e8fc071335f187fab3ad282b6a691192f` | [link](https://explorer.testnet.lez.logos.co/transaction/e24f5367521616f235acd26e3ee8937e8fc071335f187fab3ad282b6a691192f) |
+| `create_multisig` | `de22a8c917774643969fec0b566082f701867b1359f18574fc8ee390badb3cdd` | not indexed |
+| `create_proposal` | `b7a4f74534cf9efc5da734c50b3c3ace7d1e7aa35aeaf86ca8f736dd566ea832` | not indexed |
+| `approve` (member A, **privacy tx**) | `6e035e4e702bcd241faa2ac304bc32178193bef25d66036a8bf7b0915d716347` | not indexed |
+| `approve` (member B, **privacy tx**) | `968c5d1ba1b828f93ee44a037b313f1c8c2b3ea30afb9302857b18fd8619dc55` | not indexed |
+| `execute` | `5817c49ce6ab86b5349ca2d55b95662f4cf7192b89be924d1f72c74f5d0e8b74` | not indexed |
+
+### Why five of them say "not indexed"
+
+**All seven are live.** `getTransaction` returns every one of them; the last
+column is about the explorer's indexer, not about the chain.
+
+The explorer currently renders program deployments and not much else. That is
+observable independently of this submission: a transaction hash that cannot
+exist and a lifecycle transaction that provably does both return the identical
+2416-byte page shell, while the two deployments above return the full
+transaction with the bytecode inline. The same gap was reported on
+[logos-co/lambda-prize#64](https://github.com/logos-co/lambda-prize/pull/64) in
+July for a different submission's transactions, which `getTransaction` also
+returned.
+
+So do not judge these by clicking. Check any hash directly:
+
+```bash
+curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"getTransaction","params":["<hash>"]}'
+```
+
+A `"result"` that is a base64 string means the transaction is on chain; a
+`null` means it is not. `./scripts/verify-onchain.sh` does the stronger check —
+it reads the five accounts the lifecycle produced and confirms the verifier
+program owns them, which no amount of transaction-fetching can fake.
+
+If the testnet is reset again and the hashes go cold, `./scripts/deploy-and-run.sh`
+re-runs the whole lifecycle. The two deployment hashes come back identical,
+because a deployment hash is `SHA256(borsh(bytecode))` and the binaries are
+committed; the five lifecycle hashes are signed with a nonce and will be new.
 
 Multisig id `ccd1a480cdf52d79c6d720543e5f88a73027097397d626de8d4ec8ac0efe1ffe`,
 member root `04a021a4d53a635a02eeebc193f2e6a3bad302cb3b5500a066038d0753db6fc2`,
@@ -163,11 +194,18 @@ and `THRESHOLD` to shrink it.
 This reads the multisig PDA, the proposal PDA, each approval marker, and the
 execution marker over JSON-RPC, and reports each one's owner.
 
-**Do not expect to find approvals on the block explorer.** A privacy-preserving
-transaction publishes commitments and nullifiers and carries neither `program_id`
-nor `instruction_data`, so the explorer's indexer has nothing to attribute. That
-is the privacy property working exactly as designed — and it means reading the
-accounts is the verification path, not searching the explorer.
+**Do not expect to find approvals on the block explorer**, for two separate
+reasons that are worth keeping apart.
+
+The first is the indexer gap above, which applies to the public transactions
+too and is nothing to do with this design.
+
+The second is specific to approvals and is the point of the submission: a
+privacy-preserving transaction publishes commitments and nullifiers and carries
+neither `program_id` nor `instruction_data`, so there is nothing for an indexer
+to attribute even once the explorer catches up. An approval is *supposed* to be
+unattributable. That is why reading the accounts is the verification path here:
+it proves two distinct members approved without ever making them findable.
 
 ## Invocation reference
 

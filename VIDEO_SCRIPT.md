@@ -33,12 +33,21 @@ ferme Slack/Discord/notifications, fenêtre terminal en plein écran.
 
 → **[Repo : edenbd1/lp-0002-private-multisig](https://github.com/edenbd1/lp-0002-private-multisig)**
 
-> **Pas d'onglet block explorer cette fois.** Une transaction privacy ne publie
-> ni `program_id` ni `instruction_data`, donc l'indexeur de l'explorer n'a rien à
-> afficher pour une approbation. C'est la propriété de confidentialité qui
-> fonctionne, pas un bug — et c'est exactement ce qu'on montre à la scène 3, en
-> lisant la chaîne directement. Plus fort qu'un explorer, et ça ne peut pas
-> t'afficher une page vide en pleine caméra.
+> **Pas d'onglet block explorer.** Deux raisons distinctes, garde-les en tête au
+> cas où on te pose la question :
+>
+> 1. **L'explorer n'indexe que les déploiements de programmes.** Vérifié : nos
+>    deux liens de deploy s'affichent en entier, mais les cinq transactions du
+>    cycle de vie renvoient exactement la même page vide qu'un hash inexistant —
+>    alors que `getTransaction` les retourne toutes. C'est un trou de l'indexeur,
+>    pas un problème de notre soumission ; le même a été signalé sur la #64 en
+>    juillet.
+> 2. **Une approbation ne serait de toute façon pas indexable.** Une transaction
+>    privacy ne publie ni `program_id` ni `instruction_data` — c'est la propriété
+>    de confidentialité qui fonctionne, pas un bug.
+>
+> D'où la scène 3 : on lit la chaîne directement. Plus fort qu'un explorer, et ça
+> ne peut pas t'afficher une page vide en pleine caméra.
 
 ## Vérif de dernière seconde (30 s, avant d'enregistrer)
 

@@ -60,7 +60,8 @@ impl Fixture {
 
     fn proposal_ref(&self, proposal_id: &[u8; 32], action: &[u8]) -> [u8; 32] {
         let action_hash = compute_action_hash(&self.multisig_id, action);
-        compute_proposal_ref(&self.multisig_id, proposal_id, &action_hash)
+        let config_hash = compute_config_hash(&self.root, self.threshold);
+        compute_proposal_ref(&self.multisig_id, &config_hash, proposal_id, &action_hash)
     }
 
     /// An honest approval by member `i` on the given proposal.
@@ -561,7 +562,8 @@ fn a_member_listed_twice_still_gets_one_vote() {
 
     let multisig_id = [0xC3; 32];
     let action_hash = compute_action_hash(&multisig_id, b"drain the treasury");
-    let pref = compute_proposal_ref(&multisig_id, &[1u8; 32], &action_hash);
+    let config_hash = compute_config_hash(&root, 2);
+    let pref = compute_proposal_ref(&multisig_id, &config_hash, &[1u8; 32], &action_hash);
 
     // Both entries prove membership successfully...
     for (i, salt) in [(0usize, [0xA1u8; 32]), (1usize, [0xB2u8; 32])] {

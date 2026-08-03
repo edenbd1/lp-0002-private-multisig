@@ -282,12 +282,14 @@ pub fn compute_action_hash(multisig_id: &[u8; 32], action: &[u8]) -> [u8; 32] {
 #[must_use]
 pub fn compute_proposal_ref(
     multisig_id: &[u8; 32],
+    config_hash: &[u8; 32],
     proposal_id: &[u8; 32],
     action_hash: &[u8; 32],
 ) -> [u8; 32] {
     let mut h = Sha256::new();
     h.update(PROPOSAL_REF_PREFIX);
     h.update(multisig_id);
+    h.update(config_hash);
     h.update(proposal_id);
     h.update(action_hash);
     h.finalize().into()

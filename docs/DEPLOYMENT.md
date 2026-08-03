@@ -1,5 +1,25 @@
 # Deployment
 
+> ## ⚠️ The deployment below is superseded and must not be relied on
+>
+> A cross-review on 2026-08-03 found a **threshold and membership bypass** in the
+> verifier that was live at the time, and it is confirmed against that binary:
+> `config_hash` appeared in neither `proposal_ref` nor the proposal account's
+> address, and `create_multisig` places no ownership constraint on `multisig_id`
+> — by design, anyone may create a multisig. So an outsider could create their
+> own 1-of-1 config **under a victim's multisig id**, approve the victim's
+> proposal against their own member set, and execute a 3-of-5 on that single
+> approval.
+>
+> The fix folds `config_hash` into `proposal_ref` *and* into the proposal PDA's
+> seeds, so a proposal now belongs to a specific `(member_root, threshold)` and
+> naming any other config resolves to an account nobody created. Two regression
+> tests reproduce both halves of the attack against the built binary.
+>
+> **The verifier has not yet been redeployed.** Every transaction hash, PDA and
+> ImageID on this page belongs to the vulnerable build and is kept only so the
+> history is auditable. See [`security.md`](security.md) for the write-up.
+
 ## Status
 
 **Deployed, and the full lifecycle has been run on the public LEZ testnet.**

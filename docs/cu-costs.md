@@ -45,9 +45,42 @@ is the platform's cost, not this program's, and it is identical for any program
 that composes a chained call.
 
 **Wall-clock is a different number entirely.** Executing `approve` takes
-milliseconds; *proving* it with `RISC0_DEV_MODE=0` takes upwards of ten minutes
-on a laptop. Budget the lifecycle accordingly: a 3-of-5 run against the public
-testnet is a couple of hours, dominated entirely by proving.
+milliseconds; *proving* it with `RISC0_DEV_MODE=0` is what costs time.
+
+## Proof generation time, measured
+
+Not estimated. `scripts/deploy-and-run.sh` times each approval and writes the
+figure into `lifecycle.tsv` next to the transaction hash, so the number comes
+out of the same run that produced the on-chain evidence.
+
+A 2-of-3 lifecycle against a real standalone sequencer on localhost, Apple
+silicon laptop, `RISC0_DEV_MODE=0`:
+
+| Approval | Wall clock |
+|---|---:|
+| member 0 | **149 s** |
+| member 1 | **154 s** |
+
+That interval covers everything the member waits for: building and locally
+re-verifying the Merkle witness, proving, submitting on the privacy path, and
+the sequencer confirming the transaction in a block. It is not proving in
+isolation — it is the number that matters to whoever is sitting there.
+
+A 1-of-2 run of the same script measured 151 s for its single approval, so the
+cost is per-approval and does not grow with the member set: the tree depth
+changes the witness by a few words and nothing else.
+
+Reproduce it with:
+
+```bash
+./scripts/e2e-local-sequencer.sh          # 2-of-3, about eight minutes total
+```
+
+**Against the public testnet, expect more.** Proving is identical, but block
+time and network latency are added on top of every submission, and the wallet's
+polling window can expire before a privacy transaction lands even though the
+transaction is fine. The local figure is the honest measure of the *proving*
+cost; the testnet figure measures the testnet.
 
 ## A note on the revision
 

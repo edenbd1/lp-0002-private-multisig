@@ -127,8 +127,8 @@ module. It carries **two variants** — `darwin-arm64` and `linux-amd64` — eac
 with the plugin library, the QML view, the module metadata, and the `msig` CLI
 the bridge drives. Basecamp selects the one matching the host.
 
-Two variants rather than one because the evaluator reviews on a Linux VPS (see
-logos-co/lambda-prize#67); a macOS-only package is one they cannot open.
+Two variants rather than one because the evaluation happens on Linux; a
+macOS-only package is one the evaluator cannot open at all.
 
 ### Installing it
 

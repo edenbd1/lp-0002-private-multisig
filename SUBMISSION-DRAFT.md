@@ -161,9 +161,9 @@ honestly.
       the five lifecycle transactions.** All seven are on chain —
       `getTransaction` returns each. Checkable without trusting me: a hash that
       *cannot exist* and a lifecycle hash that provably does return byte-identical
-      page shells, while the two deployment links render in full. The same gap
-      was reported on #64 in July for transactions the RPC also returned, so it
-      is the indexer rather than the chain. `docs/DEPLOYMENT.md` gives a one-line
+      page shells, while the two deployment links render in full — including one
+      deployment submitted *after* those five, which rules out an indexing lag.
+      It is the indexer rather than the chain. `docs/DEPLOYMENT.md` gives a one-line
       `curl` per hash, and `./scripts/verify-onchain.sh` does the stronger check —
       it reads the five accounts the lifecycle created and confirms the verifier
       program owns them, which no transaction lookup can fake.

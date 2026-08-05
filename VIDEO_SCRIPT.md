@@ -49,9 +49,9 @@ ferme Slack/Discord/notifications, fenêtre terminal en plein écran.
 >    nos deux liens de deploy s'affichent en entier, les cinq autres renvoient
 >    exactement la même page vide qu'un hash *inexistant* — alors que
 >    `getTransaction` les retourne toutes. Sa couverture est irrégulière, pas
->    absente : des transactions publiques d'autres soumissions s'affichent, elles.
->    C'est donc l'indexeur, pas la chaîne, et le même trou a été signalé sur la
->    #64 en juillet.
+>    absente : d'autres invocations de programme publiques s'affichent, et l'un
+>    de nos deux deploys a été soumis *après* les cinq et s'affiche quand même —
+>    donc ce n'est pas un retard d'indexation. C'est l'indexeur, pas la chaîne.
 > 2. **Une approbation ne serait de toute façon pas indexable.** Une transaction
 >    privacy ne publie ni `program_id` ni `instruction_data` — c'est la propriété
 >    de confidentialité qui fonctionne, pas un bug.

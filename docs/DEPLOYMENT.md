@@ -49,11 +49,12 @@ transaction with the bytecode inline, and the other five return exactly the same
 counts, so the explorer is not saying "this transaction is empty" — it is saying
 it has no record of the hash at all, while `getTransaction` returns it.
 
-The indexer's coverage is uneven rather than absent: other submissions' public
-transactions do render. The same gap was reported on
-[logos-co/lambda-prize#64](https://github.com/logos-co/lambda-prize/pull/64) in
-July for transactions `getTransaction` also returned, so it is not specific to
-this submission and is not something a resubmission would fix.
+The indexer's coverage is uneven rather than absent, and that is checkable
+here rather than asserted: other public program invocations on this testnet do
+render, and one of the two deployments above was submitted *after* the five
+lifecycle transactions and still renders. So this is not an indexing lag and it
+is not specific to this submission — re-submitting the same transactions would
+produce the same result.
 
 So do not judge these by clicking. Check any hash directly:
 

@@ -61,7 +61,7 @@ fi
 WALLET_BIN="$LEZ_SRC/target/release/wallet"
 [ -x "$WALLET_BIN" ] || ( cd "$LEZ_SRC" && cargo build --release -p wallet ) || die "wallet build failed"
 
-# The v0.2.0 wallet links Python 3.9 and dies with `Library not loaded:
+# The wallet links Python 3.9 and dies with `Library not loaded:
 # @rpath/Python3.framework/... no LC_RPATH's found` without this. Exporting it
 # is not enough: macOS SIP strips DYLD_* whenever bash execs another script, so
 # it has to be set on the wallet's own exec. Same reason as in
@@ -128,8 +128,13 @@ curl -s -m 3 -X POST "$RPC" -H 'Content-Type: application/json' \
   | grep -q '"result"' || die "sequencer never answered on $RPC"
 
 say "[2/5] a throwaway wallet pointed at it"
+# LEZ v0.2.2 made the wallet multi-sequencer: the single `sequencer_addr` became
+# a `sequencers` array. An old-format config does not fail over to a default —
+# the wallet refuses to deserialize it and dies before doing anything.
+# `multi_sequencer_client_config` is `#[serde(default)]`, so it is left out.
 cat > "$WALLET_HOME/wallet_config.json" <<EOF
-{ "sequencer_addr": "$RPC/", "seq_poll_timeout": "30s", "seq_tx_poll_max_blocks": 15,
+{ "sequencers": [ { "sequencer_addr": "$RPC/" } ],
+  "seq_poll_timeout": "30s", "seq_tx_poll_max_blocks": 15,
   "seq_poll_max_retries": 10, "seq_block_poll_max_amount": 100 }
 EOF
 export LEE_WALLET_HOME_DIR="$WALLET_HOME"

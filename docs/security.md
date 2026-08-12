@@ -237,7 +237,7 @@ on a parameter that someone had to generate honestly and then forget.
 What *is* trusted is smaller and checkable: the two program ImageIDs. Those are
 content-addressed, so an evaluator who rebuilds from source either gets the same
 identity or learns immediately that the committed binary is not the source. A
-clean `cargo risczero build` reproduces `cf5724b0…` exactly — see
+clean `cargo risczero build` reproduces `5bb40082…` exactly — see
 [`DEPLOYMENT.md`](DEPLOYMENT.md), which also shows the deployed bytes hashing to
 the deployment transaction id.
 

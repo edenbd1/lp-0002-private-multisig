@@ -21,17 +21,23 @@
 #                Create them with `wallet account new private`.
 #   MEMBERS      member set size          (default 5)
 #   THRESHOLD    approvals required       (default 3)
-#   SPEL_BIN     spel >= 0.6.0            (default: spel on PATH)
-#   WALLET_BIN   wallet from LEZ v0.2.0   (default: wallet on PATH)
+#   SPEL_BIN     spel built from vendor/spel (default: spel on PATH). NOT the
+#                released spel: it targets LEZ v0.2.0 and fails every
+#                instruction here with `missing field 'sequencer_addr'`.
+#                See vendor/spel/PATCH.md.
+#   WALLET_BIN   wallet from LEZ v0.2.4   (default: wallet on PATH)
 #   SEQUENCER_URL                          (default: https://testnet.lez.logos.co)
 #
 # The wallet may print "Transaction NOT confirmed" for a privacy transaction
 # whose proving outruns its polling window; the transaction lands anyway. This
 # script checks getTransaction, not the CLI's verdict.
 #
-# Budget: an approval is a real proof, measured at 149-154 s per approval on an
-# M-series laptop against a local sequencer. Public testnet adds block time and
-# network latency on top. The script prints its own per-approval wall clock.
+# Budget: an approval is a real proof. Measured at 149-154 s per approval on an
+# M-series laptop against a local sequencer, and 440-469 s per approval against
+# the public testnet, which adds block time, network latency and contention. The
+# script prints its own per-approval wall clock — and that number is the check
+# that the run was real: a lifecycle whose approvals take seconds proved
+# nothing.
 
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -95,9 +101,32 @@ tx_hash_from() {
   grep -oE 'tx_hash: [0-9a-f]{64}' "$1" | awk '{print $2}' | head -1
 }
 
+# Submit-and-confirm, where "spel printed no tx_hash" is FATAL.
+#
+# spel can exit 0 having submitted nothing at all — a wallet config it cannot
+# read, an argument it rejects — and simply print no hash. The previous form here
+# was `[ -n "$TX" ] && wait_tx ...`, which reads that as "nothing to wait for"
+# and moves on. A whole lifecycle then completes with exit 0, a printed summary,
+# and an empty chain.
+#
+# That is the worst failure this script can have, because it is the one an
+# evaluator would trust. It happened: against LEZ v0.2.4 the released spel failed
+# every instruction with `missing field 'sequencer_addr'`, and the run still
+# reported success — with approvals timed at 1s and 32s, where a real proof takes
+# minutes. The timings were the only tell.
+require_tx() { # out-file label
+  local hash; hash=$(tx_hash_from "$1")
+  if [ -z "$hash" ]; then
+    echo "  NO TRANSACTION for $2 — spel submitted nothing. Its output:" >&2
+    tail -12 "$1" >&2
+    exit 1
+  fi
+  wait_tx "$hash" "$2"
+}
+
 # Run the wallet with the framework path it needs, set on its own exec.
 #
-# The v0.2.0 wallet links Python 3.9 and dies with
+# The wallet links Python 3.9 and dies with
 # `Library not loaded: @rpath/Python3.framework/... no LC_RPATH's found`
 # unless DYLD_FALLBACK_FRAMEWORK_PATH points at the CommandLineTools frameworks.
 # Exporting that in a calling shell is not enough: macOS System Integrity
@@ -114,10 +143,19 @@ if [ "$(uname)" = "Darwin" ]; then
 fi
 wallet_run() { "${WALLET_ENV[@]}" "$WALLET_BIN" "$@"; }
 
+# A transaction is confirmed iff `getTransaction` returns a non-null result.
+#
+# Do NOT test the *shape* of that result. This used to grep for `"result":"`,
+# which quietly assumed the node returns a string; on LEZ v0.2.4 it returns a
+# decoded object, so the check failed for transactions that were demonstrably in
+# a block. That reads exactly like a dead deploy — three retries, then a hard
+# failure — for a deploy that landed the first time.
 confirmed() {
   curl -s -m 20 -X POST "$RPC" -H 'Content-Type: application/json' \
     -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getTransaction\",\"params\":[\"$1\"]}" \
-    | grep -q '"result":"'
+    | python3 -c 'import json,sys
+try:    sys.exit(0 if json.load(sys.stdin).get("result") is not None else 1)
+except Exception: sys.exit(1)' 2>/dev/null
 }
 wait_tx() { # hash label
   for _ in $(seq 1 60); do
@@ -179,8 +217,7 @@ read_args "$WORK/create.args"
 "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" \
   -- create_multisig --authority "Public/$SIGNER" "${ARGS[@]}" \
   2>&1 | tee "$WORK/create.out" | tail -3
-CREATE_TX=$(tx_hash_from "$WORK/create.out")
-[ -n "$CREATE_TX" ] && wait_tx "$CREATE_TX" "create_multisig"
+require_tx "$WORK/create.out" "create_multisig"
 
 echo "[4/6] publish a proposal"
 PROP_ID=$(python3 -c "import os;print(os.urandom(32).hex())")
@@ -191,8 +228,7 @@ read_args "$WORK/prop.args"
 "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" \
   -- create_proposal --authority "Public/$SIGNER" "${ARGS[@]}" \
   2>&1 | tee "$WORK/prop.out" | tail -3
-PROP_TX=$(tx_hash_from "$WORK/prop.out")
-[ -n "$PROP_TX" ] && wait_tx "$PROP_TX" "create_proposal"
+require_tx "$WORK/prop.out" "create_proposal"
 
 echo "[5/6] gather $THRESHOLD approvals on the privacy-preserving path"
 echo "      each is a real proof composed on chain; ~150 s on a laptop and"
@@ -213,8 +249,7 @@ for i in $(seq 0 $((THRESHOLD-1))); do
   "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" --bin-membership "$MEMBERSHIP" \
     -- approve --approver "Private/$APPROVER" "${ARGS[@]}" \
     2>&1 | tee "$WORK/approve_$i.out" | tail -3
-  TX=$(tx_hash_from "$WORK/approve_$i.out")
-  [ -n "$TX" ] && wait_tx "$TX" "approve:member_$i"
+  require_tx "$WORK/approve_$i.out" "approve:member_$i"
   T_APPROVE_END=$(date +%s)
   printf '   approval %d: %ds wall clock (witness + proof + submit + confirm)\n' \
     "$i" "$((T_APPROVE_END - T_WITNESS_START))"
@@ -241,8 +276,7 @@ read_args "$WORK/exec.args"
 "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" \
   -- execute --executor "Public/$SIGNER" --approvals "$MARKERS" "${ARGS[@]}" \
   2>&1 | tee "$WORK/exec.out" | tail -3
-EXEC_TX=$(tx_hash_from "$WORK/exec.out")
-[ -n "$EXEC_TX" ] && wait_tx "$EXEC_TX" "execute"
+require_tx "$WORK/exec.out" "execute"
 
 echo
 echo "lifecycle recorded in $LOG"

@@ -17,7 +17,7 @@ path = "src/bin/membership_lez.rs"
 [dependencies]
 risc0-zkvm = { version = "=3.0.5", default-features = false, features = ["std"] }
 multisig-core = { path = "../../../multisig-core", default-features = false }
-lee_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", default-features = false }
+lee_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.4", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
 sha2 = { version = "0.10", default-features = false }
 # Pinned for the risc0 guest toolchain (rustc 1.88-dev); newer releases fail the

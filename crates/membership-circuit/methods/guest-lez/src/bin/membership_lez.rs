@@ -2,7 +2,7 @@
 //
 // WHY THIS EXISTS
 //
-// The one path on LEZ v0.2.0 where a proof is genuinely verified on chain is the
+// The one path on LEZ where a proof is genuinely verified on chain is the
 // privacy-preserving transaction: the client proves locally, and LEZ's privacy
 // circuit composes each chained call with a real `env::verify` over the callee's
 // `ProgramOutput` (`lee/privacy_preserving_circuit/src/execution_state.rs:149`),

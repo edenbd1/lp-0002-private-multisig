@@ -1,0 +1,90 @@
+# Why a patched SPEL is vendored here
+
+This directory is [`logos-co/spel`](https://github.com/logos-co/spel) at
+**v0.6.0** (`0cb7e09`), carrying a two-line change so that it builds against
+**LEZ v0.2.4**. Nothing else is modified.
+
+Vendoring upstream code is not a decision taken lightly, so here is the reasoning
+in full.
+
+## The problem
+
+SPEL v0.6.0 — released 15 July 2026, and still identical to `main` — pins LEZ
+`v0.2.0` in around twenty places. LEZ has shipped four releases since
+(v0.2.1 on 2 Aug through v0.2.4 on 7 Aug), and **the public testnet was reset
+onto the newer chain**. A v0.2.0 client can still read that chain, but nothing it
+submits is ever accepted: transactions come back with a hash whose
+`getTransaction` is `null`, and balances never move.
+
+So a submission cannot both use SPEL, as the prize requires, and transact on the
+live testnet, as the prize also requires — not with any published SPEL release.
+
+## What actually breaks, and what does not
+
+Compiling SPEL against LEZ v0.2.4 produces exactly three failures:
+
+1. **`spel-framework-core/src/pda.rs`** — `AccountId::for_private_pda` now takes
+   five arguments instead of four. LEZ v0.2.4 folds a `ViewingPublicKey`
+   (ML-KEM 768, post-quantum) into private-PDA derivation, and moved that
+   derivation's domain to `/LEE/v0.3/AccountId/PrivatePDA/`.
+2. **`spel-cli/src/pda.rs`** — the same arity change.
+3. **`spel-cli`'s transaction layer** — `WalletCore::from_env()` became `async`,
+   the `sequencer_client` field was replaced by a multi-sequencer helm
+   (`helm_owned()` / `poller_helm()`), and `get_accounts_nonces` now takes a
+   slice.
+
+All three are fixed here, and (3) is not optional: `scripts/deploy-and-run.sh`
+submits `create_multisig`, `create_proposal`, `approve` and `execute` **through
+the `spel` binary**. Only the two program deployments go through the LEZ
+`wallet` binary. An unpatched spel does not merely fail to build — the released
+one builds fine and then reads the *old* wallet config format, so every
+instruction fails with `missing field 'sequencer_addr'` while the script's
+timing output still looks superficially plausible.
+
+**Public PDA derivation is unchanged** in v0.2.4 — same signature, same
+`/LEE/v0.2/AccountId/PDA/` prefix. This project's accounts are all public PDAs,
+so its address derivation (`scripts/pda.py`) is unaffected by any of this.
+
+## The change
+
+    spel-framework-core/src/pda.rs   compute_private_pda takes a `vpk` and
+                                     forwards it to for_private_pda
+    spel-cli/src/pda.rs              the private-PDA branch returns an error
+                                     instead of deriving a wrong address
+    spel-cli/src/tx.rs               `.await` on WalletCore::from_env();
+                                     sequencer_client -> helm_owned() and
+                                     poller_helm(); nonces take a slice
+    spel-cli/src/account_inspect.rs  `.await` on WalletCore::from_env()
+
+plus the dependency pins moved from `tag = "v0.2.0"` to `tag = "v0.2.4"`.
+
+The `spel-cli` branch deliberately **fails loudly**. spel has no way to supply a
+viewing key yet, and a plausible-looking guess would produce an address that is
+silently wrong — the worst outcome for a tool whose job is deriving addresses.
+Refusing is honest; this project never takes that branch.
+
+## What this patch does *not* fix
+
+`#[account(..., private_pda)]` in `spel-framework-macros` still emits a call
+without a viewing key, so **programs using private PDAs remain broken upstream**.
+Fixing that properly means threading a `vpk` through the macro's account
+constraints — a change to SPEL's public API that belongs upstream, decided by
+its maintainers, not vendored into a submission. This project does not use
+private PDAs, and its build is unaffected.
+
+## Reproducing this directory
+
+    git clone https://github.com/logos-co/spel.git && cd spel
+    git checkout 0cb7e09
+    # apply the two source changes above, then:
+    find . -name Cargo.toml -exec sed -i '' \
+      's|logos-execution-zone.git", tag = "v0.2.0"|logos-execution-zone.git", tag = "v0.2.4"|g' {} \;
+
+`git diff` against upstream v0.6.0 should show only the two `.rs` files, the
+pin changes, and the resulting `Cargo.lock`.
+
+## When this goes away
+
+As soon as SPEL publishes a release targeting a current LEZ, the vendored copy
+should be deleted and `crates/multisig-verifier-spel/methods/guest/Cargo.toml`
+pointed back at the upstream tag. Nothing else depends on this directory.

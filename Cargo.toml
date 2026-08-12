@@ -11,6 +11,9 @@ members = [
 # reuses. `_external/` holds cloned reference repos, never build them as members.
 exclude = [
     "_external",
+    # Patched SPEL (see vendor/spel/PATCH.md). Vendored, not ours to lint or
+    # format — CI must not gate on upstream code we only carry.
+    "vendor",
     "crates/membership-circuit/methods/guest-lez",
     "crates/multisig-verifier-spel/methods/guest",
 ]

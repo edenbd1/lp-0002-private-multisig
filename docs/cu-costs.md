@@ -12,7 +12,7 @@ cargo test -p multisig-verifier-tests -- --ignored --nocapture
 
 ## Results
 
-Verifier ImageID `00286a889dabd8c3d7fdfb058c5935f5d46172946249c98da73953e3f136ed5d`.
+Verifier ImageID `5bb4008273ddc31d1c2b5bad8835daaf4c567e029dbb059c20c7e83ba5966f82`.
 
 | Instruction | Segments | User cycles | Proving cycles | Share of the public budget |
 |---|---:|---:|---:|---:|
@@ -83,6 +83,17 @@ laptop, and the second did not. Take 179 s as the testnet figure and 360 s as
 what contention costs — both are in that run's `lifecycle.tsv`, and neither is
 rounded in this document's favour.
 
+**Re-measured on 2026-08-12, after the migration to LEZ v0.2.4**: **440 s** and
+**469 s** on the same laptop against the public testnet. That is slower than the
+179 s above and the number is left as measured rather than explained away — the
+run competed with a Docker guest build on the same machine, and the chain itself
+was busier. It is quoted because it is the run the current deployment came from.
+
+These timings are also the check that a lifecycle was *real*. A run whose
+approvals complete in seconds did not prove anything: on 2026-08-12 an unpatched
+`spel` failed every instruction while the script still reported success, and the
+1 s and 32 s approval timings were the only visible tell.
+
 **And on a CI runner, far more.** The scheduled e2e workflow measured
 **1264 s** for its single approval on a standard GitHub `ubuntu-latest` runner —
 roughly eight times the laptop figure, for the same proof of the same circuit.
@@ -93,6 +104,7 @@ honest way to read every number here is *per machine*:
 |---|---:|
 | Apple silicon laptop, local sequencer | **149-154 s** |
 | Apple silicon laptop, public testnet | **179 s** (360 s under CPU contention) |
+| Apple silicon laptop, public testnet, LEZ v0.2.4 | **440-469 s** (under contention) |
 | GitHub `ubuntu-latest`, local sequencer | **1264 s** |
 
 Quoting one of these as "the" proving time would be picking the flattering one.

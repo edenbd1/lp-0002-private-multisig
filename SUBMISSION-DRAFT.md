@@ -157,21 +157,30 @@ honestly.
       re-implementing a transfer that LEZ already has.
 
       One thing to flag before you click, because it would otherwise look like
-      dead links: **the explorer renders the two program deployments and none of
-      the five lifecycle transactions.** All seven are on chain —
-      `getTransaction` returns each. Checkable without trusting me: a hash that
-      *cannot exist* and a lifecycle hash that provably does return byte-identical
-      page shells, while the two deployment links render in full — including one
-      deployment submitted *after* those five, which rules out an indexing lag.
-      It is the indexer rather than the chain. `docs/DEPLOYMENT.md` gives a one-line
-      `curl` per hash, and `./scripts/verify-onchain.sh` does the stronger check —
-      it reads the five accounts the lifecycle created and confirms the verifier
-      program owns them, which no transaction lookup can fake.
+      dead links: **none of the seven transactions renders on the explorer right
+      now**, and all seven are on chain — `getTransaction` returns every one.
+      The explorer's indexer is behind: its own front page listed block 4351 as
+      the most recent while the chain was at 4496, and every transaction here was
+      included after that. It affects anything recently submitted, by anyone.
+
+      Worth stating plainly, since an earlier version of this document claimed
+      the opposite: the explorer is a WASM app that serves an identical page
+      shell for every hash and renders client-side, so comparing response sizes
+      — which is how the previous claim was reached — cannot distinguish an
+      indexed transaction from one that does not exist.
+      `./scripts/check-explorer.py` renders the pages in a headless browser
+      instead, with an impossible hash as the control, and prints what it finds.
+      Re-run it; the answer is a measurement with a date on it, not a claim.
+
+      `docs/DEPLOYMENT.md` gives a one-line `curl` per hash, and
+      `./scripts/verify-onchain.sh` does the stronger check — it reads the five
+      accounts the lifecycle created and confirms the verifier program owns
+      them, which no transaction lookup can fake.
 - [x] **At least 1 multisig instance on testnet with a proposal submitted,
       approved by threshold, and executed.** Multisig
-      `9GwWLZThKirW56FPWTCpXPhZ1gTrEy7HYuk5jerQvUTR`, proposal
-      `2G8eAKAgTR7JjkDrzioPc4nJmHDx3MgK5Kk9xDaH6LHN`, execution marker
-      `DXGgrR6R52Et4wjNDQyLeSxtvStpj69xGNC2ZKv4kuWc` — all owned by the verifier.
+      `4wqJXoEhqqqYknt1s7gHcgBL6pkfwNJDfhbVVeAqwtnX`, proposal
+      `E11Awng7j59dVft83VVrwftXp41roJPKY5QRMb45Zcoe`, execution marker
+      `CpiuicNDii6uCeMXtjd1W6hek6Vq35HJ7k3mz1Q82Fui` — all owned by the verifier.
       Re-verify with `./scripts/verify-onchain.sh`.
 - [x] **Full documentation and a clean public repository.**
 
@@ -335,7 +344,7 @@ the Scope section adds a seventh. Rather than leave them to be hunted for:
 | **Threshold proof scheme** | *Approach* above — membership against an anchored Merkle root, proved in a Risc0 guest, composed on chain by LEZ's privacy circuit via `env::verify` |
 | **Nullifier design** | *Making M markers mean M distinct members* above, and bindings 4–7 in [`docs/security.md`](docs/security.md) |
 | **LEZ account model compatibility** — specifically the **nonce** and **`program_owner`** constraints | [`docs/lez-account-model.md`](docs/lez-account-model.md), in full. Short version: the nonce constraint never binds on membership because a member is a Merkle leaf and not an account this program touches; it binds one level up, on the account that *submits*, which is unrelated to the member and may be a relayer. `program_owner` is load-bearing rather than an obstacle — it is how an uninitialised PDA is detectable, which is what makes a forged member set unrepresentable instead of merely refused |
-| **Trusted setup** | **None.** Risc0 is a STARK-based, transparent proving system: there is no structured reference string, no ceremony, and no toxic waste to trust or destroy. The only trusted parameters are the two program ImageIDs, and those are content-addressed — [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) shows a clean rebuild reproducing `cf5724b0…` exactly, so an evaluator who rebuilds gets the same identity or knows something is wrong |
+| **Trusted setup** | **None.** Risc0 is a STARK-based, transparent proving system: there is no structured reference string, no ceremony, and no toxic waste to trust or destroy. The only trusted parameters are the two program ImageIDs, and those are content-addressed — [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) shows a clean rebuild reproducing `5bb40082…` exactly, so an evaluator who rebuilds gets the same identity or knows something is wrong |
 | **Security assumptions** | [`docs/security.md`](docs/security.md) — three adversaries in increasing order of knowledge, ending at the insider, which is the interesting one |
 | **Known limitations** | [`docs/security.md`](docs/security.md), *What is not hidden* and *Residual risks and non-goals* — timing correlation, small anonymity sets, and a 1-of-2 multisig hiding nothing from its other member |
 | **Integration instructions** | [`README.md`](README.md) — the CLI lifecycle, the Basecamp walkthrough, and [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for deployment |

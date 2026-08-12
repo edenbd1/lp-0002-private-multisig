@@ -95,8 +95,18 @@ approvals complete in seconds did not prove anything: on 2026-08-12 an unpatched
 1 s and 32 s approval timings were the only visible tell.
 
 **And on a CI runner, far more.** The scheduled e2e workflow measured
-**1264 s** for its single approval on a standard GitHub `ubuntu-latest` runner —
-roughly eight times the laptop figure, for the same proof of the same circuit.
+**1264 s** for its single approval on a standard GitHub `ubuntu-latest` runner
+under LEZ v0.2.0 — roughly eight times the laptop figure, for the same proof of
+the same circuit.
+
+**On LEZ v0.2.4 the same job measured 4033 s**, about three times that. The
+cause is not established here and is not asserted: it could be runner variance,
+or it could be that v0.2.4's privacy path genuinely costs more — v0.2.4
+introduced ML-KEM 768 material into the private account model, and that is the
+kind of change that shows up in a circuit. What is certain is that the number
+was measured on the run that produced the current deployment, with
+`RISC0_DEV_MODE=0`, and it is quoted as measured rather than as the older and
+more flattering figure.
 Proving is CPU-bound and does not parallelise past the cores it is given, so the
 honest way to read every number here is *per machine*:
 
@@ -105,11 +115,15 @@ honest way to read every number here is *per machine*:
 | Apple silicon laptop, local sequencer | **149-154 s** |
 | Apple silicon laptop, public testnet | **179 s** (360 s under CPU contention) |
 | Apple silicon laptop, public testnet, LEZ v0.2.4 | **440-469 s** (under contention) |
-| GitHub `ubuntu-latest`, local sequencer | **1264 s** |
+| GitHub `ubuntu-latest`, local sequencer, LEZ v0.2.0 | **1264 s** |
+| GitHub `ubuntu-latest`, local sequencer, LEZ v0.2.4 | **4033 s** |
 
 Quoting one of these as "the" proving time would be picking the flattering one.
-A member on a laptop waits about two and a half minutes; a shared CI runner
-takes twenty.
+A member on a laptop waits two and a half minutes against a local sequencer and
+seven or eight against the public testnet; the same proof on a shared CI runner
+took sixty-seven. The spread is the point: this is a cost that belongs to the
+machine holding the member's key, and any single number quoted without one is
+marketing.
 
 What testnet adds on top of proving is block time and network latency per
 submission, plus a wallet polling window that can expire before a privacy

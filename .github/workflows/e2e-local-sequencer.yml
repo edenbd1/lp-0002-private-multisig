@@ -41,6 +41,23 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # LEZ v0.2.4 added `lez/keycard_wallet`, which links the system
+      # libpcsclite through the `pcsc` crate. v0.2.0 did not, so this is new
+      # with the upgrade, and it is not optional: without it both
+      # `cargo install spel` and the LEZ wallet build die in a C build script,
+      # with an error that never mentions LEZ.
+      #
+      # This is LEZ's own list, copied from its .github/docker/ci.Dockerfile
+      # rather than guessed one failure at a time — ubuntu-latest already has
+      # most of them, and taking the authoritative set is how this avoids a
+      # second red run for the next missing package.
+      - name: System libraries LEZ needs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential clang libclang-dev libssl-dev pkg-config \
+            libpcsclite-dev curl git jq python3-dev
+
       - name: Check out logos-execution-zone
         run: |
           git clone --filter=blob:none https://github.com/logos-blockchain/logos-execution-zone _external/lez

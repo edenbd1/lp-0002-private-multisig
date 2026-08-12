@@ -16,10 +16,10 @@ name = "multisig_verifier"
 path = "src/bin/multisig_verifier.rs"
 
 [dependencies]
-spel-framework = { git = "https://github.com/logos-co/spel.git", tag = "v0.6.0" }
+spel-framework = { path = "../../../../vendor/spel/spel-framework" }
 # spel-framework's macro emits `nssa_core::` paths, so lee_core must be in scope
 # under that name. Same aliasing spel itself uses.
-nssa_core      = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", features = ["host"], package = "lee_core" }
+nssa_core      = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.4", features = ["host"], package = "lee_core" }
 risc0-zkvm     = { version = "=3.0.5", default-features = false, features = ["std"] }
 
 multisig-core = { path = "../../../multisig-core", default-features = false }

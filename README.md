@@ -227,7 +227,7 @@ all the chain records and all the other members can see.
 
 | Component | Version |
 |---|---|
-| LEZ | `v0.2.0` |
+| LEZ | `v0.2.4` |
 | SPEL | `v0.6.0` |
 | risc0 | `3.0.5` |
 | Rust (host) | stable |
@@ -245,17 +245,17 @@ with `getTransaction` against `https://testnet.lez.logos.co`.
 
 | Step | Transaction |
 |---|---|
-| deploy `membership_lez` | `64098974b7d28f4facf1218e771d27c6163f7fb7ce3bd4f218df6db42ace6dde` |
-| deploy `multisig_verifier` | `78a68aa2b0bdcc5c99778fdfa52469f6b367c36f28489f4a40418873dd9ab1ca` |
-| `create_multisig` | `09e8245d8673dd2de0621f3e843822cba30f5297c87a7224da950c093f5fd60e` |
-| `create_proposal` | `88698af7fd639229563b22f59ca00d3d5e5f30baea20677ca82e611add7c17f5` |
-| `approve` (member A, **privacy tx**) | `0b0a13dd39b57222d0d641863061db81e925b7f21c635701139f73f7d0a356a7` |
-| `approve` (member B, **privacy tx**) | `ff22f4c33bce23f6454be09872f14fae8672ea334d6cfda66270d4d8a09259b7` |
-| `execute` | `18d428af895cd992899cbbec0ad5eb326e7cf0388f985c609ac510f05cba3e98` |
+| deploy `membership_lez` | `fb8eb10f7f394286c109cb6502a1c95294180523f30d06f707fc087a589bea98` |
+| deploy `multisig_verifier` | `517efe12a0b592abe4d21a03246866b95c4379483e87af62fd9f26f7b8fe45ff` |
+| `create_multisig` | `2930c1db4521b7c0b912278f4025e430704cfb9a7ebfcb5d22c374fd7ce85b70` |
+| `create_proposal` | `68d5127e1e5570936f8d78e9a2da4d485562566cd8b7487a59322bf059406978` |
+| `approve` (member A, **privacy tx**) | `41f5bb99346a0bef6aa0c69243473a554b84f0f0ad65e460bbb6890b11644942` |
+| `approve` (member B, **privacy tx**) | `ae006465f5f945b8ba2666f28a5357d0a2aab4af05508c9c2811e0101d0ac649` |
+| `execute` | `b43e46505f571e31d6051f7da43563db605b6a74b90c670da2d3582d53412ecd` |
 
-The two approval markers — `yyNX12APVKBCh9yJyR98rG7qyM8mrfBda8m34AC115N` and
-`BWGfzw5EescKdS53nkawCQdkhu5koW2LfXPCFnS45Vrn` — and the execution marker
-`DXGgrR6R52Et4wjNDQyLeSxtvStpj69xGNC2ZKv4kuWc` are all owned by the verifier
+The two approval markers — `DaG2Qan1ie5YhEpcti2LMCsvbkYi7WjWxnNKvxiqxi7B` and
+`FMj5yL8cpcrQzN7xhENHC2vysTrNwbtokPbTYjr98rPt` — and the execution marker
+`CpiuicNDii6uCeMXtjd1W6hek6Vq35HJ7k3mz1Q82Fui` are all owned by the verifier
 program. Neither approval marker could exist without a membership proof having
 been verified on chain, and neither names a member.
 
@@ -266,8 +266,8 @@ Full detail, including how to re-verify each one yourself, in
 
 | Program | ImageID |
 |---|---|
-| `membership_lez` | `a48ecc5289404ad01fd6d6fd1d79eaebb8d2f0fe4f2dc2ebbc85003ee82af3d6` |
-| `multisig_verifier` | `00286a889dabd8c3d7fdfb058c5935f5d46172946249c98da73953e3f136ed5d` |
+| `membership_lez` | `56f784d6b37f5cbac85d2eca3e28f56346e8739e6c22cb15a1b7165616758e31` |
+| `multisig_verifier` | `5bb4008273ddc31d1c2b5bad8835daaf4c567e029dbb059c20c7e83ba5966f82` |
 
 The verifier pins the membership program id as a constant, so a chained call can
 only ever reach the audited binary. `./scripts/build-programs.sh --check` fails if

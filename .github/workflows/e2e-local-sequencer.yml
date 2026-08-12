@@ -30,7 +30,7 @@ concurrency:
 env:
   # The revision this was developed and verified against. Floating HEAD would
   # turn an upstream change into a red build here with no change of ours.
-  LEZ_REV: a58fbce
+  LEZ_REV: 47eba25   # v0.2.4
   CARGO_TERM_COLOR: always
 
 jobs:
@@ -69,14 +69,18 @@ jobs:
           "$HOME/.risc0/bin/rzup" install r0vm 3.0.5
 
       - name: Install spel
-        # The crate is named `spel`, in a directory called `spel-cli`, and it is
-        # not published to crates.io — so this is a clone and a --path install,
-        # exactly as spel's own README documents. Pinned for the same reason
-        # LEZ is: an upstream change should not turn this red on its own.
+        # From vendor/spel, NOT from upstream. `spel` is not just a code
+        # generator here: deploy-and-run.sh submits create_multisig,
+        # create_proposal, approve and execute through this binary, so it has to
+        # speak the chain's current protocol.
+        #
+        # Released spel (v0.6.0) still pins LEZ v0.2.0. It builds cleanly and
+        # then fails at run time on every instruction with
+        # `missing field 'sequencer_addr'`, because the wallet config format
+        # changed — a failure that does not look like a version mismatch. The
+        # patch that fixes it is documented in vendor/spel/PATCH.md.
         run: |
-          git clone --depth 1 https://github.com/logos-co/spel /tmp/spel
-          git -C /tmp/spel fetch --depth 1 origin 0cb7e09 && git -C /tmp/spel checkout 0cb7e09
-          cargo install --path /tmp/spel/spel-cli --locked
+          cargo install --path vendor/spel/spel-cli --locked
           # `spel --help` exits 1, so check the binary is on PATH instead of
           # gating on its status and failing the step over nothing.
           command -v spel

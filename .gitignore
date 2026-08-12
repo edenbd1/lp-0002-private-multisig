@@ -5,13 +5,12 @@ _external/
 .DS_Store
 
 /.demo/
-# Every testnet working directory, present and future. Enumerating them by name
-# is how .testnet3/ got committed one commit after .testnet2/ was removed for
-# carrying member secret keys: the rule was correct and the next directory was
-# simply not in it. A working directory holds members.json, so the glob is the
-# only version of this rule that stays true.
+# Every testnet working directory and wallet home, present and future. These
+# hold members.json and account keys, so the patterns are globs: an enumeration
+# only ever covers the directories that existed when it was written, and the
+# next one created is exactly the one that gets committed.
 /.testnet*/
-/.wallet/
+/.wallet*/
 /_external/
 
 # Basecamp app build output, and the metadata copy CMake stages for moc

@@ -11,7 +11,7 @@
 > a 3-of-5 on that single approval.
 >
 > Everything on this page is the **fixed** build: verifier ImageID
-> `00286a88…`, redeployed, and the whole lifecycle re-run against it. The
+> `5bb40082…`, redeployed, and the whole lifecycle re-run against it. The
 > previous deployment is gone from this page on purpose — it was evidence for a
 > program that could be bypassed. The finding, why the earlier fix missed this
 > variant, and the two regression tests that reproduce it are in
@@ -30,69 +30,87 @@ the privacy-preserving path, and executed.
 
 | Step | Transaction | On the explorer |
 |---|---|---|
-| deploy `membership_lez` | `64098974b7d28f4facf1218e771d27c6163f7fb7ce3bd4f218df6db42ace6dde` | [link](https://explorer.testnet.lez.logos.co/transaction/64098974b7d28f4facf1218e771d27c6163f7fb7ce3bd4f218df6db42ace6dde) |
-| deploy `multisig_verifier` | `78a68aa2b0bdcc5c99778fdfa52469f6b367c36f28489f4a40418873dd9ab1ca` | [link](https://explorer.testnet.lez.logos.co/transaction/78a68aa2b0bdcc5c99778fdfa52469f6b367c36f28489f4a40418873dd9ab1ca) |
-| `create_multisig` | `09e8245d8673dd2de0621f3e843822cba30f5297c87a7224da950c093f5fd60e` | not indexed |
-| `create_proposal` | `88698af7fd639229563b22f59ca00d3d5e5f30baea20677ca82e611add7c17f5` | not indexed |
-| `approve` (member A, **privacy tx**) | `0b0a13dd39b57222d0d641863061db81e925b7f21c635701139f73f7d0a356a7` | not indexed |
-| `approve` (member B, **privacy tx**) | `ff22f4c33bce23f6454be09872f14fae8672ea334d6cfda66270d4d8a09259b7` | not indexed |
-| `execute` | `18d428af895cd992899cbbec0ad5eb326e7cf0388f985c609ac510f05cba3e98` | not indexed |
+| deploy `membership_lez` | `fb8eb10f7f394286c109cb6502a1c95294180523f30d06f707fc087a589bea98` | not indexed yet |
+| deploy `multisig_verifier` | `517efe12a0b592abe4d21a03246866b95c4379483e87af62fd9f26f7b8fe45ff` | not indexed yet |
+| `create_multisig` | `2930c1db4521b7c0b912278f4025e430704cfb9a7ebfcb5d22c374fd7ce85b70` | not indexed yet |
+| `create_proposal` | `68d5127e1e5570936f8d78e9a2da4d485562566cd8b7487a59322bf059406978` | not indexed yet |
+| `approve` (member A, **privacy tx**) | `41f5bb99346a0bef6aa0c69243473a554b84f0f0ad65e460bbb6890b11644942` | not indexed yet |
+| `approve` (member B, **privacy tx**) | `ae006465f5f945b8ba2666f28a5357d0a2aab4af05508c9c2811e0101d0ac649` | not indexed yet |
+| `execute` | `b43e46505f571e31d6051f7da43563db605b6a74b90c670da2d3582d53412ecd` | not indexed yet |
 
-### Why five of them say "not indexed"
+### Why all seven say "not indexed yet"
 
-**All seven are live.** `getTransaction` returns every one of them; the last
-column is about the explorer's indexer, not about the chain.
+**All seven are live.** `getTransaction` returns every one of them. The last
+column is a statement about the explorer's indexer, not about the chain.
 
-What was measured, rather than assumed: the two deployment URLs return the full
-transaction with the bytecode inline, and the other five return exactly the same
-2416-byte page shell that a hash which *cannot exist* returns. Identical byte
-counts, so the explorer is not saying "this transaction is empty" — it is saying
-it has no record of the hash at all, while `getTransaction` returns it.
+**How this was measured — and why the obvious method does not work.** The
+explorer is a WASM application: `/transaction/<hash>` serves the same 2416-byte
+shell for every hash, and the content is fetched and rendered client-side.
+Comparing response sizes with `curl` therefore cannot distinguish an indexed
+transaction from one that does not exist — both are 2416 bytes. The page has to
+be rendered. `scripts/check-explorer.py` does that with a headless browser and
+prints the rendered text, including for a deliberately impossible hash as a
+control.
 
-The indexer's coverage is uneven rather than absent, and that is checkable
-here rather than asserted: other public program invocations on this testnet do
-render, and one of the two deployments above was submitted *after* the five
-lifecycle transactions and still renders. So this is not an indexing lag and it
-is not specific to this submission — re-submitting the same transactions would
-produce the same result.
+Rendered, all seven show the same thing as that impossible hash:
 
-So do not judge these by clicking. Check any hash directly:
+    LEZ Block Explorer  Error  Failed to load transaction:
+    error running server function: Transaction not found
+
+**The reason is an indexer that is behind the chain, and it is visible from the
+explorer's own front page.** At the time of writing, the most recent block it
+listed was **4351** (2026-08-12 11:44:52 UTC) while `getLastBlockId` returned
+**4496**; `/block/4400` answered `Block not found`. Every transaction above was
+included after block 4351, so none of them can render yet. This affects anything
+recently submitted to this testnet, by anyone — it is not specific to this
+submission, and it is not a property of privacy transactions.
+
+Whether it catches up is not something this repository can promise: over the
+course of one run of the script the indexer advanced from 4351 to 4354 while the
+chain advanced faster than that, so it was losing ground rather than gaining it.
+Re-run `./scripts/check-explorer.py` to see where it stands now — the answer it
+gives is a measurement, with the date it was taken, not a claim.
+
+So do not judge these by clicking, in either direction: a link that does not
+render is evidence about the indexer, and a link that does render would not
+prove ownership of anything. Check the chain directly instead:
 
 ```bash
 curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"getTransaction","params":["<hash>"]}'
 ```
 
-A `"result"` that is a base64 string means the transaction is on chain; a
-`null` means it is not. `./scripts/verify-onchain.sh` does the stronger check —
-it reads the five accounts the lifecycle produced and confirms the verifier
-program owns them, which no amount of transaction-fetching can fake.
+A non-`null` `"result"` means the transaction is on chain — on LEZ v0.2.4 that
+result is a decoded object, not a string, so test whether it is null rather than
+what type it is. `./scripts/verify-onchain.sh` is the stronger check: it reads
+the five accounts the lifecycle produced and confirms the verifier program owns
+them, which no amount of transaction-fetching can fake.
 
 If the testnet is reset again and the hashes go cold, `./scripts/deploy-and-run.sh`
 re-runs the whole lifecycle. The two deployment hashes come back identical,
 because a deployment hash is `SHA256(borsh(bytecode))` and the binaries are
 committed; the five lifecycle hashes are signed with a nonce and will be new.
 
-Multisig id `e0ea615c1179270ea9fbc0c7c7978bac79996f7e154501b8c8683e092646ca2e`,
-member root `1ae4233b5c8c256948196373b0c0169efce584a8cab1236e45f3c140caf0428e`,
-config hash `1ae8ce6b1135b9e01f89cd1d200ef6bd6e9e8e29fe44d115cb86ea566991269f`
+Multisig id `df2c8c3d0a036414cd819aa04c023c489f4a5ca2c0e7e99cca80363d14ab8472`,
+member root `2e6fa5feaacec254fe7a2124cf6a2e62f7e5be8f0e14b37a0e4b42767ccc5a7d`,
+config hash `92100d32ab976481e74fcaf28d1ab99f5f1be27421e190bb07ba09185a305475`
 (which is what anchors the root *and* the threshold in the multisig's address).
 The action was `transfer 100 LEZ to the grants treasury`.
 
 ## The accounts, and what they prove
 
 All five are owned by the verifier program
-(the verifier ProgramId).
+(ProgramId `8200b45b,1dc3dd73,ad5b2b1c,afda3588,027e564c,9c05bb9d,3be8c720,826f96a5`).
 Read them yourself with `./scripts/verify-onchain.sh`, or derive the addresses
 with `scripts/pda.py` and query `getAccount`.
 
 | Account | Address |
 |---|---|
-| multisig | `9GwWLZThKirW56FPWTCpXPhZ1gTrEy7HYuk5jerQvUTR` |
-| proposal | `2G8eAKAgTR7JjkDrzioPc4nJmHDx3MgK5Kk9xDaH6LHN` |
-| approval marker A | `yyNX12APVKBCh9yJyR98rG7qyM8mrfBda8m34AC115N` |
-| approval marker B | `BWGfzw5EescKdS53nkawCQdkhu5koW2LfXPCFnS45Vrn` |
-| execution marker | `DXGgrR6R52Et4wjNDQyLeSxtvStpj69xGNC2ZKv4kuWc` |
+| multisig | `4wqJXoEhqqqYknt1s7gHcgBL6pkfwNJDfhbVVeAqwtnX` |
+| proposal | `E11Awng7j59dVft83VVrwftXp41roJPKY5QRMb45Zcoe` |
+| approval marker A | `DaG2Qan1ie5YhEpcti2LMCsvbkYi7WjWxnNKvxiqxi7B` |
+| approval marker B | `FMj5yL8cpcrQzN7xhENHC2vysTrNwbtokPbTYjr98rPt` |
+| execution marker | `CpiuicNDii6uCeMXtjd1W6hek6Vq35HJ7k3mz1Q82Fui` |
 
 **The two approval markers are the whole claim.** Each exists only because
 `approve` ran and claimed it; `approve` declares a `ChainedCall` to
@@ -114,8 +132,8 @@ counted them against the threshold anchored in the multisig's address.
 
 | Program | ImageID | ProgramId (hex) |
 |---|---|---|
-| `membership_lez` | `a48ecc5289404ad01fd6d6fd1d79eaebb8d2f0fe4f2dc2ebbc85003ee82af3d6` | `52cc8ea4,d04a4089,fdd6d61f,ebea791d,fef0d2b8,ebc22d4f,3e0085bc,d6f32ae8` |
-| `multisig_verifier` | `00286a889dabd8c3d7fdfb058c5935f5d46172946249c98da73953e3f136ed5d` | the verifier ProgramId |
+| `membership_lez` | `56f784d6b37f5cbac85d2eca3e28f56346e8739e6c22cb15a1b7165616758e31` | `d684f756,ba5c7fb3,ca2e5dc8,63f5283e,9e73e846,15cb226c,5616b7a1,318e7516` |
+| `multisig_verifier` | `5bb4008273ddc31d1c2b5bad8835daaf4c567e029dbb059c20c7e83ba5966f82` | `8200b45b,1dc3dd73,ad5b2b1c,afda3588,027e564c,9c05bb9d,3be8c720,826f96a5` |
 
 Verify for yourself:
 
@@ -126,7 +144,7 @@ spel program-id artifacts/programs/multisig_verifier.bin
 
 **The build is reproducible.** Rebuilding the verifier guest from a clean
 `cargo risczero build` reproduces ImageID
-`00286a889dabd8c3d7fdfb058c5935f5d46172946249c98da73953e3f136ed5d` exactly —
+`5bb4008273ddc31d1c2b5bad8835daaf4c567e029dbb059c20c7e83ba5966f82` exactly —
 checked, not assumed. That matters because the ImageID *is* the program's
 identity on chain: an evaluator who rebuilds and gets the same id knows the
 committed binary is the source in this repository, compiled.
@@ -146,7 +164,7 @@ and why a deploy link survives a re-run unchanged.
 
 | Tool | Version | Note |
 |---|---|---|
-| `wallet` | LEZ `v0.2.0` | Wallet home is `LEE_WALLET_HOME_DIR`, default `~/.lee/wallet`. A pre-v0.2.0 wallet looks in `~/.nssa/wallet` and will not work |
+| `wallet` | LEZ `v0.2.4` | Wallet home is `LEE_WALLET_HOME_DIR`, default `~/.lee/wallet`. A pre-v0.2.0 wallet looks in `~/.nssa/wallet` and will not work |
 | `spel` | `>= 0.6.0` | Older versions fail with `missing field 'accounts'` |
 | `cargo-risczero` | `3.0.5` | Needs Docker for the guest builds |
 

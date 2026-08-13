@@ -231,8 +231,8 @@ read_args "$WORK/prop.args"
 require_tx "$WORK/prop.out" "create_proposal"
 
 echo "[5/6] gather $THRESHOLD approvals on the privacy-preserving path"
-echo "      each is a real proof composed on chain; ~150 s on a laptop and"
-echo "      ~20 min on a shared CI runner. Timed below, per machine."
+echo "      each is a real proof composed on chain. Cost is per machine and"
+echo "      depends on what else is proving: timed below, not predicted."
 for i in $(seq 0 $((THRESHOLD-1))); do
   echo "-- member $i"
   # Timed, because "proof generation time" is a required benchmark and a number

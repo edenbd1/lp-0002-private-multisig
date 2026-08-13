@@ -54,12 +54,17 @@ figure into `lifecycle.tsv` next to the transaction hash, so the number comes
 out of the same run that produced the on-chain evidence.
 
 A 2-of-3 lifecycle against a real standalone sequencer on localhost, Apple
-silicon laptop, `RISC0_DEV_MODE=0`:
+silicon laptop, `RISC0_DEV_MODE=0`, **on LEZ v0.2.0**:
 
 | Approval | Wall clock |
 |---|---:|
 | member 0 | **149 s** |
 | member 1 | **154 s** |
+
+The version matters: the same run on **v0.2.4** takes **437 s** on the same idle
+machine. Both are kept, because the older one is what the earlier figures in
+this document were measured against — see the table further down for all of them
+side by side.
 
 That interval covers everything the member waits for: building and locally
 re-verifying the Merkle witness, proving, submitting on the privacy path, and
@@ -87,17 +92,20 @@ rounded in this document's favour.
 **469 s** on the same laptop against the public testnet. It is quoted because it
 is the run the current deployment came from, and it is left as measured.
 
-**Read those two numbers as contended, not as the cost of v0.2.4.** Proving on
-this machine is dominated by what else is proving on it, and that was not
-controlled during that run. The effect was measured directly the next day: the
-same `MEMBERS=2 THRESHOLD=1` local-sequencer run that takes about 150 s idle
-took **935 s** while a second, unrelated Risc0 proof held roughly half the
-cores — a factor of six from contention alone, which is larger than any
-difference between LEZ versions claimed anywhere in this document.
+**Contention matters more than it looks, so it was controlled for.** The same
+`MEMBERS=2 THRESHOLD=1` local-sequencer run measured **935 s** while a second,
+unrelated Risc0 proof held roughly half the cores, and **437 s** on the same
+machine with nothing else proving. Anyone reproducing these should check
+`pgrep -fl r0vm` before timing anything.
 
-The practical consequence, for anyone reproducing these: check that nothing else
-is proving (`pgrep -fl r0vm`) before timing anything, and treat every figure
-here as belonging to a machine in a state, not to the circuit.
+**With contention ruled out, v0.2.4 really is about three times more expensive.**
+That idle 437 s is against 149-154 s for the same 1-approval run under v0.2.0 —
+and the CI runner shows the same ratio independently (1264 s → 4033 s). Two
+machines with nothing in common but the version change is enough to stop calling
+it variance. The most likely cause is that v0.2.4 folds ML-KEM 768 material into
+the private account model, which the privacy circuit then has to carry; this
+document does not claim to have isolated it further, because that would need the
+two versions timed against the same circuit and that has not been done.
 
 These timings are also the check that a lifecycle was *real*. A run whose
 approvals complete in seconds did not prove anything: on 2026-08-12 an unpatched
@@ -109,34 +117,30 @@ approvals complete in seconds did not prove anything: on 2026-08-12 an unpatched
 under LEZ v0.2.0 — roughly eight times the laptop figure, for the same proof of
 the same circuit.
 
-**On LEZ v0.2.4 the same job measured 4033 s**, about three times that. The
-cause is not established here and is not asserted: it could be runner variance,
-or it could be that v0.2.4's privacy path genuinely costs more — v0.2.4
-introduced ML-KEM 768 material into the private account model, and that is the
-kind of change that shows up in a circuit. Establishing which would need the two
-versions timed back to back on the same idle machine, which has not been done.
-What is certain is that the number was measured with `RISC0_DEV_MODE=0` on the
-run that gates this repository, and it is quoted rather than the older and more
-flattering figure.
+**On LEZ v0.2.4 the same job measured 4033 s**, about three times that — the
+same ratio the laptop shows between 149-154 s and 437 s, on hardware with
+nothing else in common. Both numbers were measured with `RISC0_DEV_MODE=0`, and
+the older, more flattering figure is kept beside the newer one rather than
+replaced by it.
 
 Proving is CPU-bound and does not parallelise past the cores it is given, so the
 honest way to read every number here is *per machine*:
 
 | Where | One approval |
 |---|---:|
-| Apple silicon laptop, local sequencer, idle | **149-154 s** |
-| Apple silicon laptop, local sequencer, one other proof running | **935 s** |
+| Apple silicon laptop, local sequencer, idle, LEZ v0.2.0 | **149-154 s** |
+| Apple silicon laptop, local sequencer, idle, LEZ v0.2.4 | **437 s** |
+| Apple silicon laptop, local sequencer, LEZ v0.2.4, one other proof running | **935 s** |
 | Apple silicon laptop, public testnet | **179 s** (360 s under CPU contention) |
 | Apple silicon laptop, public testnet, LEZ v0.2.4 | **440-469 s** (under contention) |
 | GitHub `ubuntu-latest`, local sequencer, LEZ v0.2.0 | **1264 s** |
 | GitHub `ubuntu-latest`, local sequencer, LEZ v0.2.4 | **4033 s** |
 
 Quoting one of these as "the" proving time would be picking the flattering one.
-A member on a laptop waits two and a half minutes against a local sequencer and
-seven or eight against the public testnet; the same proof on a shared CI runner
-took sixty-seven. The spread is the point: this is a cost that belongs to the
-machine holding the member's key, and any single number quoted without one is
-marketing.
+On LEZ v0.2.4 a member on an idle laptop waits about seven minutes against a
+local sequencer; the same proof on a shared CI runner took sixty-seven. The
+spread is the point: this is a cost that belongs to the machine holding the
+member's key, and any single number quoted without one is marketing.
 
 What testnet adds on top of proving is block time and network latency per
 submission, plus a wallet polling window that can expire before a privacy

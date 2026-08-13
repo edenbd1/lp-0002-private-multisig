@@ -116,6 +116,33 @@ centralised multisig service can hide the member list from the public; it cannot
 hide it from itself, and it cannot prove to a third party that it counted
 honestly.
 
+### Targeting the current testnet, and the SPEL patch that took
+
+The prize says it targets the *current* LEZ testnet. That testnet was reset onto
+a newer chain in August: everything deployed against **v0.2.0** stopped being
+accepted — not "went stale", but rejected outright, with submitted transactions
+returning a hash whose `getTransaction` is `null`. Everything here was rebuilt
+against **LEZ v0.2.4**, redeployed, and the whole lifecycle re-run. Every hash
+and address in this submission comes from that run.
+
+That upgrade is also why this repository vendors SPEL. Its latest release,
+**v0.6.0**, still pins LEZ v0.2.0 in about twenty places, and there is no
+released SPEL that builds against a current LEZ — so "use SPEL" and "transact on
+the current testnet" could not both be satisfied with anything published.
+`vendor/spel` is upstream v0.6.0 with the minimum changes to do both, and
+[`vendor/spel/PATCH.md`](https://github.com/edenbd1/lp-0002-private-multisig/blob/main/vendor/spel/PATCH.md)
+documents every one of them, how to reproduce the directory, and when it should
+be deleted. Three things broke: private-PDA derivation gained an ML-KEM 768
+viewing key, `WalletCore::from_env()` became async, and the wallet went
+multi-sequencer.
+
+Worth flagging because it is the kind of thing that wastes a reviewer's day:
+released SPEL *builds* cleanly against v0.2.4's testnet and then fails at run
+time on every instruction with `missing field 'sequencer_addr'`, because the
+wallet config format changed. The private-PDA API question is left to SPEL's
+maintainers rather than patched over here — this project uses only public PDAs,
+whose derivation is unchanged in v0.2.4.
+
 ## Success Criteria Checklist
 
 ### Functionality

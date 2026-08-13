@@ -84,10 +84,20 @@ what contention costs — both are in that run's `lifecycle.tsv`, and neither is
 rounded in this document's favour.
 
 **Re-measured on 2026-08-12, after the migration to LEZ v0.2.4**: **440 s** and
-**469 s** on the same laptop against the public testnet. That is slower than the
-179 s above and the number is left as measured rather than explained away — the
-run competed with a Docker guest build on the same machine, and the chain itself
-was busier. It is quoted because it is the run the current deployment came from.
+**469 s** on the same laptop against the public testnet. It is quoted because it
+is the run the current deployment came from, and it is left as measured.
+
+**Read those two numbers as contended, not as the cost of v0.2.4.** Proving on
+this machine is dominated by what else is proving on it, and that was not
+controlled during that run. The effect was measured directly the next day: the
+same `MEMBERS=2 THRESHOLD=1` local-sequencer run that takes about 150 s idle
+took **935 s** while a second, unrelated Risc0 proof held roughly half the
+cores — a factor of six from contention alone, which is larger than any
+difference between LEZ versions claimed anywhere in this document.
+
+The practical consequence, for anyone reproducing these: check that nothing else
+is proving (`pgrep -fl r0vm`) before timing anything, and treat every figure
+here as belonging to a machine in a state, not to the circuit.
 
 These timings are also the check that a lifecycle was *real*. A run whose
 approvals complete in seconds did not prove anything: on 2026-08-12 an unpatched
@@ -103,16 +113,19 @@ the same circuit.
 cause is not established here and is not asserted: it could be runner variance,
 or it could be that v0.2.4's privacy path genuinely costs more — v0.2.4
 introduced ML-KEM 768 material into the private account model, and that is the
-kind of change that shows up in a circuit. What is certain is that the number
-was measured on the run that produced the current deployment, with
-`RISC0_DEV_MODE=0`, and it is quoted as measured rather than as the older and
-more flattering figure.
+kind of change that shows up in a circuit. Establishing which would need the two
+versions timed back to back on the same idle machine, which has not been done.
+What is certain is that the number was measured with `RISC0_DEV_MODE=0` on the
+run that gates this repository, and it is quoted rather than the older and more
+flattering figure.
+
 Proving is CPU-bound and does not parallelise past the cores it is given, so the
 honest way to read every number here is *per machine*:
 
 | Where | One approval |
 |---|---:|
-| Apple silicon laptop, local sequencer | **149-154 s** |
+| Apple silicon laptop, local sequencer, idle | **149-154 s** |
+| Apple silicon laptop, local sequencer, one other proof running | **935 s** |
 | Apple silicon laptop, public testnet | **179 s** (360 s under CPU contention) |
 | Apple silicon laptop, public testnet, LEZ v0.2.4 | **440-469 s** (under contention) |
 | GitHub `ubuntu-latest`, local sequencer, LEZ v0.2.0 | **1264 s** |

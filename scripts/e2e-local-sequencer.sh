@@ -26,8 +26,10 @@
 #   PORT        sequencer RPC port   (default: first free from 3141)
 #   KEEP        set to 1 to leave the sequencer running for inspection
 #
-# Budget: one approval is a real proof, measured at ~150 s. A 2-of-3 run is
-# about eight minutes end to end. THRESHOLD=1 still exercises every
+# Budget: one approval is a real proof. On an idle M-series laptop that has been
+# about 150 s; it is highly sensitive to load, and a second proof running on the
+# same machine roughly doubles it. The script prints its own wall clock, which is
+# the number to trust — see docs/cu-costs.md. THRESHOLD=1 still exercises every
 # integration point and is what CI uses.
 
 set -uo pipefail
@@ -58,8 +60,19 @@ if [ ! -x "$SEQ_BIN" ]; then
   ( cd "$LEZ_SRC" && cargo build --release --features standalone -p sequencer_service ) \
     || die "sequencer build failed"
 fi
-WALLET_BIN="$LEZ_SRC/target/release/wallet"
-[ -x "$WALLET_BIN" ] || ( cd "$LEZ_SRC" && cargo build --release -p wallet ) || die "wallet build failed"
+# WALLET_BIN is overridable because building the LEZ wallet fails on some macOS
+# installs: since v0.2.4 it pulls a risc0 kernel crate that needs the Metal
+# toolchain, and without it the build dies with `Could not build metal kernels`
+# — nothing to do with this project. `lez/wallet` and `lez/state_machine` are
+# byte-identical between v0.2.2 and v0.2.4, so a wallet built from either tag
+# works here. Linux builds it natively and needs none of this.
+WALLET_BIN="${WALLET_BIN:-$LEZ_SRC/target/release/wallet}"
+if [ ! -x "$WALLET_BIN" ]; then
+  ( cd "$LEZ_SRC" && cargo build --release -p wallet ) || die "wallet build failed.
+On macOS this is usually the missing Metal toolchain: either run
+\`xcodebuild -downloadComponent MetalToolchain\`, or point WALLET_BIN at a wallet
+you already have (any build from LEZ v0.2.2 or later)."
+fi
 
 # The wallet links Python 3.9 and dies with `Library not loaded:
 # @rpath/Python3.framework/... no LC_RPATH's found` without this. Exporting it
@@ -178,7 +191,7 @@ APPROVERS=$(IFS=,; echo "${APPROVER_LIST[*]}")
 echo "  $APPROVERS"
 
 say "[5/5] the lifecycle, against that sequencer"
-echo "  RISC0_DEV_MODE=0, $THRESHOLD real proof(s), ~150 s apiece"
+echo "  RISC0_DEV_MODE=0, $THRESHOLD real proof(s) — timed per machine below"
 SIGNER="$TEST_SIGNER" \
 APPROVERS="$APPROVERS" \
 MEMBERS="$MEMBERS" \

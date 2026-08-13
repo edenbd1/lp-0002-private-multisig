@@ -45,39 +45,59 @@ ferme Slack/Discord/notifications, fenêtre terminal en plein écran.
 > **Pas d'onglet block explorer.** Deux raisons distinctes, garde-les en tête au
 > cas où on te pose la question :
 >
-> 1. **L'explorer n'indexe pas nos cinq transactions de cycle de vie.** Vérifié :
->    nos deux liens de deploy s'affichent en entier, les cinq autres renvoient
->    exactement la même page vide qu'un hash *inexistant* — alors que
->    `getTransaction` les retourne toutes. Sa couverture est irrégulière, pas
->    absente : d'autres invocations de programme publiques s'affichent, et l'un
->    de nos deux deploys a été soumis *après* les cinq et s'affiche quand même —
->    donc ce n'est pas un retard d'indexation. C'est l'indexeur, pas la chaîne.
+> 1. **L'explorer n'affiche aucune de nos sept transactions**, parce que son
+>    indexeur est loin derrière la chaîne : sa propre page d'accueil listait le
+>    bloc 4351 alors que `getLastBlockId` renvoyait 4496, et toutes nos
+>    transactions sont postérieures. Ça touche tout ce qui a été soumis
+>    récemment, par n'importe qui. Mesuré avec `./scripts/check-explorer.py`, qui
+>    rend les pages dans un navigateur headless — l'explorer est une app WASM qui
+>    sert la même coquille pour tous les hashes, donc comparer des tailles de
+>    réponse ne prouve rien (une version antérieure de ce script en tirait la
+>    conclusion inverse, à tort).
 > 2. **Une approbation ne serait de toute façon pas indexable.** Une transaction
 >    privacy ne publie ni `program_id` ni `instruction_data` — c'est la propriété
 >    de confidentialité qui fonctionne, pas un bug.
 >
 > D'où la scène 3 : on lit la chaîne directement. Plus fort qu'un explorer, et ça
 > ne peut pas t'afficher une page vide en pleine caméra.
+>
+> **Si on te pose la question en review**, la réponse honnête tient en une
+> phrase : les sept hashes sont vivants, `getTransaction` les retourne, et
+> `verify-onchain.sh` prouve la propriété des comptes — ce qu'aucun explorer ne
+> fait.
 
 ## Vérif de dernière seconde (30 s, avant d'enregistrer)
 
 **🎬 ACTION** :
 
 ```bash
+# 1. Rien d'autre ne doit prouver — sinon la scène 2bis dure 3 à 4x plus
+pgrep -fl r0vm || echo "ok, aucune preuve concurrente"
+
+# 2. La vérif on-chain : cinq ✅ attendus
 P=$(cat artifacts/testnet/proposal_id)
 ./scripts/verify-onchain.sh artifacts/testnet $P
 ```
 
+> **La première commande n'est pas du zèle.** Une preuve concurrente sur cette
+> machine (l'autre projet, un `cargo test`, un build) fait passer la scène 2bis
+> de 2 min 30 à 15 minutes, en direct et sans moyen d'accélérer. Si `pgrep`
+> sort quelque chose, attends qu'il ait fini.
+
 Tu dois voir **cinq ✅** et `all accounts present and owned by the verifier`.
 Si oui → QuickTime → Screen Recording → Démarre. Sinon → stop, préviens-moi.
 
-> **Le verifier a été redéployé le 3 août au soir**, après qu'une relecture
-> croisée a trouvé un contournement (c'est la scène 4). Le déploiement live est
-> le binaire **corrigé**, ImageID `00286a88…`, avec le cycle de vie entièrement
-> rejoué contre lui. Si tu avais répété avec d'anciennes adresses, elles ne sont
-> plus valides — toutes celles de ce script pointent déjà sur la bonne instance,
-> et le hash de deploy du membership est inchangé parce que ce guest-là n'a pas
-> bougé.
+> **Tout a été redéployé le 12 août**, après la migration vers LEZ v0.2.4. Le
+> testnet public avait été réinitialisé sur une chaîne plus récente : nos sept
+> transactions et nos cinq comptes étaient morts, et plus rien de ce que notre
+> stack v0.2.0 soumettait n'était accepté. Le déploiement live est donc entièrement
+> neuf — verifier ImageID `5bb40082…`, membership `56f784d6…`, et **les deux
+> hashes de deploy ont changé aussi**, parce que les deux guests ont été
+> recompilés contre le nouveau `lee_core`.
+>
+> Toutes les adresses de ce script pointent déjà sur la nouvelle instance. Si tu
+> avais répété avec une version antérieure, **jette-la** : rien de l'ancienne ne
+> résout plus.
 
 ## 📋 Les 4 commandes à taper à l'écran, dans l'ordre
 
@@ -96,7 +116,7 @@ MEMBERS=2 THRESHOLD=1 ./scripts/e2e-local-sequencer.sh
 
 # Scène 3 — la chaîne brute, un marqueur d'approbation
 curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json' \
- -d '{"jsonrpc":"2.0","id":1,"method":"getAccount","params":["yyNX12APVKBCh9yJyR98rG7qyM8mrfBda8m34AC115N"]}'
+ -d '{"jsonrpc":"2.0","id":1,"method":"getAccount","params":["DaG2Qan1ie5YhEpcti2LMCsvbkYi7WjWxnNKvxiqxi7B"]}'
 ```
 
 ---
@@ -186,12 +206,23 @@ MEMBERS=2 THRESHOLD=1 ./scripts/e2e-local-sequencer.sh
 > "It's funding a throwaway account from the genesis vault, and deploying both programs onto that fresh chain. Notice the deployment hashes — they're the same two hashes as on the public testnet, because a deployment hash is the hash of the bytecode. Same binaries, same identity, wherever you put them."
 
 **🎬 ACTION** : Quand `[5/6] gather 1 approvals` apparaît, **arrête-toi et
-laisse tourner**. C'est le cœur de la scène : environ **deux minutes trente** de
-proving réel, à l'écran, sans coupure.
+laisse tourner**. C'est le cœur de la scène : du proving réel, à l'écran, sans
+coupure.
+
+> **⚠️ La durée dépend de la charge de la machine, et fortement.** Sur un
+> portable au repos c'est ~2 min 30. Mesuré ici à **935 s** parce qu'une autre
+> preuve tournait en parallèle — presque quatre fois plus. **Vérifie avant de
+> filmer** (voir le pré-vol) qu'aucun autre `r0vm` ne tourne, sinon tu passes
+> quinze minutes de vidéo à regarder une barre de progression.
+>
+> **Ne cite aucun chiffre précis à voix haute** : le chronomètre s'affiche à
+> l'écran à la fin, et une narration qui annonce « deux minutes trente » pendant
+> qu'il affiche 900 s est la seule chose ici qu'un relecteur peut prendre en
+> défaut.
 
 **💬 SAY** (pendant le proving — prends ton temps, laisse des silences) :
 
-> "This is the part the brief asks to see. R-I-S-C zero dev mode is zero — no mock receipts, no shortcut. This is a real Risc0 proof being generated on this laptop, right now, and it takes about two and a half minutes. On a shared C-I runner the same proof takes twenty, which is why the benchmark in the repo is stated per machine rather than as one number."
+> "This is the part the brief asks to see. R-I-S-C zero dev mode is zero — no mock receipts, no shortcut. This is a real Risc0 proof being generated on this laptop, right now. It takes minutes, and how many depends entirely on the machine and what else it is doing — on a shared C-I runner the same proof took over an hour. That is why the benchmark in the repo is stated per machine, with the machine named, rather than as one number."
 
 **💬 SAY** :
 
@@ -234,7 +265,7 @@ proving réel, à l'écran, sans coupure.
 
 ```bash
 curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json' \
- -d '{"jsonrpc":"2.0","id":1,"method":"getAccount","params":["yyNX12APVKBCh9yJyR98rG7qyM8mrfBda8m34AC115N"]}'
+ -d '{"jsonrpc":"2.0","id":1,"method":"getAccount","params":["DaG2Qan1ie5YhEpcti2LMCsvbkYi7WjWxnNKvxiqxi7B"]}'
 ```
 
 **💬 SAY** :

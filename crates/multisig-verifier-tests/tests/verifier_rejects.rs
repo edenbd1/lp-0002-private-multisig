@@ -1,4 +1,4 @@
-//! Adversarial audit of the deployed LP-0002 multisig verifier.
+//! Adversarial tests against the deployed LP-0002 multisig verifier.
 //!
 //! These tests run the committed `multisig_verifier.bin` through the
 //! *sequencer's own* execution path — same input order, same 32M session limit,
@@ -944,7 +944,7 @@ fn an_undecodable_witness_is_rejected() {
 }
 
 // ---------------------------------------------------------------------------
-// Attacks an audit pass asked for that the original suite did not cover
+// Further attacks against the same bindings
 // ---------------------------------------------------------------------------
 
 /// Replay: executing a proposal a second time.
@@ -1074,7 +1074,7 @@ fn approving_with_a_witness_for_a_different_member_set_is_rejected() {
     assert_rejected(err, 5003, "anchor");
 }
 
-/// AUDIT PROBE: can a proposal be executed while naming a *different* multisig,
+/// Can a proposal be executed while naming a *different* multisig,
 /// one the attacker created with a lower threshold over the same member root?
 ///
 /// `execute` takes `proposal_ref` as an argument and constrains the proposal
@@ -1138,10 +1138,9 @@ fn executing_a_proposal_under_a_foreign_multisig_is_rejected() {
 /// The approve-side half of the same attack: creating an approval marker for
 /// someone else's proposal while naming a multisig you control.
 ///
-/// This was step 2 of the chain the audit probe uncovered — an outsider mints a
-/// valid-looking marker on a proposal they are not a member of, which step 3
-/// then counts. Binding the proposal address to its multisig closes both halves
-/// at once.
+/// Step 2 of a two-step attack: an outsider mints a valid-looking marker on a
+/// proposal they are not a member of, which step 3 then counts. Binding the
+/// proposal address to its multisig closes both halves at once.
 #[test]
 fn approving_a_proposal_under_a_foreign_multisig_is_rejected() {
     let elf = elf();
@@ -1200,7 +1199,7 @@ fn approving_a_proposal_under_a_foreign_multisig_is_rejected() {
     );
 }
 
-// ── The variant the first fix did not close ──────────────────────────────────
+// ── Same multisig id, a second configuration ─────────────────────────────────
 //
 // Seeding the proposal PDA with `[multisig_id, proposal_ref]` closed the case
 // where the attacker names a *different* multisig id. It does not close the case

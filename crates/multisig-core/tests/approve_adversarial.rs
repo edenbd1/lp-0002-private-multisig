@@ -535,7 +535,7 @@ fn reordering_members_changes_the_root() {
 }
 
 // ---------------------------------------------------------------------------
-// Soundness properties a third audit pass asked for
+// Further soundness properties
 // ---------------------------------------------------------------------------
 
 /// Listing the same member twice in the set must not buy them two votes.

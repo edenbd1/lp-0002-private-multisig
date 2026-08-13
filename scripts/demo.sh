@@ -56,7 +56,7 @@ rule "2. the on-chain checks, through the sequencer's executor"
 echo "30 tests against the built verifier binary: five honest controls — one per"
 echo "instruction, plus an over-threshold approval set that must still be accepted"
 echo "— and 25 attacks each required to be rejected with its documented error"
-echo "code, including the threshold bypass a third audit pass found."
+echo "code."
 echo "Plus 2 that pin the verifier to the exact membership binary it chains to."
 cargo test -p multisig-verifier-tests --quiet 2>&1 \
   | grep -E 'test result' | grep -v ' 0 passed' | sed 's/^/   /'

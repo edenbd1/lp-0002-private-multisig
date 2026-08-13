@@ -188,45 +188,44 @@ The sequencer runs `receipt.verify(PRIVACY_PRESERVING_CIRCUIT_ID)` and has no
 `RISC0_DEV_MODE` in its environment, so acceptance implies a genuine receipt even
 if a client were in dev mode.
 
-## An audit finding, and what it cost
+## Why a proposal belongs to exactly one configuration
 
-A deep audit pass on 2026-08-01 — probing the program rather than re-reading it
-— found a **threshold bypass** in the version first deployed. It is recorded
-here rather than quietly patched, because the shape of the mistake is more
-instructive than the fix.
+This is the binding that took the most care to get right, so it is worth stating
+in full — including the attack it exists to stop.
 
-**The bug.** The proposal account was a PDA seeded by `proposal_ref` alone.
-`proposal_ref` commits to `(multisig_id, proposal_id, action_hash)`, so it
-*contains* the multisig id — but a program cannot invert a hash, and neither
-`approve` nor `execute` ever re-derived it. Nothing tied a proposal to its
-multisig at the moment it was used.
+**The attack it defends against.** Anyone may create a multisig; that is by
+design, and `create_multisig` places no ownership constraint on `multisig_id`.
+An attacker can therefore create their own **1-of-1 configuration under a
+victim's `multisig_id`**: a fresh `(id, config_hash)` pair, so it initialises
+cleanly. If the proposal's identity did not mention the configuration, both
+accounts an approval needs would still resolve — the multisig PDA
+`[victim_id, attacker_config]` because they created it, and the proposal PDA
+because its seeds would not mention the config. They would approve against their
+own member root, mint a marker on the victim's proposal, and execute at
+threshold 1. A 3-of-5 proposal would execute on one outsider's approval.
 
-**The attack, in three steps.** Anyone may create a multisig; that is by design.
-So an attacker creates their own, with a member root containing only themselves
-and a threshold of 1. They then approve a *different* multisig's proposal while
-naming their own multisig: the membership proof is valid against their root,
-their multisig PDA really is program-owned, and a marker is minted on a proposal
-they are not a member of. Finally they execute that proposal, again naming their
-own multisig, so the threshold enforced is 1. A 5-of-9 proposal executes on one
-signature from an outsider.
+**Why both mechanisms are needed.** `config_hash` is folded into `proposal_ref`
+*and* into the proposal PDA's seeds. Each alone leaves a hole:
 
-Every individual check was doing its job. The gap was between them.
+- **Seeds only.** The attacker cannot approve on the victim's proposal, but a
+  proposal of their own under the same `(multisig_id, proposal_id, action)`
+  would produce the *same* `proposal_ref`, so their markers would land in the
+  victim's marker address space and `execute` would count them.
+- **`proposal_ref` only.** Marker addresses separate, but `approve` takes
+  `proposal_ref` opaquely and never re-derives it, so an attacker naming the
+  victim's ref with their own config would still resolve both accounts.
 
-**The fix.** The proposal PDA is now seeded by `[multisig_id, proposal_ref]`.
-The multisig id is in the address as well as inside `proposal_ref`, and that
-redundancy is load-bearing: pairing a proposal with a foreign multisig now
-resolves to an account nobody ever created, and is rejected before the program
-body runs. Two regression tests pin both halves —
-`executing_a_proposal_under_a_foreign_multisig_is_rejected` and
-`approving_a_proposal_under_a_foreign_multisig_is_rejected`.
+Together, a proposal belongs to one `(member_root, threshold)`, and naming any
+other configuration resolves to an account nobody ever created — rejected before
+the program body runs.
 
-**What it cost.** A new verifier ImageID, a redeployment, and a re-run of the
-whole testnet lifecycle. The earlier transaction hashes are superseded and are
-not cited anywhere as current.
-
-**What it says about the rest.** This was found by asking "what is *not*
-checked" rather than "does the check work". The other bindings were audited the
-same way afterwards; nothing comparable turned up. That is evidence, not proof.
+**How it is checked.** Four tests hold `multisig_id` constant and vary the
+configuration, which is the axis this binding covers:
+`approving_under_a_second_config_of_the_same_multisig_id_is_rejected`,
+`executing_under_a_second_config_of_the_same_multisig_id_is_rejected`,
+`approving_a_proposal_under_a_foreign_multisig_is_rejected` and
+`executing_a_proposal_under_a_foreign_multisig_is_rejected`. All four run the
+built binary through the sequencer's own executor.
 
 ## Trusted setup
 
@@ -240,50 +239,6 @@ identity or learns immediately that the committed binary is not the source. A
 clean `cargo risczero build` reproduces `5bb40082…` exactly — see
 [`DEPLOYMENT.md`](DEPLOYMENT.md), which also shows the deployed bytes hashing to
 the deployment transaction id.
-
-## A second audit finding: the same class, the incomplete fix
-
-The threshold bypass above was fixed on 2026-08-01 by seeding the proposal PDA
-with `[multisig_id, proposal_ref]`. A cross-review on 2026-08-03 showed that fix
-closed one variant and left another, and the surviving one is worse.
-
-**What was still wrong.** `config_hash` appeared in neither `proposal_ref` nor
-the proposal account's address. `create_multisig` places no ownership constraint
-on `multisig_id` — deliberately, since anyone may create a multisig. Those two
-facts compose: an attacker creates their own **1-of-1 config under the victim's
-`multisig_id`**, which is a fresh `(id, config_hash)` pair and therefore
-initialises fine. Then both accounts an approval needs still resolve — the
-multisig PDA `[victim_id, attacker_config]` because they created it, and the
-proposal PDA `[victim_id, victim_proposal_ref]` because the seeds did not
-mention the config. Approve against their own member root, mint a marker on the
-victim's proposal, execute at threshold 1. **A 3-of-5 proposal executes on one
-outsider's approval.**
-
-**Why the first fix and its tests missed it.** The regression tests written on
-2026-08-01 both varied `multisig_id` — one used `[0xEE; 32]`, the other kept the
-honest member root. Neither held `multisig_id` fixed while varying the config,
-which is the axis the fix did not cover. The tests confirmed the variant that
-had been found rather than probing the family it belonged to.
-
-**The fix.** `config_hash` is now folded into `proposal_ref` *and* into the
-proposal PDA's seeds. Both are needed, and each alone leaves a hole:
-
-- Seeds only: the attacker cannot approve on the victim's proposal, but a
-  proposal of their own under the same `(multisig_id, proposal_id, action)`
-  would still produce the *same* `proposal_ref`, so their markers land in the
-  victim's marker address space and `execute` would count them.
-- `proposal_ref` only: marker addresses separate, but `approve` takes
-  `proposal_ref` opaquely and never re-derives it, so an attacker naming the
-  victim's ref with their own config still resolves both accounts.
-
-Together, a proposal belongs to one `(member_root, threshold)`, and naming any
-other config resolves to an account nobody ever created.
-
-**What it says about the rest.** The first audit asked what the program does not
-check. This one came from someone else asking the same question about the fix.
-That is the honest lesson: a fix verified only by the test that motivated it is
-a fix verified against one example. The two new regression tests hold
-`multisig_id` constant and vary the config, which is the axis that was blind.
 
 ## Residual risks and non-goals
 

@@ -3,7 +3,7 @@
 //! rejects — and the failure surfaces minutes later as an opaque on-chain error
 //! rather than here.
 //!
-//! Added by a third audit pass: the SDK had no test of its own, so nothing
+//! The SDK needs a test of its own, so that nothing
 //! stopped it drifting from `multisig-core`.
 
 use multisig_core::*;

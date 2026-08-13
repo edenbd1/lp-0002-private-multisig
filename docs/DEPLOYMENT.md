@@ -1,22 +1,5 @@
 # Deployment
 
-> ## Redeployed 2026-08-03, after a bypass found by cross-review
->
-> The verifier that was live until 2026-08-03 carried a **threshold and
-> membership bypass**: `config_hash` appeared in neither `proposal_ref` nor the
-> proposal account's address, and `create_multisig` places no ownership
-> constraint on `multisig_id` — by design, anyone may create a multisig. An
-> outsider could therefore create a 1-of-1 config **under a victim's multisig
-> id**, approve the victim's proposal against their own member set, and execute
-> a 3-of-5 on that single approval.
->
-> Everything on this page is the **fixed** build: verifier ImageID
-> `5bb40082…`, redeployed, and the whole lifecycle re-run against it. The
-> previous deployment is gone from this page on purpose — it was evidence for a
-> program that could be bypassed. The finding, why the earlier fix missed this
-> variant, and the two regression tests that reproduce it are in
-> [`security.md`](security.md).
-
 ## Status
 
 **Deployed, and the full lifecycle has been run on the public LEZ testnet.**

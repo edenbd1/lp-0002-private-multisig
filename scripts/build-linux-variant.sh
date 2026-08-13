@@ -3,11 +3,10 @@
 #
 # WHY
 #
-# The evaluator reviews on a Linux VPS — weboko says so himself on
-# logos-co/lambda-prize#67, arguing for the cross-platform requirement precisely
-# so he can check submissions there. A `.lgx` carrying only `darwin-arm64` is a
-# package he cannot open at all, which makes the Basecamp deliverable worth
-# nothing to the person assessing it.
+# The prize asks for a Basecamp module that is loadable, and review happens on
+# Linux. A `.lgx` carrying only `darwin-arm64` is a package the reviewer cannot
+# open at all, which makes the Basecamp deliverable worth nothing to the person
+# assessing it.
 #
 # So this produces the `linux-amd64` half: the Qt plugin as an ELF shared
 # object, and the `msig` CLI the plugin's bridge shells out to. Both are built

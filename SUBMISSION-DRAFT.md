@@ -1,10 +1,5 @@
 # Solution: LP-0002 — Private M-of-N Multisig
 
-> **Draft.** This is the file that would become `solutions/LP-0002.md` in a PR to
-> `logos-co/lambda-prize`. It is kept here so it can be reviewed before anything
-> is opened upstream. One thing is still outstanding and is marked as such
-> below: the narrated demo video.
-
 **Submitted by:** edenbd1
 
 ## Summary
@@ -22,6 +17,7 @@ threshold are anchored by PDA address, so neither can be invented or lowered.
 ## Repository
 
 - **Repo:** <https://github.com/edenbd1/lp-0002-private-multisig>
+- **Video:** <https://youtu.be/cPVsWWBVEeE>
 
 ## Approach
 
@@ -302,8 +298,10 @@ whose derivation is unchanged in v0.2.4.
       back off it. Nothing mocked, `RISC0_DEV_MODE=0` throughout, about eight
       minutes for a 2-of-3. `scripts/demo.sh` remains the five-second tour for
       readers who want the rejections and the cost table without a sequencer.
-- [ ] **Recorded narrated video demo.** ⚠️ **Not yet recorded.** Script prepared
-      at `VIDEO_SCRIPT.md`.
+- [x] **Recorded narrated video demo.** <https://youtu.be/cPVsWWBVEeE> — the
+      terminal is on screen throughout, `RISC0_DEV_MODE=0` is visible before any
+      proving starts, and the approval is a real proof generated in one
+      uninterrupted take, with its wall clock printed at the end.
 
 ## FURPS Self-Assessment
 

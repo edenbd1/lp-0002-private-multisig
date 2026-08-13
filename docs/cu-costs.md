@@ -16,10 +16,10 @@ Verifier ImageID `5bb4008273ddc31d1c2b5bad8835daaf4c567e029dbb059c20c7e83ba5966f
 
 | Instruction | Segments | User cycles | Proving cycles | Share of the public budget |
 |---|---:|---:|---:|---:|
-| `approve` | 1 | 336,937 | 524,288 | 1.56 % |
-| `execute` (M=1) | 1 | 267,306 | 524,288 | 1.56 % |
-| `execute` (M=3) | 1 | 363,354 | 524,288 | 1.56 % |
-| `execute` (M=5) | 1 | 461,446 | 524,288 | 1.56 % |
+| `approve` | 1 | 337,105 | 524,288 | 1.56 % |
+| `execute` (M=1) | 1 | 267,055 | 524,288 | 1.56 % |
+| `execute` (M=3) | 1 | 363,510 | 524,288 | 1.56 % |
+| `execute` (M=5) | 1 | 461,604 | 524,288 | 1.56 % |
 
 `create_multisig` and `create_proposal` do strictly less work than `execute`
 (M=1) — a hash, a comparison, and a PDA claim — and are bounded by it.
@@ -32,7 +32,7 @@ show the same 524,288: every instruction fits comfortably inside one segment, an
 a segment is billed whole. The practical headroom is therefore large — the
 budget share stays at 1.56 % until an instruction crosses 524,288 user cycles.
 
-**`execute` scales linearly in M**, at roughly **48,500 user cycles per
+**`execute` scales linearly in M**, at roughly **48,600 user cycles per
 additional approval**. That is one SHA-256 for the marker seed, one for the PDA
 derivation, plus the pairwise distinctness comparisons. The distinctness check is
 quadratic in M by choice: M is a multisig threshold, a small number, and a sort

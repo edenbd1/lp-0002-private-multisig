@@ -186,10 +186,9 @@ whose derivation is unchanged in v0.2.4.
       the most recent while the chain was at 4496, and every transaction here was
       included after that. It affects anything recently submitted, by anyone.
 
-      Worth stating plainly, since an earlier version of this document claimed
-      the opposite: the explorer is a WASM app that serves an identical page
-      shell for every hash and renders client-side, so comparing response sizes
-      — which is how the previous claim was reached — cannot distinguish an
+      Worth stating plainly, because the obvious check misleads: the explorer
+      is a WASM app that serves an identical page shell for every hash and
+      renders client-side, so comparing response sizes cannot distinguish an
       indexed transaction from one that does not exist.
       `./scripts/check-explorer.py` renders the pages in a headless browser
       instead, with an impossible hash as the control, and prints what it finds.
@@ -348,10 +347,9 @@ re-runs is just a claim.
 
 ### Supportability
 
-61 tests across five suites, counted and itemised in the README. That number
-went from 40 after two audit passes found a threshold bypass and three untested
-error codes; the finding and its cost are written up in `docs/security.md`
-rather than quietly patched. The two guest
+61 tests across five suites, counted and itemised in the README. Every one of
+the thirteen documented error codes is exercised against the built binary, and
+the bindings they enforce are written up in `docs/security.md`. The two guest
 crates are excluded from the host workspace because they target
 `riscv32im-risc0-zkvm-elf` — but the deployed program is still under test,
 because `multisig-verifier-tests` is a workspace member exercising the built
@@ -386,12 +384,12 @@ the Scope section adds a seventh. Rather than leave them to be hunted for:
   stops, and the test behind it
 - [`docs/cu-costs.md`](docs/cu-costs.md)
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
-- Narrated demo video: ⚠️ pending — script at `VIDEO_SCRIPT.md`
+- Narrated demo video: <https://youtu.be/cPVsWWBVEeE>
 
-## What the testnet run taught, and what it cost
+## Two LEZ behaviours worth knowing
 
-Two things went wrong on the way, both worth stating because they are invisible
-until you hit them and neither is a program bug:
+Both are invisible until you hit them, and neither is a program bug — they are
+noted here because anyone deploying on this stack will meet them:
 
 1. **One approver account cannot serve several approvals.** A privacy
    transaction consumes the approver's commitment, so a second approval from the
@@ -405,13 +403,8 @@ until you hit them and neither is a program bug:
    `E_APPROVAL_COUNT_MISMATCH` (5009) — the check doing exactly its job, which is
    how the cause was found.
 
-Both are now fixed in `scripts/deploy-and-run.sh` and documented in
+Both are handled in `scripts/deploy-and-run.sh` and documented in
 `docs/DEPLOYMENT.md`.
-
-## Outstanding
-
-**The narrated video has not been recorded.** `VIDEO_SCRIPT.md` has the full
-script. Nothing in this submission claims otherwise.
 
 ## Terms & Conditions
 

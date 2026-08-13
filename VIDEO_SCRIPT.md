@@ -1,8 +1,8 @@
-# 🎬 LP-0002 — script vidéo (~8 min)
+# 🎬 LP-0002 — script vidéo (~14 min)
 
 > **⚠️ Tap les liens directement sur ton phone — ne pas copy-paste (les URLs sont longues et peuvent être tronquées au copy).**
 
-- Durée totale visée : **~8 minutes**
+- Durée totale visée : **~14 minutes** (dont ~7 de proving réel, narrées)
 - Langue : English
 - `🎬 ACTION` = ce que tu fais à l'écran
 - `💬 SAY` = ce que tu lis à voix haute
@@ -121,7 +121,7 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 ---
 
-# SCÈNE 1 — Intro (0:00 – 0:35)
+# SCÈNE 1 — Intro (~35 s)
 
 **🎬 ACTION** : Terminal vide
 
@@ -135,7 +135,7 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 ---
 
-# SCÈNE 2 — Le demo (0:35 – 2:10)
+# SCÈNE 2 — Le demo (~1 min 35)
 
 **🎬 ACTION** : Tape lentement :
 
@@ -182,7 +182,7 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 ---
 
-# SCÈNE 2bis — Une vraie preuve, en direct (2:10 – 4:45)
+# SCÈNE 2bis — Une vraie preuve, en direct (~10 min)
 
 > **⚠️ Cette scène est OBLIGATOIRE.** Le brief l'exige mot pour mot : *« the
 > recording must show terminal output (including proof generation) to confirm
@@ -209,16 +209,33 @@ MEMBERS=2 THRESHOLD=1 ./scripts/e2e-local-sequencer.sh
 laisse tourner**. C'est le cœur de la scène : du proving réel, à l'écran, sans
 coupure.
 
-> **⚠️ La durée dépend de la charge de la machine, et fortement.** Sur un
-> portable au repos c'est ~2 min 30. Mesuré ici à **935 s** parce qu'une autre
-> preuve tournait en parallèle — presque quatre fois plus. **Vérifie avant de
-> filmer** (voir le pré-vol) qu'aucun autre `r0vm` ne tourne, sinon tu passes
-> quinze minutes de vidéo à regarder une barre de progression.
+> **⚠️ Compte ~7 minutes de proving, et ~10 minutes pour la commande entière.**
+> Mesuré le 2026-08-13 sur cette machine, au repos : **437 s** de preuve, 621 s
+> du lancement au `PASS`. Sous LEZ v0.2.0 c'était 150 s — v0.2.4 coûte environ
+> trois fois plus, et ce n'est pas de la variance (le runner CI montre le même
+> facteur). Avec une autre preuve en parallèle, c'est monté à 935 s : d'où le
+> `pgrep` du pré-vol.
+>
+> **Ces 7 minutes ne sont pas du temps mort — c'est là que va le contenu que le
+> brief exige** : *« narrates what they built and why, walks through the
+> architecture and key implementation decisions »*. Le plan ci-dessous les
+> remplit. Ne reste pas silencieux devant une barre de progression.
 >
 > **Ne cite aucun chiffre précis à voix haute** : le chronomètre s'affiche à
 > l'écran à la fin, et une narration qui annonce « deux minutes trente » pendant
-> qu'il affiche 900 s est la seule chose ici qu'un relecteur peut prendre en
-> défaut.
+> qu'il affiche 437 s est la seule chose ici qu'un relecteur peut prendre en
+> défaut. Dis « ça prend des minutes », et laisse le compteur parler.
+
+> **📐 Plan des ~7 minutes d'attente**, dans cet ordre. Chaque bloc est déjà
+> écrit ailleurs dans ce script — tu ne fais que les dire pendant que ça prouve :
+>
+> 1. **~1 min** — ce qui est en train d'être prouvé (les deux 💬 ci-dessous)
+> 2. **~2 min** — l'architecture : les quatre 💬 du *bloc architecture*
+>    ci-dessous. C'est une exigence du brief, pas du remplissage.
+> 3. **~2 min** — l'audit et le contournement : c'est l'ancienne SCÈNE 4,
+>    déplacée ici. Elle ne demandait aucune action écran, et elle passe mieux
+>    pendant l'attente qu'après.
+> 4. **le reste** — silences assumés, puis tu montres le chronomètre.
 
 **💬 SAY** (pendant le proving — prends ton temps, laisse des silences) :
 
@@ -227,6 +244,23 @@ coupure.
 **💬 SAY** :
 
 > "What's being proved is membership: that the secret behind a nullifier owns a leaf under the committed member root. And it's declared as a chained call, so when this lands, L-E-Z's privacy circuit composes it with a real env-verify and the sequencer checks that receipt against the pinned circuit I-D. That composition is the whole reason this is on the privacy path and not the public one."
+
+**💬 SAY** (bloc architecture — obligatoire selon le brief, et c'est le moment) :
+
+> "Let me use this wait to walk through the two decisions that shaped everything."
+
+**💬 SAY** :
+
+> "First: which transaction path. L-E-Z has a public one and a privacy-preserving one. On the public path, a program's proof is not verified by the chain at all — the sequencer re-executes the program instead. So a membership proof submitted publicly would prove nothing to anyone; I would just be asserting it. Only the privacy path composes a real env-verify into L-E-Z's own circuit, and the sequencer checks that receipt against a circuit I-D pinned in the node. That is why every approval here is a privacy transaction. It is also why approvals don't show up on the block explorer — a privacy transaction publishes no program I-D and no instruction data. That is the confidentiality property working, not a gap."
+
+**💬 SAY** :
+
+> "Second: anchoring. A multisig's address is derived from its member root and its threshold together. So there is no such thing as 'the same multisig with a lower threshold' — change either one and you are talking about a different address, which holds no approvals. The proposal's address is derived from that config too. An earlier version of this code seeded the proposal only by proposal reference, and that was exactly the hole an audit found: an attacker could create their own one-of-one member set under someone else's multisig I-D and execute a five-of-nine on a single signature. I'll come back to that."
+
+**💬 SAY** :
+
+> "And the markers themselves. Each approval claims an account whose address is a hash of a nullifier, and each nullifier is a hash of a member secret bound to this exact proposal. Two markers therefore imply two distinct secrets — that is what makes M markers mean M distinct members, rather than one member voting M times. Nothing in the pair names anybody. Read the accounts and you learn that the threshold was met, and nothing about who met it."
+
 
 **🎬 ACTION** : Quand la ligne `approval 0: 1XXs wall clock` s'affiche, **montre-la**.
 
@@ -243,7 +277,7 @@ coupure.
 
 ---
 
-# SCÈNE 3 — La chaîne, en direct (4:45 – 5:55)
+# SCÈNE 3 — La chaîne, en direct (~1 min 10)
 
 **🎬 ACTION** : Scrolle sur `== 11. the Basecamp package`
 
@@ -274,7 +308,12 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 ---
 
-# SCÈNE 4 — L'audit (5:55 – 7:40)
+# SCÈNE 4 — L'audit
+
+> **⚠️ Cette scène se raconte maintenant PENDANT le proving de la scène 2bis**,
+> pas après. Elle ne demande aucune action à l'écran — c'est de la narration
+> pure — et l'attente de sept minutes est exactement ce qu'elle remplit. Gardée
+> ici comme texte de référence ; suis le plan donné en 2bis.
 
 **🎬 ACTION** : Reste sur le terminal
 
@@ -308,7 +347,7 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 ---
 
-# SCÈNE 5 — Closing (7:40 – 8:10)
+# SCÈNE 5 — Closing (~30 s)
 
 **🎬 ACTION** : Passe sur l'ONGLET A (le repo)
 
@@ -382,17 +421,28 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 |---|---|
 | 1. Intro | 35s |
 | 2. demo.sh | 1m35 |
-| **2bis. Une vraie preuve** | **~2m35 sur machine au repos — variable** |
+| **2bis. Une vraie preuve** | **~10 min** (dont ~7 de proving, narrés) |
 | 3. La chaîne en direct | 1m10 |
-| 4. L'audit | 1m45 |
+| 4. L'audit | *fondue dans 2bis* |
 | 5. Closing | 30s |
-| **Total** | **~8 min si la scène 2bis tient en 2m35** |
+| **Total** | **~14 min** |
 
-> **Les horodatages absolus ont été retirés de ce tableau exprès.** Ils ne
-> tenaient que si le proving durait exactement 2m35, ce qui dépend de la charge
-> de la machine et non de nous. Toutes les scènes après 2bis glissent d'autant.
-> Fais le pré-vol `pgrep -fl r0vm` et le budget tient ; ne le fais pas et la
-> vidéo peut durer vingt minutes.
+> **Pourquoi la vidéo est passée de 8 à 14 minutes.** Le proving a triplé avec
+> LEZ v0.2.4 : 437 s au lieu de 150 s pour une approbation, mesuré au repos, et
+> confirmé indépendamment par le runner CI (1264 s → 4033 s). Ce n'est pas
+> rattrapable — c'est du calcul, pas de l'attente réseau.
+>
+> **Le brief ne fixe aucune durée maximale**, et il exige en revanche que la
+> vidéo montre la génération de preuve *et* détaille l'architecture et les
+> décisions d'implémentation. Ces deux exigences se servent mutuellement : les
+> sept minutes de calcul sont exactement où le contenu obligatoire tient. C'est
+> pour ça que l'ancienne scène 4 y a été déplacée et qu'un bloc architecture y a
+> été ajouté.
+>
+> **Ne coupe pas au montage.** Une coupe pendant le proving est précisément ce
+> qu'un relecteur méfiant regarderait de travers, et le critère est explicite :
+> *« the recording must show terminal output (including proof generation) »*.
+> Quatorze minutes honnêtes valent mieux que huit qui posent une question.
 
 > **Où sont passées les 3 minutes.** La scène 4 racontait quatre trouvailles
 > séparées ; elle en raconte une seule, celle qui porte — l'audit, le correctif,

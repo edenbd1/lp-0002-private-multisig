@@ -378,15 +378,21 @@ curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json'
 
 # ⏱️ Timing récap
 
-| Scène | De | À | Durée |
-|---|---|---|---|
-| 1. Intro | 0:00 | 0:35 | 35s |
-| 2. demo.sh | 0:35 | 2:10 | 1m35 |
-| **2bis. Une vraie preuve** | 2:10 | 4:45 | **2m35** |
-| 3. La chaîne en direct | 4:45 | 5:55 | 1m10 |
-| 4. L'audit | 5:55 | 7:40 | 1m45 |
-| 5. Closing | 7:40 | 8:10 | 30s |
-| **Total** | | | **~8 min** |
+| Scène | Durée |
+|---|---|
+| 1. Intro | 35s |
+| 2. demo.sh | 1m35 |
+| **2bis. Une vraie preuve** | **~2m35 sur machine au repos — variable** |
+| 3. La chaîne en direct | 1m10 |
+| 4. L'audit | 1m45 |
+| 5. Closing | 30s |
+| **Total** | **~8 min si la scène 2bis tient en 2m35** |
+
+> **Les horodatages absolus ont été retirés de ce tableau exprès.** Ils ne
+> tenaient que si le proving durait exactement 2m35, ce qui dépend de la charge
+> de la machine et non de nous. Toutes les scènes après 2bis glissent d'autant.
+> Fais le pré-vol `pgrep -fl r0vm` et le budget tient ; ne le fais pas et la
+> vidéo peut durer vingt minutes.
 
 > **Où sont passées les 3 minutes.** La scène 4 racontait quatre trouvailles
 > séparées ; elle en raconte une seule, celle qui porte — l'audit, le correctif,

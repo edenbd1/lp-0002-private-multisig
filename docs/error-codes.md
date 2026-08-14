@@ -52,6 +52,6 @@ rejected with the code documented above. Every one of the thirteen codes is
 exercised against the built binary, and every instruction — including
 `create_multisig` and `create_proposal` — has coverage there.
 
-The circuit-side bindings are covered separately by 22 tests in
+The circuit-side bindings are covered separately by 25 tests in
 `cargo test -p multisig-core`, and the pin between the verifier and the
-membership binary by 2 more in `--test program_id_pin`. 53 in total.
+membership binary by 2 more in `--test program_id_pin`. 57 in total.

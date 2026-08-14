@@ -12,11 +12,11 @@ Submission for [λPrize LP-0002](https://github.com/logos-co/lambda-prize/blob/m
 
 **The membership proof is genuinely verified on chain.** A LEZ *public*
 transaction proves and verifies nothing — the sequencer re-executes the program
-host-side (`lee/state_machine/src/program.rs:73-77`, commented *"Execute the
+host-side (`lee/state_machine/src/program/mod.rs:73-77`, commented *"Execute the
 program (without proving)"*). A multisig built on that path is a signature check
 wearing a zero-knowledge costume. This one targets the privacy-preserving path,
 where LEZ's circuit composes each chained call with a real `env::verify`
-(`lee/privacy_preserving_circuit/src/execution_state.rs:149`) and the sequencer
+(`lee/privacy_preserving_circuit/src/execution_state.rs:149-155`) and the sequencer
 checks the receipt against the node-pinned `PRIVACY_PRESERVING_CIRCUIT_ID`.
 
 **The member set and the threshold are anchored by address.** The multisig
@@ -48,9 +48,9 @@ cd lp-0002-private-multisig
 ```
 
 No network, no funded account, no sequencer required. The demo runs the 25
-circuit tests, the 30 adversarial tests against the built verifier binary through
-the sequencer's own executor, a full 3-of-5 lifecycle, and reports the measured
-compute cost.
+circuit tests, the 30 tests against the built verifier binary through the
+sequencer's own executor — five honest controls and 25 attacks — a full 3-of-5
+lifecycle, and reports the measured compute cost.
 
 ### Against a real sequencer
 
@@ -201,7 +201,7 @@ all the chain records and all the other members can see.
 | `crates/multisig-core` | Shared primitives and the in-circuit approval logic. `no_std`. 25 adversarial tests |
 | `crates/membership-circuit/methods/guest-lez` | The membership proof as a native LEZ program, so the privacy circuit composes it with `env::verify` |
 | `crates/multisig-verifier-spel/methods/guest` | The on-chain verifier: `create_multisig`, `create_proposal`, `approve`, `execute` |
-| `crates/multisig-verifier-tests` | 28 adversarial tests against the built binary, through the sequencer's own executor |
+| `crates/multisig-verifier-tests` | 32 tests against the built binary, through the sequencer's own executor: 30 on the instructions, 2 pinning the membership binary |
 | `crates/multisig-sdk` | The reusable client library for Logos modules. Transport-agnostic |
 | `crates/multisig-cli` | `msig`, the command line client |
 | `app/` | The Basecamp GUI |

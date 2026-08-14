@@ -25,14 +25,14 @@ threshold are anchored by PDA address, so neither can be invented or lowered.
 
 The first thing I checked was whether a LEZ **public** transaction verifies a
 proof. It does not — the sequencer re-executes the program host-side
-(`lee/state_machine/src/program.rs:73-77`, commented *"Execute the program
+(`lee/state_machine/src/program/mod.rs:73-77`, commented *"Execute the program
 (without proving)"*). A multisig built there would be a signature check wearing
 a zero-knowledge costume, which is precisely the ground on which earlier
 submissions in this program were rejected.
 
 The path that works is the **privacy-preserving transaction**: the client proves
 locally, LEZ's privacy circuit composes each chained call with a real
-`env::verify` (`lee/privacy_preserving_circuit/src/execution_state.rs:149`), and
+`env::verify` (`lee/privacy_preserving_circuit/src/execution_state.rs:149-155`), and
 the sequencer verifies the receipt against the pinned circuit id.
 
 For that composition to happen, the callee must *be* a LEZ program emitting a
@@ -278,7 +278,7 @@ whose derivation is unchanged in v0.2.4.
       CI.** Two layers, because they answer different questions.
       `multisig-verifier-tests` runs the built binary through the sequencer's own
       **executor** on every push — same executor, same input order, same 32M
-      session limit — which is what makes 28 adversarial rejections cheap enough
+      session limit — which is what makes 25 adversarial rejections cheap enough
       to gate a commit. On top of that,
       [`.github/workflows/e2e-local-sequencer.yml`](.github/workflows/e2e-local-sequencer.yml)
       starts the actual `sequencer_service` binary in **standalone mode** and

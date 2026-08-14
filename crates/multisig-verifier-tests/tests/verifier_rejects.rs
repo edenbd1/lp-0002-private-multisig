@@ -2,7 +2,7 @@
 //!
 //! These tests run the committed `multisig_verifier.bin` through the
 //! *sequencer's own* execution path — same input order, same 32M session limit,
-//! same executor (`lee/state_machine/src/program.rs:55-110`) — so a rejection
+//! same executor (`lee/state_machine/src/program/mod.rs:55-110`) — so a rejection
 //! here is the same rejection the chain performs. They deliberately do not
 //! prove: proving costs minutes and would establish nothing extra about which
 //! inputs are accepted.

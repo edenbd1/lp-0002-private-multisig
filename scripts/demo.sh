@@ -6,7 +6,7 @@
 #
 # Everything here runs against the *sequencer's own executor* — the same
 # executor, the same input order, the same 32M session limit the chain uses
-# (`lee/state_machine/src/program.rs:55-110`). A rejection you see below is the
+# (`lee/state_machine/src/program/mod.rs:55-110`). A rejection you see below is the
 # rejection the chain performs, byte for byte, because it is the same binary
 # being fed the same inputs.
 #

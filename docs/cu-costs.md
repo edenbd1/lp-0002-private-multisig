@@ -2,7 +2,7 @@
 
 Measured by replaying each instruction through the **sequencer's own executor**
 — the same executor, input order and 32M-cycle session limit the chain applies
-(`lee/state_machine/src/program.rs:55-110`).
+(`lee/state_machine/src/program/mod.rs:55-110`).
 
 Reproduce with:
 

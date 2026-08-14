@@ -160,17 +160,17 @@ This is the criterion most submissions in this program have failed, so it is
 worth being exact about the mechanism.
 
 A LEZ **public** transaction proves and verifies nothing. The sequencer
-re-executes the program host-side — `lee/state_machine/src/program.rs:73-77`,
+re-executes the program host-side — `lee/state_machine/src/program/mod.rs:73-77`,
 commented *"Execute the program (without proving)"*. A multisig built on that
 path would be a signature check wearing a zero-knowledge costume.
 
 The privacy-preserving path is different. The client proves locally
-(`lez/wallet/src/lib.rs:578`); LEZ's privacy circuit composes each chained call
-with a real verification —
+(`lez/wallet/src/lib.rs:778-785`, `execute_and_prove_with_padded_inputs`); LEZ's
+privacy circuit composes each chained call with a real verification —
 
 ```
 env::verify(chained_call.program_id, program_output_words)
-    -- lee/privacy_preserving_circuit/src/execution_state.rs:149
+    -- lee/privacy_preserving_circuit/src/execution_state.rs:149-155
 ```
 
 — and the sequencer checks the resulting receipt against the node-pinned

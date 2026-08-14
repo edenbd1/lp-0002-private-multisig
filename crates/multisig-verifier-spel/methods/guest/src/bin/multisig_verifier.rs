@@ -3,15 +3,15 @@
 // WHAT MAKES THE THRESHOLD REAL ON CHAIN
 //
 // A LEZ public transaction re-executes rather than proves
-// (`lee/state_machine/src/program.rs:73-77`), so no program on the public path
-// can verify a membership proof. This program targets the privacy-preserving
+// (`lee/state_machine/src/program/mod.rs:73-77`), so no program on the public
+// path can verify a membership proof. This program targets the privacy-preserving
 // path, where LEZ's circuit composes each chained call with a real `env::verify`
 // over the callee's `ProgramOutput`
-// (`lee/privacy_preserving_circuit/src/execution_state.rs:149`) and the sequencer
-// checks the receipt against the pinned `PRIVACY_PRESERVING_CIRCUIT_ID`. The
-// `approve` instruction declares a ChainedCall to the LEZ-native membership
-// program, so membership is genuinely verified on chain as a precondition of the
-// transaction being accepted.
+// (`lee/privacy_preserving_circuit/src/execution_state.rs:149-155`) and the
+// sequencer checks the receipt against the pinned
+// `PRIVACY_PRESERVING_CIRCUIT_ID`. The `approve` instruction declares a
+// ChainedCall to the LEZ-native membership program, so membership is genuinely
+// verified on chain as a precondition of the transaction's acceptance.
 //
 // WHY THE MEMBER SET AND THE THRESHOLD ARE ANCHORED BY ADDRESS
 //
@@ -34,7 +34,7 @@
 // PRIVACY AND UNLINKABILITY
 //
 // A privacy `Message` publishes neither `program_id` nor `instruction_data`
-// (`privacy_preserving_transaction/message.rs:14-24`). The only public trace an
+// (`privacy_preserving_transaction/message.rs:14-27`). The only public trace an
 // approval leaves is the marker PDA, seeded by
 // `SHA256(APPROVAL_MARKER_PREFIX || proposal_ref || nullifier)`. The nullifier is
 // `SHA256(APPROVAL_NULLIFIER_PREFIX || proposal_ref || msk)`, a function of the

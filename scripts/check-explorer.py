@@ -4,17 +4,27 @@
 WHY THIS EXISTS
 
 The reviewer asked for explorer links, so the honest answer needs measuring
-rather than asserting — and the obvious measurement does not work.
+rather than asserting.
 
-The explorer is a WASM application. Every `/transaction/<hash>` URL returns the
-same 2416-byte shell and fetches its content client-side, so an indexed
-transaction and a hash that *cannot exist* are byte-identical over `curl`. A
-size comparison cannot distinguish them, and concluding anything from one is a
-mistake this repository made once already.
+When this script was written the explorer was a WASM application: every
+`/transaction/<hash>` URL returned the same 2416-byte shell and fetched its
+content client-side, so an indexed transaction and a hash that *cannot exist*
+were byte-identical over `curl` and a size comparison could not tell them apart.
+That is why this drives a browser at all.
 
-So this renders each page in a headless browser and prints the resulting text,
-with an impossible hash as the control: whatever the explorer shows for "this
-does not exist" is the baseline every real hash is compared against.
+That is no longer true. Re-measured 2026-08-15, the explorer server-side renders
+(Leptos): a real transaction comes back around 366 kB with its `Type:` and
+`Proof Size:` in the body, and a hash that cannot exist comes back as a
+2416-byte page reading `Failed to load transaction: error running server
+function: Transaction not found`. So `curl` does separate them now, and
+docs/DEPLOYMENT.md gives that one-liner.
+
+Rendering is kept as the second opinion, not as a necessity: it reads the DOM a
+reviewer actually sees rather than a byte count, and it keeps working if the
+explorer goes back to rendering client-side. The impossible hash stays as the
+control — whatever the explorer shows for "this does not exist" is the baseline
+every real hash is compared against, and if that control ever renders as a
+*found* transaction the baseline is meaningless and the whole run is abandoned.
 
     ./scripts/check-explorer.py                    # the committed lifecycle
     ./scripts/check-explorer.py <hash> [<hash>...] # arbitrary hashes
@@ -27,6 +37,7 @@ import sys
 
 BASE = "https://explorer.testnet.lez.logos.co"
 IMPOSSIBLE = "ff" * 32
+NOT_FOUND = "Transaction not found"
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
@@ -43,10 +54,13 @@ def committed_hashes():
         cells = [c.strip() for c in line.split("|") if c.strip()]
         if len(cells) < 2:
             continue
-        label, tx = cells[0].replace("`", ""), cells[1].strip("`")
-        if len(tx) == 64 and all(ch in "0123456789abcdef" for ch in tx) and tx not in seen:
-            seen.add(tx)
-            out.append((label, tx))
+        # The hash cell may be a bare `hash` or a markdown link to the explorer,
+        # so take the first 64-hex run in it either way.
+        label = cells[0].replace("`", "")
+        m = re.search(r"\b[0-9a-f]{64}\b", cells[1])
+        if m and m.group(0) not in seen:
+            seen.add(m.group(0))
+            out.append((label, m.group(0)))
     return out
 
 
@@ -84,6 +98,16 @@ def main():
         browser.close()
 
     control = results[0][2]
+    # The control is the whole basis of the comparison. If a hash that cannot
+    # exist renders as a found transaction, the baseline is wrong and every
+    # verdict derived from it is meaningless — so refuse to print any.
+    if NOT_FOUND not in control:
+        sys.exit(
+            f"control ({IMPOSSIBLE[:8]}…) is a hash that cannot exist, but the explorer did "
+            f"not render it as not-found. The baseline is invalid, so no verdict below it "
+            f"would mean anything. Control rendered:\n  {control[:300]}"
+        )
+
     print(f"explorer's most recent indexed block: {head}\n")
     print(f"{'step':<38} verdict")
     for label, h, text in results[1:]:

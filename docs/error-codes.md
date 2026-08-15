@@ -47,11 +47,21 @@ executor:
 cargo test -p multisig-verifier-tests
 ```
 
-30 tests: five honest controls and the rest attacks, each required to be
-rejected with the code documented above. Every one of the thirteen codes is
-exercised against the built binary, and every instruction — including
-`create_multisig` and `create_proposal` — has coverage there.
+30 tests: five honest controls — one per instruction, plus an over-threshold
+approval set that must still be accepted — and 25 rejections. 19 of those name
+one of the thirteen codes documented above, and all thirteen are covered. The
+remaining 6 are rejected one layer earlier than the program body, by SPEL's
+address validation or LEZ's init guard, so they assert that rejection rather
+than a code: `the_framework_rejects_a_multisig_at_the_wrong_address`,
+`executing_the_same_proposal_twice_is_rejected`, and the four foreign-multisig
+and second-config cases. Every instruction — including `create_multisig` and
+`create_proposal` — has coverage here.
 
 The circuit-side bindings are covered separately by 25 tests in
 `cargo test -p multisig-core`, and the pin between the verifier and the
-membership binary by 2 more in `--test program_id_pin`. 57 in total.
+membership binary by 2 more in `--test program_id_pin`. **57 in total** for the
+error-code story.
+
+That 57 is a subset of the 61 the README itemises: 30 + 25 + 2 here, with
+`multisig-sdk` (2) and `multisig-cli` (2) left out because neither asserts
+anything about a verifier error code. `cargo test --workspace` runs all 61.

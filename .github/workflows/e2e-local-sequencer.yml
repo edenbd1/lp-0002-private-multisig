@@ -37,12 +37,17 @@ jobs:
   e2e:
     name: lifecycle vs standalone sequencer
     runs-on: ubuntu-latest
-    # Two real proofs, not one. The last single-approval run took 3390 s in the
-    # lifecycle step alone (run 31865412264) against a 120-minute job budget, so
-    # a second proof would not have fitted. Raised with headroom rather than
-    # tuned to the last measurement: proving time on a shared runner varies with
-    # whatever else is on the host, and a timeout would read as a failed
-    # threshold test rather than a slow one.
+    # Two real proofs, not one, so 120 minutes is no longer enough.
+    #
+    # Measured on this runner, not extrapolated: the first two-approval run
+    # (31885000503) took 3752 s and 3746 s for the two proofs and 138 minutes
+    # end to end. The single-approval runs before it took about 64 minutes, so
+    # 120 would have killed this one at the second proof — and a timeout reads
+    # as a failed threshold test rather than a slow one.
+    #
+    # 180 leaves ~40 minutes over the measured run. Proving time on a shared
+    # runner varies with whatever else is on the host, so the margin is the
+    # point; it is not tuned down to the last measurement.
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v7

@@ -52,6 +52,13 @@ circuit tests, the 30 tests against the built verifier binary through the
 sequencer's own executor — five honest controls and 25 attacks — a full 3-of-5
 lifecycle, and reports the measured compute cost.
 
+The only hard requirement is a Rust toolchain. `r0vm`, `spel`, `python3` and
+`curl` are each optional and each gates exactly one step: without one, that step
+prints `(skipped: …)`, is listed again in a summary at the end, and the script
+still exits 0. A skip is never reported as a pass. The two steps that need
+`r0vm` — the verifier suite and the compute-cost measurement — run in CI on
+every push against these same committed binaries.
+
 ### Against a real sequencer
 
 `demo.sh` is fast because it drives the sequencer's *executor* in-process. That
@@ -66,9 +73,11 @@ It starts the actual `sequencer_service` binary in standalone mode, points a
 throwaway wallet at it, and drives the whole lifecycle over JSON-RPC — deploy,
 create, propose, gather a threshold of **real Risc0 approvals** with
 `RISC0_DEV_MODE=0`, execute — then reads the resulting accounts back off that
-local chain. About eight minutes for a 2-of-3; it prints its own per-approval
-wall clock. Needs a `logos-execution-zone` checkout (`LEZ_SRC`, default
-`_external/lez`) and builds the sequencer once.
+local chain. About 22 minutes for a 2-of-3 on LEZ v0.2.4 — measured, not
+estimated: 1333 s end to end on an Apple-silicon laptop, of which 444 s and
+704 s were the two real proofs. It prints its own per-approval wall clock, which
+is the number to trust on your machine. Needs a `logos-execution-zone` checkout
+(`LEZ_SRC`, default `_external/lez`) and builds the sequencer once.
 
 The same script runs in CI on a schedule — see
 [`.github/workflows/e2e-local-sequencer.yml`](.github/workflows/e2e-local-sequencer.yml).
@@ -101,14 +110,24 @@ To rebuild the on-chain programs (needs Docker and `cargo-risczero`):
 | Suite | Count | What it establishes |
 |---|---:|---|
 | `multisig-core` — `approve_adversarial` | 25 | The circuit-side bindings: non-members, borrowed Merkle paths, invented roots, forged nullifiers, bait-and-switch actions, the padding sentinel, tree construction |
-| `multisig-verifier-tests` — `verifier_rejects` | 30 | The **built verifier binary** through the sequencer's own executor: 4 honest controls (one per instruction), 22 attacks, 2 framework-layer checks |
+| `multisig-verifier-tests` — `verifier_rejects` | 30 | The **built verifier binary** through the sequencer's own executor: 5 honest controls (one per instruction, plus an over-threshold approval set that must still be accepted) and 25 rejections — 19 asserting a documented error code, 6 caught one layer earlier by SPEL's address validation or LEZ's init guard |
 | `multisig-verifier-tests` — `program_id_pin` | 2 | The verifier pins the committed membership binary, and the pin is not a placeholder |
 | `multisig-sdk` — `cross_check` + doctest | 2 | Every SDK derivation equals the `multisig-core` one the chain re-derives, and the four client-side guards hold |
 | `multisig-cli` — `resumable` | 2 | Through the **built binary**, one process per step: a partial set of approvals survives client restarts, and a non-member is refused in milliseconds instead of after two and a half minutes of proving |
 
+25 + 30 + 2 + 2 + 2 = 61, and every row's own breakdown adds up to its count.
+
 One further test is `#[ignore]`d: it reports the measured compute cost rather
 than asserting a property. Run it with
 `cargo test -p multisig-verifier-tests -- --ignored --nocapture`.
+
+[`docs/error-codes.md`](docs/error-codes.md) counts **57** rather than 61. That
+is the same inventory minus the two suites that assert nothing about the
+verifier's error codes — `multisig-sdk` (2) and `multisig-cli` (2). 57 is the
+count of tests behind the error-code table; 61 is what `cargo test --workspace`
+runs. Both numbers are in CI: the `workspace` job runs `multisig-core`,
+`multisig-sdk` and `multisig-cli`, the `verifier` job runs
+`multisig-verifier-tests`, and between them all 61 run on every push.
 
 **The deployed program is genuinely under test.** The two guest crates are
 excluded from the host workspace because they build for

@@ -78,8 +78,20 @@ changes the witness by a few words and nothing else.
 Reproduce it with:
 
 ```bash
-./scripts/e2e-local-sequencer.sh          # 2-of-3, about eight minutes total
+./scripts/e2e-local-sequencer.sh          # 2-of-3, the default and the CI shape
 ```
+
+**Re-measured on 2026-08-15, 2-of-3 against a local standalone sequencer on
+v0.2.4**, same laptop, nothing else proving: **444 s** and **704 s** for the two
+approvals, **1333 s** end to end including deploy, create, propose, execute and
+the on-chain read-back. The two approvals differ by more than half again on an
+otherwise idle machine, which is the variance to expect rather than a figure to
+average away. "About eight minutes" appeared here and in the README until this
+run; that was the v0.2.0 number and it no longer holds.
+
+This is also the measurement behind the 180-minute job budget in
+`.github/workflows/e2e-local-sequencer.yml`: the runner is slower than this
+laptop, and it now proves twice.
 
 **Against the public testnet, measured too.** The 2026-08-03 redeploy recorded
 **360 s** and **179 s** for its two approvals. The gap between them is not the

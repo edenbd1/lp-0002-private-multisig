@@ -89,9 +89,12 @@ otherwise idle machine, which is the variance to expect rather than a figure to
 average away. "About eight minutes" appeared here and in the README until this
 run; that was the v0.2.0 number and it no longer holds.
 
-This is also the measurement behind the 180-minute job budget in
-`.github/workflows/e2e-local-sequencer.yml`: the runner is slower than this
-laptop, and it now proves twice.
+**The same 2-of-3, on a GitHub `ubuntu-latest` runner** (run 31885000503):
+**3752 s** and **3746 s**, 138 minutes end to end. That is roughly 6.5x the
+laptop, and it is the honest figure for a 4-vCPU shared runner with no GPU —
+worth stating because "about twenty minutes" is a laptop number, not a
+universal one. It is also the measurement behind the 180-minute job budget in
+`.github/workflows/e2e-local-sequencer.yml`.
 
 **Against the public testnet, measured too.** The 2026-08-03 redeploy recorded
 **360 s** and **179 s** for its two approvals. The gap between them is not the

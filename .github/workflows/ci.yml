@@ -47,6 +47,14 @@ jobs:
       - name: Circuit-side adversarial tests
         run: cargo test -p multisig-core -p multisig-sdk
 
+      # `multisig-cli`'s `resumable` suite backs two of the three Reliability
+      # criteria — a partial set of approvals surviving client restarts, and a
+      # proof failure surfacing a clear error instead of a panic. It drives the
+      # built `msig` binary one process per step, needs no r0vm and no network,
+      # and was the only part of the claimed 61 tests that no workflow ran.
+      - name: CLI reliability tests
+        run: cargo test -p multisig-cli
+
       - name: CLI lifecycle
         shell: bash
         run: |

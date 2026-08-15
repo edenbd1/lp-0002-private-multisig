@@ -179,20 +179,27 @@ whose derivation is unchanged in v0.2.4.
       part the prize is about — reaching the threshold privately — rather than
       re-implementing a transfer that LEZ already has.
 
-      One thing to flag before you click, because it would otherwise look like
-      dead links: **none of the seven transactions renders on the explorer right
-      now**, and all seven are on chain — `getTransaction` returns every one.
-      The explorer's indexer is behind: its own front page listed block 4351 as
-      the most recent while the chain was at 4496, and every transaction here was
-      included after that. It affects anything recently submitted, by anyone.
+      **On the explorer: all seven render**, and the two approvals show as
+      `Privacy-Preserving Transaction` — which is the part that matters, since an
+      approval belongs on the proving path rather than the public one. The
+      explorer is a separate index and reaches a transaction later than the
+      sequencer does, so a hash submitted minutes ago can read `Transaction not
+      found` there while `getTransaction` already returns it. That is an indexing
+      delay, not a gap, and it affects anything recent by anyone.
 
-      Worth stating plainly, because the obvious check misleads: the explorer
-      is a WASM app that serves an identical page shell for every hash and
-      renders client-side, so comparing response sizes cannot distinguish an
-      indexed transaction from one that does not exist.
-      `./scripts/check-explorer.py` renders the pages in a headless browser
-      instead, with an impossible hash as the control, and prints what it finds.
-      Re-run it; the answer is a measurement with a date on it, not a claim.
+      **A correction**, because an earlier version of this said otherwise: it
+      claimed the explorer was a WASM app serving an identical shell for every
+      hash and rendering client-side, so response sizes could not distinguish an
+      indexed transaction from one that cannot exist. That was true when
+      `./scripts/check-explorer.py` was written — it is why the script drives a
+      browser — and is not true now. Re-measured 2026-08-15, the explorer
+      server-side renders: a real transaction is ~366 kB carrying its type and
+      `Proof Size:`, and an impossible hash is a 2416-byte page reading `Failed
+      to load transaction: error running server function: Transaction not found`.
+      So `curl` does separate them; `docs/DEPLOYMENT.md` gives the one-liner.
+      `./scripts/check-explorer.py` is still worth running as a second opinion —
+      it compares the rendered DOM against that impossible hash as a control, and
+      aborts rather than report anything if the control ever comes back found.
 
       `docs/DEPLOYMENT.md` gives a one-line `curl` per hash, and
       `./scripts/verify-onchain.sh` does the stronger check — it reads the five

@@ -13,50 +13,57 @@ the privacy-preserving path, and executed.
 
 | Step | Transaction | On the explorer |
 |---|---|---|
-| deploy `membership_lez` | `fb8eb10f7f394286c109cb6502a1c95294180523f30d06f707fc087a589bea98` | not indexed yet |
-| deploy `multisig_verifier` | `517efe12a0b592abe4d21a03246866b95c4379483e87af62fd9f26f7b8fe45ff` | not indexed yet |
-| `create_multisig` | `2930c1db4521b7c0b912278f4025e430704cfb9a7ebfcb5d22c374fd7ce85b70` | not indexed yet |
-| `create_proposal` | `68d5127e1e5570936f8d78e9a2da4d485562566cd8b7487a59322bf059406978` | not indexed yet |
-| `approve` (member A, **privacy tx**) | `41f5bb99346a0bef6aa0c69243473a554b84f0f0ad65e460bbb6890b11644942` | not indexed yet |
-| `approve` (member B, **privacy tx**) | `ae006465f5f945b8ba2666f28a5357d0a2aab4af05508c9c2811e0101d0ac649` | not indexed yet |
-| `execute` | `b43e46505f571e31d6051f7da43563db605b6a74b90c670da2d3582d53412ecd` | not indexed yet |
+| deploy `membership_lez` | [`fb8eb10f7f394286c109cb6502a1c95294180523f30d06f707fc087a589bea98`](https://explorer.testnet.lez.logos.co/transaction/fb8eb10f7f394286c109cb6502a1c95294180523f30d06f707fc087a589bea98) | renders |
+| deploy `multisig_verifier` | [`517efe12a0b592abe4d21a03246866b95c4379483e87af62fd9f26f7b8fe45ff`](https://explorer.testnet.lez.logos.co/transaction/517efe12a0b592abe4d21a03246866b95c4379483e87af62fd9f26f7b8fe45ff) | renders |
+| `create_multisig` | [`2930c1db4521b7c0b912278f4025e430704cfb9a7ebfcb5d22c374fd7ce85b70`](https://explorer.testnet.lez.logos.co/transaction/2930c1db4521b7c0b912278f4025e430704cfb9a7ebfcb5d22c374fd7ce85b70) | renders |
+| `create_proposal` | [`68d5127e1e5570936f8d78e9a2da4d485562566cd8b7487a59322bf059406978`](https://explorer.testnet.lez.logos.co/transaction/68d5127e1e5570936f8d78e9a2da4d485562566cd8b7487a59322bf059406978) | renders |
+| `approve` (member A, **privacy tx**) | [`41f5bb99346a0bef6aa0c69243473a554b84f0f0ad65e460bbb6890b11644942`](https://explorer.testnet.lez.logos.co/transaction/41f5bb99346a0bef6aa0c69243473a554b84f0f0ad65e460bbb6890b11644942) | renders, `Privacy-Preserving Transaction` |
+| `approve` (member B, **privacy tx**) | [`ae006465f5f945b8ba2666f28a5357d0a2aab4af05508c9c2811e0101d0ac649`](https://explorer.testnet.lez.logos.co/transaction/ae006465f5f945b8ba2666f28a5357d0a2aab4af05508c9c2811e0101d0ac649) | renders, `Privacy-Preserving Transaction` |
+| `execute` | [`b43e46505f571e31d6051f7da43563db605b6a74b90c670da2d3582d53412ecd`](https://explorer.testnet.lez.logos.co/transaction/b43e46505f571e31d6051f7da43563db605b6a74b90c670da2d3582d53412ecd) | renders |
 
-### Why all seven say "not indexed yet"
+### How the explorer column was measured
 
-**All seven are live.** `getTransaction` returns every one of them. The last
-column is a statement about the explorer's indexer, not about the chain.
+All seven are live, and all seven render. `getTransaction` returns every one of
+them over RPC, and clicking any hash above shows its page.
 
-**How this was measured — and why the obvious method does not work.** The
-explorer is a WASM application: `/transaction/<hash>` serves the same 2416-byte
-shell for every hash, and the content is fetched and rendered client-side.
-Comparing response sizes with `curl` therefore cannot distinguish an indexed
-transaction from one that does not exist — both are 2416 bytes. The page has to
-be rendered. `scripts/check-explorer.py` does that with a headless browser and
-prints the rendered text, including for a deliberately impossible hash as a
-control.
+**A correction, because this document said the opposite.** It used to state that
+the explorer was a WASM application serving the same 2416-byte shell for every
+`/transaction/<hash>` URL and rendering client-side, so that `curl` could not
+distinguish an indexed transaction from an impossible one. That was true when
+`scripts/check-explorer.py` was written — it is why the script drives a browser
+at all — and it is not true now. Re-measured **2026-08-15**, the explorer
+server-side renders, so a one-line `curl` does separate the two cases:
 
-Rendered, all seven show the same thing as that impossible hash:
+```bash
+# a real transaction: ~366 kB, and the body carries its type and proof size
+curl -s https://explorer.testnet.lez.logos.co/transaction/41f5bb99346a0bef6aa0c69243473a554b84f0f0ad65e460bbb6890b11644942 | wc -c
 
-    LEZ Block Explorer  Error  Failed to load transaction:
-    error running server function: Transaction not found
+# a hash that cannot exist: 2416 bytes, and the body says why
+curl -s "https://explorer.testnet.lez.logos.co/transaction/$(python3 -c 'print("ff"*32)')" | wc -c
+```
 
-**The reason is an indexer that is behind the chain, and it is visible from the
-explorer's own front page.** At the time of writing, the most recent block it
-listed was **4351** (2026-08-12 11:44:52 UTC) while `getLastBlockId` returned
-**4496**; `/block/4400` answered `Block not found`. Every transaction above was
-included after block 4351, so none of them can render yet. This affects anything
-recently submitted to this testnet, by anyone — it is not specific to this
-submission, and it is not a property of privacy transactions.
+The second returns `Failed to load transaction: error running server function:
+Transaction not found`. Compare the bodies rather than only the sizes — a size
+is a weaker signal that happens to work today.
 
-Whether it catches up is not something this repository can promise: over the
-course of one run of the script the indexer advanced from 4351 to 4354 while the
-chain advanced faster than that, so it was losing ground rather than gaining it.
-Re-run `./scripts/check-explorer.py` to see where it stands now — the answer it
-gives is a measurement, with the date it was taken, not a claim.
+`scripts/check-explorer.py` remains the stronger check and is worth running as a
+second opinion: it renders each page headless and compares it against the same
+impossible hash as a control, so it reads the DOM a reviewer actually sees, and
+it keeps working if the explorer returns to client-side rendering. If that
+control ever renders as a *found* transaction the script aborts rather than
+report anything, because the baseline every verdict rests on would be invalid.
 
-So do not judge these by clicking, in either direction: a link that does not
-render is evidence about the indexer, and a link that does render would not
-prove ownership of anything. Check the chain directly instead:
+**The explorer is still a separate index, and it lags the sequencer.** A hash
+submitted minutes ago can read `Transaction not found` there while
+`getTransaction` already returns it. That is an indexing delay, not a gap, and
+it affects anything recent by anyone — it is not specific to this submission and
+not a property of privacy transactions. The script prints the explorer's most
+recent indexed block so the current lag can be read off against `getLastBlockId`
+rather than quoted from here, where it would go stale.
+
+So do not judge these by clicking alone, in either direction: a link that does
+not render is evidence about the indexer, and a link that does render does not
+prove ownership of anything. Check the chain directly as well:
 
 ```bash
 curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json' \

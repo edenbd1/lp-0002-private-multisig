@@ -37,7 +37,13 @@ jobs:
   e2e:
     name: lifecycle vs standalone sequencer
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # Two real proofs, not one. The last single-approval run took 3390 s in the
+    # lifecycle step alone (run 31865412264) against a 120-minute job budget, so
+    # a second proof would not have fitted. Raised with headroom rather than
+    # tuned to the last measurement: proving time on a shared runner varies with
+    # whatever else is on the host, and a timeout would read as a failed
+    # threshold test rather than a slow one.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v7
 
@@ -112,10 +118,22 @@ jobs:
         env:
           RISC0_DEV_MODE: 0
         run: |
-          # One approval rather than two: the integration surface is identical
-          # and the proof is the expensive part. A reviewer wanting the 2-of-3
-          # shape runs the same script without MEMBERS/THRESHOLD set.
-          MEMBERS=2 THRESHOLD=1 ./scripts/e2e-local-sequencer.sh
+          # A genuine threshold, not 1-of-2.
+          #
+          # This used to run MEMBERS=2 THRESHOLD=1 to save one proof, and that
+          # made the job prove less than it looked like it did. At M=1 the
+          # verifier's pairwise-distinctness loop (5011) has no pairs to compare
+          # and its body never executes, so the step that turns "M approval
+          # accounts" into "M distinct members" was vacuous in the only job that
+          # touches a real sequencer. docs/security.md says the same of the shape
+          # itself: a 1-of-2 multisig hides almost nothing.
+          #
+          # Three members with a threshold of 2 — the script's own default —
+          # costs a second real proof and buys the checks the submission
+          # actually claims: two distinct nullifiers compared pairwise, two
+          # marker PDAs each re-derived and required to be owned by this program
+          # (5012), and an execution that only lands once both are present.
+          MEMBERS=3 THRESHOLD=2 ./scripts/e2e-local-sequencer.sh
 
       - name: Sequencer log on failure
         if: failure()

@@ -16,8 +16,8 @@
 # approvals, execute — then reads the resulting accounts back off that local
 # chain. Nothing is mocked and RISC0_DEV_MODE is 0 throughout.
 #
-#   ./scripts/e2e-local-sequencer.sh
-#   MEMBERS=2 THRESHOLD=1 ./scripts/e2e-local-sequencer.sh     # the CI shape
+#   ./scripts/e2e-local-sequencer.sh                           # 2-of-3, the CI shape
+#   MEMBERS=2 THRESHOLD=1 ./scripts/e2e-local-sequencer.sh     # one proof, faster
 #
 # Env:
 #   LEZ_SRC     checkout of logos-execution-zone (default: ./_external/lez)
@@ -27,10 +27,16 @@
 #   KEEP        set to 1 to leave the sequencer running for inspection
 #
 # Budget: one approval is a real proof. On an idle M-series laptop that has been
-# about 150 s; it is highly sensitive to load, and a second proof running on the
-# same machine roughly doubles it. The script prints its own wall clock, which is
-# the number to trust — see docs/cu-costs.md. THRESHOLD=1 still exercises every
-# integration point and is what CI uses.
+# about 150 s on LEZ v0.2.0 and about 440 s on v0.2.4; it is highly sensitive to
+# load, and a second proof running on the same machine roughly doubles it. The
+# script prints its own wall clock, which is the number to trust — see
+# docs/cu-costs.md.
+#
+# THRESHOLD=1 halves the wall clock, but it does not exercise the same thing:
+# the verifier's pairwise-distinctness check (error 5011) compares nullifier
+# pairs, and a single approval has no pairs, so that loop's body never runs. CI
+# therefore uses the 2-of-3 default. Use THRESHOLD=1 to iterate quickly, not to
+# claim the threshold was tested.
 
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

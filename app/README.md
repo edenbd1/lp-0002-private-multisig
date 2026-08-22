@@ -290,3 +290,20 @@ python3 scripts/package-lgx.py --verify app/lp-0002-multisig.lgx
 | `src/plugin.{h,cpp}` | The Qt plugin: hosts the QML scene, exposes the bridge |
 | `src/multisig_bridge.{h,cpp}` | Shells out to `msig`, passes its human-readable refusals straight through |
 | `qml/Main.qml` | The surface |
+
+
+## What only shows up with two modules installed
+
+**Two modules that both register `qrc:/qml/Main.qml` render each other.** Qt's
+resource system is process-global, so whichever registers first wins for both:
+with LP-0002 and LP-0003 installed together, the airdrop tile showed the multisig
+UI. Each loaded fine on its own, and `QPluginLoader::load()` was happy in both
+cases — the collision is invisible until a second module is present. The resource
+prefix is now this module's own name, which cannot collide. Verified in Basecamp
+0.2.2 with five modules installed at once, each opened in turn.
+
+A sibling module that talks to a sequencer over `QNetworkAccessManager` has a
+second, harsher failure on first click — Qt's macOS proxy lookup asks PCRE2 to
+JIT-compile a regex, and Basecamp runs hardened without
+`com.apple.security.cs.allow-jit`, so the host dies with `SIGTRAP`. This module
+shells out to a CLI and never uses Qt networking, so it is not affected.

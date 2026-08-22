@@ -44,7 +44,7 @@ if(DEFINED ENV{LOGOS_MODULE_BUILDER_ROOT})
     )
 
     qt_add_resources(lp_0002_multisig_module_plugin "qml"
-        PREFIX "/qml"
+        PREFIX "/lp_0002_multisig"
         BASE "qml"
         FILES qml/Main.qml qml/qmldir
     )
@@ -72,7 +72,7 @@ else()
     )
 
     qt_add_resources(lp_0002_multisig_plugin "qml"
-        PREFIX "/qml"
+        PREFIX "/lp_0002_multisig"
         BASE "qml"
         FILES qml/Main.qml qml/qmldir
     )

@@ -223,8 +223,22 @@ and `THRESHOLD` to shrink it.
 This reads the multisig PDA, the proposal PDA, each approval marker, and the
 execution marker over JSON-RPC, and reports each one's owner.
 
-**Do not expect to find approvals on the block explorer**, for two separate
-reasons that are worth keeping apart.
+**The accounts are on the block explorer even though the approvals are not**,
+and the distinction matters because a reader who takes the warning below as
+"the explorer will not help" stops looking one click too early. The explorer has
+an account view, and it renders all three PDAs with their owner:
+
+- multisig `/account/4wqJXoEhqqqYknt1s7gHcgBL6pkfwNJDfhbVVeAqwtnX`
+- proposal `/account/E11Awng7j59dVft83VVrwftXp41roJPKY5QRMb45Zcoe`
+- execution marker `/account/CpiuicNDii6uCeMXtjd1W6hek6Vq35HJ7k3mz1Q82Fui`
+
+Each shows `Program Owner: 7AyJ7x4DuAa58ALGqLXYwqdhEvQLCz5A2GFdcDrwyzUZ`, which
+base58-decodes to `5bb4008273ddc31d1c2b5bad8835daaf4c567e029dbb059c20c7e83ba5966f82`
+— exactly what `spel program-id artifacts/programs/multisig_verifier.bin` prints
+for the binary committed here. That is the whole claim, checkable in a browser.
+
+**Do not expect to find the approval transactions on the block explorer**, for
+two separate reasons that are worth keeping apart.
 
 The first is the indexer gap above, which applies to the public transactions
 too and is nothing to do with this design.

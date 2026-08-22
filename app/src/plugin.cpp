@@ -17,11 +17,15 @@ QWidget* MultisigPlugin::createWidget(LogosAPI* /*api*/) {
     // GUI never holds a member secret.
     m_bridge = new MultisigBridge(this);
 
+    // Qt's resource system is process-global: two modules that both register
+    // /qml/Main.qml resolve to whichever registered first. With LP-0002 and
+    // LP-0003 both installed, the airdrop tile rendered the multisig UI.
+    // The prefix is this module's name, which cannot collide.
     auto* view = new QQuickWidget();
     view->engine()->rootContext()->setContextProperty(
         QStringLiteral("bridge"), m_bridge);
     view->setResizeMode(QQuickWidget::SizeRootObjectToView);
-    view->setSource(QUrl(QStringLiteral("qrc:/qml/Main.qml")));
+    view->setSource(QUrl(QStringLiteral("qrc:/lp_0002_multisig/Main.qml")));
     return view;
 }
 

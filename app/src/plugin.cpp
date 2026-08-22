@@ -18,8 +18,8 @@ QWidget* MultisigPlugin::createWidget(LogosAPI* /*api*/) {
     m_bridge = new MultisigBridge(this);
 
     // Qt's resource system is process-global: two modules that both register
-    // /qml/Main.qml resolve to whichever registered first. With LP-0002 and
-    // LP-0003 both installed, the airdrop tile rendered the multisig UI.
+    // /qml/Main.qml resolve to whichever registered first, so with a second
+    // module installed one tile drew the other's UI over its own data.
     // The prefix is this module's name, which cannot collide.
     auto* view = new QQuickWidget();
     view->engine()->rootContext()->setContextProperty(

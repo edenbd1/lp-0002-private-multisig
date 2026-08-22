@@ -206,11 +206,22 @@ whose derivation is unchanged in v0.2.4.
       accounts the lifecycle created and confirms the verifier program owns
       them, which no transaction lookup can fake.
 - [x] **At least 1 multisig instance on testnet with a proposal submitted,
-      approved by threshold, and executed.** Multisig
-      `4wqJXoEhqqqYknt1s7gHcgBL6pkfwNJDfhbVVeAqwtnX`, proposal
-      `E11Awng7j59dVft83VVrwftXp41roJPKY5QRMb45Zcoe`, execution marker
-      `CpiuicNDii6uCeMXtjd1W6hek6Vq35HJ7k3mz1Q82Fui` — all owned by the verifier.
-      Re-verify with `./scripts/verify-onchain.sh`.
+      approved by threshold, and executed.** All three are readable in the block
+      explorer, and each one's **Program Owner** is the verifier: multisig
+      [`4wqJXoEh…`](https://explorer.testnet.lez.logos.co/account/4wqJXoEhqqqYknt1s7gHcgBL6pkfwNJDfhbVVeAqwtnX), proposal
+      [`E11Awng7…`](https://explorer.testnet.lez.logos.co/account/E11Awng7j59dVft83VVrwftXp41roJPKY5QRMb45Zcoe), execution marker
+      [`Cpiuic…`](https://explorer.testnet.lez.logos.co/account/CpiuicNDii6uCeMXtjd1W6hek6Vq35HJ7k3mz1Q82Fui). The owner
+      those pages show, `7AyJ7x4DuAa58ALGqLXYwqdhEvQLCz5A2GFdcDrwyzUZ`, decodes to
+      `5bb40082…a5966f82` — the ImageID `spel program-id
+      artifacts/programs/multisig_verifier.bin` computes from the binary committed
+      here. Nothing in that chain needs us.
+
+      `git clone && ./scripts/demo.sh` re-runs the check offline-of-us from a
+      clean clone: it derives the three addresses, reads them from the sequencer
+      and reports the owner and the approval count. `./scripts/verify-onchain.sh`
+      is the deeper version and needs the working directory a lifecycle run
+      leaves behind, so it is for whoever has just run one, not for a first
+      reader.
 - [x] **Full documentation and a clean public repository.**
 
 ### Usability

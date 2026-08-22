@@ -296,7 +296,7 @@ python3 scripts/package-lgx.py --verify app/lp-0002-multisig.lgx
 
 **Two modules that both register `qrc:/qml/Main.qml` render each other.** Qt's
 resource system is process-global, so whichever registers first wins for both:
-with LP-0002 and LP-0003 installed together, the airdrop tile showed the multisig
+with two of these installed together, one tile showed the other module's
 UI. Each loaded fine on its own, and `QPluginLoader::load()` was happy in both
 cases — the collision is invisible until a second module is present. The resource
 prefix is now this module's own name, which cannot collide. Verified in Basecamp

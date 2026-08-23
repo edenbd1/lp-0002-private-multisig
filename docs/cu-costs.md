@@ -93,6 +93,32 @@ wall-clock figures below were measured against the **previous** verifier, whose
 against this one, and each is labelled with the run it came from rather than
 quietly carried forward.
 
+## The whole lifecycle, against a real sequencer, on this binary
+
+Measured 2026-08-24 with `./scripts/e2e-local-sequencer.sh`, `MEMBERS=2
+THRESHOLD=1`, an actual `sequencer_service` in standalone mode on localhost,
+`RISC0_DEV_MODE=0`, Apple-silicon laptop:
+
+| Step | Result |
+|---|---|
+| deploy `multisig_verifier` | `2d6f720e3c6dd8d876c8617eada5ddcd3c13a978b2edcb1921a3de73231e82e2` |
+| `create_multisig` | multisig and treasury created, both decoding |
+| `fund_treasury` | treasury balance **0 → 500**, via the chained call |
+| `create_proposal` | recipient, amount and memo persisted and re-derivable |
+| `approve` (privacy tx, one real proof) | **482 s** wall clock |
+| `execute` | treasury **500 → 250**, recipient **0 → 250** |
+
+The last row is the criterion. The script exits non-zero unless both balances
+move by exactly the proposed amount, so a run that reports success has checked
+rather than claimed — and `scripts/verify-onchain.sh` then read all six accounts
+back off that chain and decoded every one of them at the offsets
+[`account-layout.md`](account-layout.md) publishes.
+
+482 s against 437 s for the same shape on the previous binary, on the same
+laptop: about a tenth more for a guest segment that doubled in size, because the
+guest's own segment is a small part of what the privacy circuit proves. One
+measurement of each, so read it as "no material change", not as a ratio.
+
 ## Proof generation time, measured
 
 Not estimated. `scripts/deploy-and-run.sh` times each approval and writes the

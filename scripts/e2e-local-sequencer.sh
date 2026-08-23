@@ -122,7 +122,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-say "[1/5] starting a real sequencer in standalone mode on $RPC"
+say "[1/6] starting a real sequencer in standalone mode on $RPC"
 python3 - "$CONFIG_SRC" "$SEQ_HOME" <<'PY'
 import json, sys
 cfg = json.load(open(sys.argv[1]))
@@ -146,7 +146,7 @@ curl -s -m 3 -X POST "$RPC" -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"getAccount","params":["'"$TEST_SIGNER"'"]}' \
   | grep -q '"result"' || die "sequencer never answered on $RPC"
 
-say "[2/5] a throwaway wallet pointed at it"
+say "[2/6] a throwaway wallet pointed at it"
 # LEZ v0.2.2 made the wallet multi-sequencer: the single `sequencer_addr` became
 # a `sequencers` array. An old-format config does not fail over to a default —
 # the wallet refuses to deserialize it and dies before doing anything.
@@ -161,7 +161,7 @@ printf 'lp0002\n' | wallet_run account import public --private-key "$TEST_SIGNER
   || die "could not import the test signer"
 echo "  imported Public/$TEST_SIGNER"
 
-say "[3/5] funding it from the genesis vault"
+say "[3/6] funding it from the genesis vault"
 wallet_run vault claim --account-id "Public/$TEST_SIGNER" --amount 5000 </dev/null >/dev/null 2>&1
 for _ in $(seq 1 30); do
   bal=$(curl -s -m 3 -X POST "$RPC" -H 'Content-Type: application/json' \

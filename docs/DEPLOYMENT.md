@@ -19,6 +19,15 @@ ImageID, and the five account addresses they produced belong to that program.
 Deriving those addresses from the binary committed here yields five different
 addresses, and `getAccount` on them returns nothing.
 
+**The new lifecycle has been run end to end, against a real sequencer.** Not the
+public testnet — a standalone `sequencer_service` on localhost, with
+`RISC0_DEV_MODE=0` and one real Risc0 approval on the privacy-preserving path.
+It deployed at `2d6f720e3c6dd8d876c8617eada5ddcd3c13a978b2edcb1921a3de73231e82e2`,
+funded the treasury to 500, paid 250 out of it on reaching the threshold, and
+read all six accounts back decoded. The transcript is summarised in
+[`cu-costs.md`](cu-costs.md). What is outstanding is a public deployment, not a
+working one.
+
 So the table below is kept as a record of a lifecycle that really happened, and
 **every address in this document is superseded** until the lifecycle is re-run.
 `./scripts/deploy-and-run.sh` re-runs it end to end; the checklist at the bottom

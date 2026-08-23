@@ -19,7 +19,9 @@ use std::process::{Command, Output};
 
 const MSIG: &str = env!("CARGO_BIN_EXE_msig");
 const PROPOSAL: &str = "00000000000000000000000000000000000000000000000000000000000000ab";
-const ACTION: &str = "transfer 100 LEZ to the grants treasury";
+const MEMO: &str = "transfer 250 LEZ to the grants treasury";
+const RECIPIENT: &str = "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e";
+const AMOUNT: &str = "250";
 
 /// One CLI invocation — a fresh process, which is what "restart" means.
 fn run(args: &[&str]) -> Output {
@@ -82,8 +84,12 @@ fn a_partial_set_of_approvals_survives_client_restarts() {
         d,
         "--proposal-id",
         PROPOSAL,
-        "--action",
-        ACTION,
+        "--recipient",
+        RECIPIENT,
+        "--amount",
+        AMOUNT,
+        "--memo",
+        MEMO,
     ]);
 
     assert_eq!(gathered(dir), "0/3", "a fresh proposal has no approvals");
@@ -171,8 +177,12 @@ fn a_witness_that_cannot_satisfy_the_statement_fails_before_proving() {
         d,
         "--proposal-id",
         PROPOSAL,
-        "--action",
-        ACTION,
+        "--recipient",
+        RECIPIENT,
+        "--amount",
+        AMOUNT,
+        "--memo",
+        MEMO,
     ]);
 
     // A secret that belongs to nobody in this member set.

@@ -47,6 +47,9 @@ step "Tests         cargo test --workspace"       cargo test --workspace --quiet
 step "Hashes        every quoted sha256 is that file's" \
      python3 scripts/check-quoted-hashes.py
 
+step "IDL           carries the error codes the guest declares" \
+     python3 scripts/idl-errors.py --check
+
 step "Workflows     yaml parse" python3 - <<'PY'
 import glob, sys
 try:

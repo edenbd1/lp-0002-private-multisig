@@ -7,6 +7,12 @@ Why this exists rather than shelling out to `spel pda`: the scripts need the
 address as a bare base58 string on stdout, and this keeps the derivation
 visible and auditable next to the code that depends on it.
 
+A seed is 32 bytes of hex, or `str:<text>` for SPEL's `literal("...")` form —
+the ASCII bytes zero-padded to 32, exactly as `spel_framework::pda::seed_from_str`
+builds them. The treasury PDA uses one:
+
+    scripts/pda.py program.bin <multisig_id> <config_hash> str:treasury
+
 The derivation, byte for byte:
 
     combined = seed                       if a single seed
@@ -39,6 +45,25 @@ def b58encode(raw: bytes) -> str:
     return "1" * (len(raw) - len(raw.lstrip(b"\0"))) + out
 
 
+def b58decode(text: str) -> bytes:
+    """32 bytes from a base58 account id, leading zeros included.
+
+    Each leading '1' is a leading zero byte — dropping them would silently
+    produce a short id that hashes to something else entirely.
+    """
+    n = 0
+    for ch in text:
+        try:
+            n = n * 58 + B58.index(ch)
+        except ValueError:
+            raise SystemExit(f"{ch!r} is not a base58 character") from None
+    body = n.to_bytes((n.bit_length() + 7) // 8, "big") if n else b""
+    raw = b"\x00" * (len(text) - len(text.lstrip("1"))) + body
+    if len(raw) != 32:
+        raise SystemExit(f"{text} decodes to {len(raw)} bytes, expected 32")
+    return raw
+
+
 def program_id_bytes(spec: str) -> bytes:
     """Accept either a path to a program binary or a comma-separated hex id."""
     path = Path(spec)
@@ -62,15 +87,29 @@ def program_id_bytes(spec: str) -> bytes:
     return b"".join(struct.pack("<I", w) for w in words)
 
 
+def seed_bytes(spec: str) -> bytes:
+    """One 32-byte seed, from hex or from SPEL's `literal("...")` padding."""
+    if spec.startswith("str:"):
+        raw = spec[4:].encode()
+        if len(raw) > 32:
+            raise SystemExit(f"literal seed {spec[4:]!r} exceeds 32 bytes")
+        return raw.ljust(32, b"\x00")
+    raw = bytes.fromhex(spec)
+    if len(raw) != 32:
+        raise SystemExit(f"a seed is 32 bytes, got {len(raw)} in {spec!r}")
+    return raw
+
+
 def pda(program: bytes, seeds: list[str]) -> str:
     if not seeds:
         raise SystemExit("at least one seed is required")
-    if len(seeds) == 1:
-        combined = bytes.fromhex(seeds[0])
+    parts = [seed_bytes(s) for s in seeds]
+    if len(parts) == 1:
+        combined = parts[0]
     else:
         h = hashlib.sha256()
-        for s in seeds:
-            h.update(bytes.fromhex(s))
+        for part in parts:
+            h.update(part)
         combined = h.digest()
     return b58encode(hashlib.sha256(PDA_PREFIX + program + combined).digest())
 

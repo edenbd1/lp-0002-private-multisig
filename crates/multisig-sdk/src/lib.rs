@@ -23,8 +23,10 @@
 //! ]);
 //! let multisig = Multisig::new([0xaa; 32], members.root(), 2).unwrap();
 //!
-//! // A proposal binds an action to an id.
-//! let proposal = Proposal::new(&multisig, [0x01; 32], b"transfer 100 to alice");
+//! // A proposal binds a treasury payment to an id. The memo is the sentence
+//! // members read before approving; it is bound by hash like everything else.
+//! let alice = [0x5E; 32];
+//! let proposal = Proposal::new(&multisig, [0x01; 32], alice, 250, b"pay the auditors");
 //!
 //! // Every approval on this proposal is scoped to the same reference.
 //! assert_eq!(proposal.proposal_ref(), proposal.proposal_ref());
@@ -33,6 +35,14 @@
 #![forbid(unsafe_code)]
 
 use multisig_core::{MerklePath, *};
+
+/// The `literal("treasury")` PDA seed, as SPEL builds it: the ASCII bytes,
+/// zero-padded to 32 (`spel_framework::pda::seed_from_str`). Spelled out here
+/// rather than computed, so a client can see the exact bytes it will hash.
+pub const TREASURY_SEED: [u8; 32] = [
+    b't', b'r', b'e', b'a', b's', b'u', b'r', b'y', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+];
 
 /// Errors the SDK returns before anything reaches a sequencer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +59,8 @@ pub enum SdkError {
     ThresholdNotMet { have: usize, need: u32 },
     /// The same member's approval was supplied more than once.
     DuplicateApproval,
+    /// A proposal that moves nothing would give the threshold nothing to gate.
+    ZeroAmount,
 }
 
 impl core::fmt::Display for SdkError {
@@ -65,6 +77,7 @@ impl core::fmt::Display for SdkError {
                 write!(f, "only {have} of {need} approvals gathered")
             }
             Self::DuplicateApproval => write!(f, "the same approval was supplied twice"),
+            Self::ZeroAmount => write!(f, "a proposal must move a non-zero amount"),
         }
     }
 }
@@ -223,6 +236,33 @@ impl Multisig {
         self.config_hash
     }
 
+    /// The PDA seeds of this multisig's treasury, in order.
+    ///
+    /// The address itself needs the verifier's ProgramId, which this crate
+    /// deliberately does not carry — a client derives it from the binary it
+    /// intends to call, so the address it computes is the address of the program
+    /// it is actually talking to. `scripts/pda.py` does the derivation.
+    #[must_use]
+    pub fn treasury_seeds(&self) -> [[u8; 32]; 3] {
+        [self.id, self.config_hash, TREASURY_SEED]
+    }
+
+    /// Arguments for `fund_treasury`.
+    ///
+    /// # Errors
+    /// Returns [`SdkError::ZeroAmount`] for a funding of nothing, which the
+    /// on-chain program refuses with `E_BAD_AMOUNT` (5017).
+    pub fn fund_args(&self, amount: u128) -> Result<FundTreasuryArgs, SdkError> {
+        if amount == 0 {
+            return Err(SdkError::ZeroAmount);
+        }
+        Ok(FundTreasuryArgs {
+            multisig_id: self.id,
+            config_hash: self.config_hash,
+            amount,
+        })
+    }
+
     /// Arguments for the `create_multisig` instruction.
     #[must_use]
     pub fn create_args(&self) -> CreateMultisigArgs {
@@ -253,13 +293,29 @@ pub struct Proposal {
     proposal_ref: [u8; 32],
     threshold: u32,
     member_root: [u8; 32],
+    recipient: [u8; 32],
+    amount: u128,
+    memo_hash: [u8; 32],
 }
 
 impl Proposal {
-    /// Bind `action` to `proposal_id` under `multisig`.
+    /// Bind a treasury payment to `proposal_id` under `multisig`.
+    ///
+    /// `memo` is the human sentence the members read — "pay the auditors" — and
+    /// it is folded into the action hash by its own digest, so it is bound as
+    /// tightly as the recipient and the amount without letting an
+    /// arbitrary-length string into the fixed on-chain record.
     #[must_use]
-    pub fn new(multisig: &Multisig, proposal_id: [u8; 32], action: &[u8]) -> Self {
-        let action_hash = compute_action_hash(&multisig.id, action);
+    pub fn new(
+        multisig: &Multisig,
+        proposal_id: [u8; 32],
+        recipient: [u8; 32],
+        amount: u128,
+        memo: &[u8],
+    ) -> Self {
+        let memo_hash = compute_memo_hash(memo);
+        let action_hash =
+            compute_transfer_action_hash(&multisig.id, &recipient, amount, &memo_hash);
         Self {
             multisig_id: multisig.id,
             config_hash: multisig.config_hash,
@@ -273,7 +329,26 @@ impl Proposal {
             ),
             threshold: multisig.threshold,
             member_root: multisig.member_root,
+            recipient,
+            amount,
+            memo_hash,
         }
+    }
+
+    /// Who this proposal pays.
+    #[must_use]
+    pub fn recipient(&self) -> [u8; 32] {
+        self.recipient
+    }
+    /// How much it pays.
+    #[must_use]
+    pub fn amount(&self) -> u128 {
+        self.amount
+    }
+    /// The commitment to its memo.
+    #[must_use]
+    pub fn memo_hash(&self) -> [u8; 32] {
+        self.memo_hash
     }
 
     #[must_use]
@@ -291,15 +366,24 @@ impl Proposal {
     }
 
     /// Arguments for the `create_proposal` instruction.
-    #[must_use]
-    pub fn create_args(&self) -> CreateProposalArgs {
-        CreateProposalArgs {
+    ///
+    /// # Errors
+    /// Returns [`SdkError::ZeroAmount`] for a proposal that moves nothing; the
+    /// on-chain program refuses it with `E_BAD_AMOUNT` (5017), minutes later.
+    pub fn create_args(&self) -> Result<CreateProposalArgs, SdkError> {
+        if self.amount == 0 {
+            return Err(SdkError::ZeroAmount);
+        }
+        Ok(CreateProposalArgs {
             multisig_id: self.multisig_id,
             config_hash: self.config_hash,
             proposal_id: self.proposal_id,
             action_hash: self.action_hash,
             proposal_ref: self.proposal_ref,
-        }
+            recipient: self.recipient,
+            amount: self.amount,
+            memo_hash: self.memo_hash,
+        })
     }
 
     /// Build one member's approval: the witness, the statement, and the
@@ -418,6 +502,17 @@ pub struct CreateProposalArgs {
     pub proposal_id: [u8; 32],
     pub action_hash: [u8; 32],
     pub proposal_ref: [u8; 32],
+    pub recipient: [u8; 32],
+    pub amount: u128,
+    pub memo_hash: [u8; 32],
+}
+
+/// Arguments for `fund_treasury`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FundTreasuryArgs {
+    pub multisig_id: [u8; 32],
+    pub config_hash: [u8; 32],
+    pub amount: u128,
 }
 
 /// Arguments for `approve`, minus the witness words, which the caller encodes

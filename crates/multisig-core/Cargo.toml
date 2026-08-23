@@ -11,10 +11,24 @@ sha2 = { workspace = true }
 serde = { workspace = true }
 
 [features]
-default = ["std"]
+default = ["std", "records"]
 # `std` adds the host-only tree builder. The guests build with
 # `default-features = false` so the crate stays no_std inside the zkVM.
 std = []
+# The on-chain account layouts and the action they encode.
+#
+# Gated so that the *membership* guest — which needs none of it — links a crate
+# whose compiled output does not move when this vocabulary changes. That is not
+# tidiness: the membership program is the audited zero-knowledge half, its
+# ImageID is its on-chain identity, and with `lto = "fat"` even unreachable code
+# in a linked crate shifts the ELF. Without this gate, adding a field to an
+# account record silently forces a redeploy of the privacy circuit.
+#
+# Verified rather than asserted: with the gate in place the membership guest
+# still builds to ImageID
+# 56f784d6b37f5cbac85d2eca3e28f56346e8739e6c22cb15a1b7165616758e31, the one
+# already deployed, byte for byte.
+records = []
 
 [lints]
 workspace = true

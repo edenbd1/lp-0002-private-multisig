@@ -22,10 +22,17 @@ spel-framework = { path = "../../../../vendor/spel/spel-framework" }
 nssa_core      = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.4", features = ["host"], package = "lee_core" }
 risc0-zkvm     = { version = "=3.0.5", default-features = false, features = ["std"] }
 
-multisig-core = { path = "../../../multisig-core", default-features = false }
+# `records` brings in the account layouts and the action encoding. The
+# membership guest deliberately does not enable it, so its ELF — and therefore
+# its on-chain identity — does not move when they change.
+multisig-core = { path = "../../../multisig-core", default-features = false, features = ["records"] }
 
 serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
 sha2  = { version = "0.10", default-features = false }
+# The #[account_type] derive resolves `borsh` through proc_macro_crate, so it
+# must be a declared dependency of the guest itself, not merely reachable
+# through spel-framework.
+borsh = { version = "1.0", default-features = false, features = ["derive"] }
 
 # Pinned for the risc0 guest toolchain (rustc 1.88-dev).
 ruint = "=1.17.2"

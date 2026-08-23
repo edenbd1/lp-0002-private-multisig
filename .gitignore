@@ -20,3 +20,6 @@ _external/
 /.linux-variant/
 /.linux-msig
 /app/build-linux/
+
+# Working draft of the submission: a build input, kept outside the repository.
+SUBMISSION-DRAFT.md

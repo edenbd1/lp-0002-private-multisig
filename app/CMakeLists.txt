@@ -4,7 +4,7 @@ project(lp_0002_multisig LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Two build paths (same pattern as LP-0003's airdrop plugin):
+# Two build paths:
 #
 # 1. Framework build — when $LOGOS_MODULE_BUILDER_ROOT is set (i.e.
 #    inside the logos-module-builder Nix dev shell), include

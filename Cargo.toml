@@ -7,8 +7,8 @@ members = [
     "crates/multisig-verifier-tests",
 ]
 # Guest crates build on the riscv32im-risc0-zkvm-elf toolchain and are excluded
-# from the host workspace, same layout as the LP-0005 / LP-0003 projects this
-# reuses. `_external/` holds cloned reference repos, never build them as members.
+# from the host workspace. `_external/` holds cloned reference repos, never
+# build them as members.
 exclude = [
     "_external",
     # Patched SPEL (see vendor/spel/PATCH.md). Vendored, not ours to lint or

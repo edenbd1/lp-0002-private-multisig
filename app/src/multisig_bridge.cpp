@@ -75,11 +75,14 @@ QString MultisigBridge::newMultisig(const QString& dir, int members,
 }
 
 QString MultisigBridge::propose(const QString& dir, const QString& proposalId,
-                                const QString& action) {
+                                const QString& recipientHex,
+                                const QString& amount, const QString& memo) {
     return run(QStringList{QStringLiteral("propose"),
                            QStringLiteral("--dir"), dir,
                            QStringLiteral("--proposal-id"), proposalId,
-                           QStringLiteral("--action"), action});
+                           QStringLiteral("--recipient"), recipientHex,
+                           QStringLiteral("--amount"), amount,
+                           QStringLiteral("--memo"), memo});
 }
 
 QString MultisigBridge::approve(const QString& dir, const QString& proposalId,

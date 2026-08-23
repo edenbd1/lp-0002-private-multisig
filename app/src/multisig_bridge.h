@@ -23,10 +23,13 @@ public:
     Q_INVOKABLE QString newMultisig(const QString& dir, int members,
                                     int threshold, const QString& idHex);
 
-    // Bind an action to a proposal id. Refuses to re-bind an id to a different
-    // action: the approvals already gathered would not carry over.
+    // Bind a treasury payment to a proposal id. Refuses to re-bind an id to a
+    // different payment: the approvals already gathered would not carry over.
+    // `amount` is a string rather than a number because it is a u128 on chain
+    // and QML's numbers are doubles — a large amount would arrive rounded.
     Q_INVOKABLE QString propose(const QString& dir, const QString& proposalId,
-                                const QString& action);
+                                const QString& recipientHex,
+                                const QString& amount, const QString& memo);
 
     // Build one member's approval arguments. `memberIndex` for the demo set, or
     // pass a secret via `mskHex` for a member who holds only their own key.

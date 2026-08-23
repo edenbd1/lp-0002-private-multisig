@@ -103,21 +103,45 @@ Rectangle {
                 }
                 RowLayout {
                     Layout.fillWidth: true
-                    Label { text: "action"; color: "#9aa0a6"; Layout.preferredWidth: 90 }
+                    Label { text: "pay"; color: "#9aa0a6"; Layout.preferredWidth: 90 }
+                    TextField {
+                        id: recipientField
+                        Layout.fillWidth: true
+                        placeholderText: "recipient account id, 64 hex characters"
+                    }
+                    TextField {
+                        id: amountField
+                        Layout.preferredWidth: 110
+                        placeholderText: "amount"
+                        // A u128 on chain, so it travels as text: QML numbers are
+                        // doubles and a large amount would arrive rounded.
+                        validator: RegularExpressionValidator {
+                            regularExpression: /[1-9][0-9]*/
+                        }
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label { text: "memo"; color: "#9aa0a6"; Layout.preferredWidth: 90 }
                     TextField {
                         id: actionField
                         Layout.fillWidth: true
-                        placeholderText: "transfer 100 LEZ to the grants treasury"
+                        placeholderText: "transfer 250 LEZ to the grants treasury"
                     }
                     Button {
                         text: "Bind"
-                        enabled: root.workDir.length > 0 && actionField.text.length > 0
+                        enabled: root.workDir.length > 0
+                                 && recipientField.text.length === 64
+                                 && amountField.text.length > 0
+                                 && actionField.text.length > 0
                         onClicked: root.log(bridge.propose(
-                            root.workDir, root.proposalId, actionField.text))
+                            root.workDir, root.proposalId,
+                            recipientField.text, amountField.text,
+                            actionField.text))
                     }
                 }
                 Label {
-                    text: "The action is bound into the proposal reference. Re-binding the same id to a different action is refused: the approvals already gathered would not carry over to it."
+                    text: "The recipient, the amount and the memo are all bound into the proposal reference. Re-binding the same id to a different payment is refused: the approvals already gathered would not carry over to it. Reaching the threshold moves the amount out of the multisig's treasury."
                     color: "#6b7076"
                     font.pixelSize: 11
                     wrapMode: Text.WordWrap

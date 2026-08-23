@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # LP-0002 full lifecycle on the public LEZ testnet: deploy both programs, create
-# a multisig instance, publish a proposal, gather the threshold of approvals on
-# the privacy-preserving path, and execute.
+# a multisig instance and its treasury, fund the treasury, publish a proposal to
+# pay somebody out of it, gather the threshold of approvals on the
+# privacy-preserving path, and execute — which moves the money.
 #
 # Each approval is a real Risc0 proof composed on chain via env::verify, with
 # RISC0_DEV_MODE=0. This is the script behind the "1 multisig instance, one
-# proposal submitted, approved by threshold, and executed" criterion.
+# proposal submitted, approved by threshold, and executed" criterion, and behind
+# "a reference threshold-gated action": the treasury balance falls by exactly the
+# proposed amount and the recipient's rises by it, in the execute transaction.
 #
 # Idempotent on the deploys (content-addressed: re-deploying a byte-identical
 # binary reproduces the same transaction hash) and on create_multisig /
@@ -19,8 +22,18 @@
 #                same account panics in the client-side circuit with
 #                "Invalid account_identities length" before it is ever sent.
 #                Create them with `wallet account new private`.
+#   RECIPIENT    Public account id the proposal pays. It must be held by the
+#                native transfer program, or the verifier refuses to pay it
+#                (E_RECIPIENT_UNUSABLE, 5020) — money in an account nobody can
+#                spend from is a burn, not a payment. Make one with:
+#                  wallet account new public
+#                  wallet auth-transfer init --account-id Public/<id>
+#                It must NOT be the signer: one account cannot appear twice in a
+#                transaction.
 #   MEMBERS      member set size          (default 5)
 #   THRESHOLD    approvals required       (default 3)
+#   FUND         how much to put in the treasury (default 500)
+#   AMOUNT       how much the proposal pays      (default 250)
 #   SPEL_BIN     spel built from vendor/spel (default: spel on PATH). NOT the
 #                released spel: it targets LEZ v0.2.0 and fails every
 #                instruction here with `missing field 'sequencer_addr'`.
@@ -53,6 +66,13 @@ MEMBERS="${MEMBERS:-5}"
 THRESHOLD="${THRESHOLD:-3}"
 : "${SIGNER:?set SIGNER to a funded Public account id}"
 : "${APPROVERS:?set APPROVERS to a comma-separated list of Private account ids, one per approval}"
+: "${RECIPIENT:?set RECIPIENT to a Public account id held by the native transfer program}"
+FUND="${FUND:-500}"
+AMOUNT="${AMOUNT:-250}"
+if [ "$RECIPIENT" = "$SIGNER" ]; then
+  echo "RECIPIENT must differ from SIGNER: LEZ refuses a transaction naming one account twice" >&2
+  exit 1
+fi
 IFS=',' read -r -a APPROVER_LIST <<< "$APPROVERS"
 if [ "${#APPROVER_LIST[@]}" -lt "$THRESHOLD" ]; then
   echo "need at least $THRESHOLD approver accounts, got ${#APPROVER_LIST[@]}" >&2
@@ -157,6 +177,18 @@ confirmed() {
 try:    sys.exit(0 if json.load(sys.stdin).get("result") is not None else 1)
 except Exception: sys.exit(1)' 2>/dev/null
 }
+# One account's balance, or the empty string if the chain does not know it.
+balance_of() {
+  curl -s -m 20 -X POST "$RPC" -H 'Content-Type: application/json' \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getAccount\",\"params\":[\"$1\"]}" \
+    | python3 -c 'import json,sys
+try:
+    r = json.load(sys.stdin).get("result")
+    print(r["balance"] if r else "")
+except Exception:
+    print("")' 2>/dev/null
+}
+
 wait_tx() { # hash label
   for _ in $(seq 1 60); do
     confirmed "$1" && { echo "  confirmed  $2  $1"; printf '%s\t%s\n' "$2" "$1" >> "$LOG"; return 0; }
@@ -203,26 +235,53 @@ deploy() { # file label
   return 1
 }
 
-echo "[1/6] deploy both programs (content-addressed, so this is idempotent)"
+echo "[1/8] deploy both programs (content-addressed, so this is idempotent)"
 deploy "$MEMBERSHIP" "deploy:membership_lez" || exit 1
 deploy "$VERIFIER"   "deploy:multisig_verifier" || exit 1
 
-echo "[2/6] build a ${THRESHOLD}-of-${MEMBERS} member set"
+echo "[2/8] build a ${THRESHOLD}-of-${MEMBERS} member set"
 MSIG_ID=$(python3 -c "import os;print(os.urandom(32).hex())")
 "$CLI" new-multisig --members "$MEMBERS" --threshold "$THRESHOLD" --id "$MSIG_ID" --out "$WORK"
 "$CLI" create-multisig-args --dir "$WORK" --out "$WORK/create.args" >/dev/null
 
-echo "[3/6] commit the multisig on chain"
+echo "[3/8] commit the multisig and open its treasury"
 read_args "$WORK/create.args"
 "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" \
   -- create_multisig --authority "Public/$SIGNER" "${ARGS[@]}" \
   2>&1 | tee "$WORK/create.out" | tail -3
 require_tx "$WORK/create.out" "create_multisig"
 
-echo "[4/6] publish a proposal"
+# The treasury's address, derived the same way the program derives it. Recorded
+# now so every later step and every reader uses one value.
+read -r SEED_ID SEED_CFG SEED_LIT <<EOF
+$("$CLI" treasury-seeds --dir "$WORK")
+EOF
+TREASURY=$(python3 scripts/pda.py "$VERIFIER" "$SEED_ID" "$SEED_CFG" "$SEED_LIT")
+echo "      treasury  $TREASURY"
+printf 'treasury\t%s\n' "$TREASURY" >> "$LOG"
+
+echo "[4/8] fund the treasury (a chained call into the native transfer program)"
+# Separate from creation, and not by preference: an account cannot be
+# initialised and paid into in one transaction, because the chained transfer
+# reads a pre-state the initialisation has not written yet.
+"$CLI" fund-treasury-args --dir "$WORK" --amount "$FUND" --out "$WORK/fund.args" >/dev/null
+read_args "$WORK/fund.args"
+"$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" \
+  -- fund_treasury --funder "Public/$SIGNER" "${ARGS[@]}" \
+  2>&1 | tee "$WORK/fund.out" | tail -3
+require_tx "$WORK/fund.out" "fund_treasury"
+echo "      treasury balance now $(balance_of "$TREASURY")"
+
+echo "[5/8] publish a proposal to pay $AMOUNT out of it"
 PROP_ID=$(python3 -c "import os;print(os.urandom(32).hex())")
-ACTION="transfer 100 LEZ to the grants treasury"
-"$CLI" propose --dir "$WORK" --proposal-id "$PROP_ID" --action "$ACTION"
+MEMO="transfer $AMOUNT LEZ to the grants treasury"
+# `spel` takes a base58 account id; the protocol commits to the 32 raw bytes.
+RECIPIENT_HEX=$(python3 -c "
+import sys; sys.path.insert(0,'scripts')
+from importlib import import_module
+print(import_module('pda').b58decode('$RECIPIENT').hex())")
+"$CLI" propose --dir "$WORK" --proposal-id "$PROP_ID" \
+  --recipient "$RECIPIENT_HEX" --amount "$AMOUNT" --memo "$MEMO"
 "$CLI" create-proposal-args --dir "$WORK" --proposal-id "$PROP_ID" --out "$WORK/prop.args" >/dev/null
 read_args "$WORK/prop.args"
 "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" \
@@ -230,7 +289,7 @@ read_args "$WORK/prop.args"
   2>&1 | tee "$WORK/prop.out" | tail -3
 require_tx "$WORK/prop.out" "create_proposal"
 
-echo "[5/6] gather $THRESHOLD approvals on the privacy-preserving path"
+echo "[6/8] gather $THRESHOLD approvals on the privacy-preserving path"
 echo "      each is a real proof composed on chain. Cost is per machine and"
 echo "      depends on what else is proving: timed below, not predicted."
 for i in $(seq 0 $((THRESHOLD-1))); do
@@ -256,7 +315,10 @@ for i in $(seq 0 $((THRESHOLD-1))); do
   printf 'timing:approve:member_%s\t%ss\n' "$i" "$((T_APPROVE_END - T_WITNESS_START))" >> "$LOG"
 done
 
-echo "[6/6] execute"
+echo "[7/8] execute — the step that moves the money"
+T_BEFORE=$(balance_of "$TREASURY")
+R_BEFORE=$(balance_of "$RECIPIENT")
+echo "      before: treasury $T_BEFORE, recipient $R_BEFORE"
 "$CLI" status --dir "$WORK" --proposal-id "$PROP_ID"
 "$CLI" execute-args --dir "$WORK" --proposal-id "$PROP_ID" --out "$WORK/exec.args" >/dev/null
 # The approval marker accounts, in the same order as the nullifiers.
@@ -274,9 +336,25 @@ while read -r seed; do
 done < "$WORK/exec.markers"
 read_args "$WORK/exec.args"
 "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" \
-  -- execute --executor "Public/$SIGNER" --approvals "$MARKERS" "${ARGS[@]}" \
+  -- execute --executor "Public/$SIGNER" --recipient "Public/$RECIPIENT" \
+     --approvals "$MARKERS" "${ARGS[@]}" \
   2>&1 | tee "$WORK/exec.out" | tail -3
 require_tx "$WORK/exec.out" "execute"
+
+echo "[8/8] read the balances back off the chain"
+# The check that matters. A marker PDA proves the threshold was reached; only
+# these two numbers prove it did anything.
+T_AFTER=$(balance_of "$TREASURY")
+R_AFTER=$(balance_of "$RECIPIENT")
+printf '      treasury  %s -> %s\n' "$T_BEFORE" "$T_AFTER"
+printf '      recipient %s -> %s\n' "$R_BEFORE" "$R_AFTER"
+printf 'balance:treasury\t%s -> %s\n'  "$T_BEFORE" "$T_AFTER"  >> "$LOG"
+printf 'balance:recipient\t%s -> %s\n' "$R_BEFORE" "$R_AFTER" >> "$LOG"
+if [ "$((T_BEFORE - AMOUNT))" != "$T_AFTER" ] || [ "$((R_BEFORE + AMOUNT))" != "$R_AFTER" ]; then
+  echo "  BALANCES DID NOT MOVE BY $AMOUNT — the execution did not pay out" >&2
+  exit 1
+fi
+echo "      moved $AMOUNT, both sides, in the execute transaction"
 
 echo
 echo "lifecycle recorded in $LOG"

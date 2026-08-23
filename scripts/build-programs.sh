@@ -69,6 +69,10 @@ if [ "$CHECK_ONLY" = 0 ]; then
 
   echo "[4/4] regenerating the IDL"
   spel generate-idl "$VERIFIER_SRC" > idl/multisig_verifier.idl.json
+  # `spel generate-idl` emits `errors: []` unconditionally, so a generated client
+  # would know every instruction and none of the rejections. Merge them back in
+  # from the guest's own `const E_*` block.
+  python3 scripts/idl-errors.py
 fi
 
 echo

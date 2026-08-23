@@ -10,9 +10,11 @@
 #
 # What it decides, and why each part is here:
 #
-#   - the two deployed programs are the binaries committed here, by recomputing
-#     the deploy transaction hash from the bytecode rather than trusting a hash
-#     written down next to it;
+#   - the deployed programs are the binaries committed here, by recomputing the
+#     deploy transaction hash from the bytecode rather than trusting a hash
+#     written down next to it — and, while a redeploy is pending, that the
+#     *verifier* committed here is NOT on chain, which is the honest reading of
+#     the current state rather than a check quietly dropped;
 #   - the seven transactions of the lifecycle resolve;
 #   - and each carries the variant it must carry. That last one is the point of
 #     the submission: if the two approvals were Public, threshold approval would
@@ -29,6 +31,17 @@ cd "$(dirname "$0")/.."
 
 RPC="${SEQUENCER_URL:-https://testnet.lez.logos.co}"
 NEVER=dededededededededededededededededededededededededededededededede
+
+# The verifier guest changed — it persists account state and pays a treasury —
+# so its ImageID changed and the binary committed here has not been deployed.
+# The membership guest did not change and is still on chain.
+#
+# While this is 1 the script *asserts the pending state*: the committed verifier
+# bytecode must NOT resolve, and the previously deployed one must. That is a
+# falsifiable statement, unlike skipping the check. Set it to 0 after running
+# ./scripts/deploy-and-run.sh — see docs/DEPLOYMENT.md.
+PENDING_VERIFIER_REDEPLOY=1
+DEPLOYED_VERIFIER_TX=517efe12a0b592abe4d21a03246866b95c4379483e87af62fd9f26f7b8fe45ff
 
 fail=0
 ok()  { printf '  \033[32mok\033[0m    %s\n' "$1"; }
@@ -74,7 +87,23 @@ for prog in membership_lez multisig_verifier; do
   bin="artifacts/programs/$prog.bin"
   if [ ! -f "$bin" ]; then bad "$prog  $bin is missing"; continue; fi
   h=$(deploy_tx_hash "$bin")
-  if [ -n "$(tx_field "$h")" ]; then
+  on_chain=$([ -n "$(tx_field "$h")" ] && echo 1 || echo 0)
+  if [ "$prog" = multisig_verifier ] && [ "$PENDING_VERIFIER_REDEPLOY" = 1 ]; then
+    # Asserted, not skipped: if the committed verifier suddenly resolved, either
+    # somebody deployed it and forgot to clear the flag, or the hash is being
+    # computed wrong. Both are worth failing over.
+    if [ "$on_chain" = 1 ]; then
+      bad "$prog  ${h:0:16}… IS on chain — clear PENDING_VERIFIER_REDEPLOY"
+    else
+      printf '  \033[33mpending\033[0m  %s  %s… is not deployed yet (docs/DEPLOYMENT.md)\n' \
+        "$prog" "${h:0:16}"
+    fi
+    if [ -n "$(tx_field "$DEPLOYED_VERIFIER_TX")" ]; then
+      ok "$prog  the superseded ${DEPLOYED_VERIFIER_TX:0:16}… is still on chain"
+    else
+      bad "$prog  the superseded ${DEPLOYED_VERIFIER_TX:0:16}… has gone"
+    fi
+  elif [ "$on_chain" = 1 ]; then
     ok "$prog  SHA256(len‖bytecode) = ${h:0:16}… is on chain"
   else
     bad "$prog  computed ${h:0:16}… is NOT on chain"
@@ -83,6 +112,10 @@ done
 echo
 
 echo "[3/3] the lifecycle, and the variant each transaction must carry"
+if [ "$PENDING_VERIFIER_REDEPLOY" = 1 ]; then
+  echo "      these seven ran against the superseded verifier. They are real and"
+  echo "      they resolve; they are simply not this repository's program."
+fi
 # variant 0 is Public, 1 is PrivacyPreserving; the deploys carry 2. The
 # approvals are the two that must not be 0 — that is the claim being made.
 check() { # label expected-variant hash
@@ -105,7 +138,13 @@ check "approve (member B)"       1 ae006465f5f945b8ba2666f28a5357d0a2aab4af05508
 check "execute"                  0 b43e46505f571e31d6051f7da43563db605b6a74b90c670da2d3582d53412ecd
 echo
 
-if [ "$fail" -eq 0 ]; then
+if [ "$fail" -eq 0 ] && [ "$PENDING_VERIFIER_REDEPLOY" = 1 ]; then
+  echo "The membership program on chain is the bytecode in this repository; the"
+  echo "verifier committed here is not deployed yet, and the seven transactions"
+  echo "below it ran against the one it replaces. The two approvals among them"
+  echo "are PrivacyPreserving rather than Public — which is the part a block"
+  echo "explorer cannot show you, and the part the redeploy has to reproduce."
+elif [ "$fail" -eq 0 ]; then
   echo "Both programs on chain are the bytecode in this repository, the seven"
   echo "transactions resolve, and the two approvals are PrivacyPreserving rather"
   echo "than Public — which is the part a block explorer cannot show you."

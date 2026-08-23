@@ -9,7 +9,9 @@
 //!
 //!   msig new-multisig --members 5 --threshold 3 --out ms/
 //!   msig create-multisig-args --dir ms/ --out ms/create.args
-//!   msig propose --dir ms/ --proposal-id 01..01 --action "transfer 100 to alice"
+//!   msig fund-treasury-args --dir ms/ --amount 500 --out ms/fund.args
+//!   msig propose --dir ms/ --proposal-id 01..01 \
+//!        --recipient <account-id> --amount 250 --memo "pay the auditors"
 //!   msig create-proposal-args --dir ms/ --proposal-id 01..01 --out ms/prop.args
 //!   msig approve-args --dir ms/ --proposal-id 01..01 --member 0 --out ms/a0.args
 //!   msig approve-args --dir ms/ --proposal-id 01..01 --member 3 --out ms/a3.args
@@ -62,15 +64,38 @@ enum Cmd {
         #[arg(long)]
         out: PathBuf,
     },
-    /// Register a proposal locally: bind an action to a proposal id.
+    /// Emit `spel` args for `fund_treasury`.
+    FundTreasuryArgs {
+        #[arg(long)]
+        dir: PathBuf,
+        /// How much to move into the treasury.
+        #[arg(long)]
+        amount: u128,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Print this multisig's treasury PDA seeds, for `scripts/pda.py`.
+    TreasurySeeds {
+        #[arg(long)]
+        dir: PathBuf,
+    },
+    /// Register a proposal locally: bind a treasury payment to a proposal id.
     Propose {
         #[arg(long)]
         dir: PathBuf,
         #[arg(long)]
         proposal_id: String,
-        /// The action payload. Opaque to the protocol; bound by hash.
+        /// The account the treasury pays. 32 bytes, hex.
         #[arg(long)]
-        action: String,
+        recipient: String,
+        /// How much it pays. Must be non-zero: a proposal that moves nothing
+        /// gives the threshold nothing to gate.
+        #[arg(long)]
+        amount: u128,
+        /// The sentence members read before approving. Bound by hash, like
+        /// everything else, so approvals cannot be carried to a different one.
+        #[arg(long)]
+        memo: String,
     },
     /// Emit `spel` args for `create_proposal`.
     CreateProposalArgs {
@@ -142,7 +167,12 @@ struct MemberFile {
 #[derive(Serialize, Deserialize)]
 struct ProposalFile {
     proposal_id_hex: String,
-    action: String,
+    /// The human-readable sentence. Bound on chain by `memo_hash`, not stored
+    /// there: a fixed-width record has no room for prose.
+    memo: String,
+    memo_hash_hex: String,
+    recipient_hex: String,
+    amount: u128,
     action_hash_hex: String,
     proposal_ref_hex: String,
     /// Approvals generated so far. This is the resumable partial state.
@@ -297,24 +327,33 @@ fn create_multisig_args(dir: &Path, out: &Path) -> Result<()> {
     Ok(())
 }
 
-fn propose(dir: &Path, proposal_id: &str, action: &str) -> Result<()> {
+fn propose(dir: &Path, proposal_id: &str, recipient: &str, amount: u128, memo: &str) -> Result<()> {
     let ms: MultisigFile = read_json(&dir.join("multisig.json"))?;
     let multisig_id = hex32(&ms.id_hex)?;
     let config_hash = hex32(&ms.config_hash_hex)?;
     let pid = hex32(proposal_id)?;
+    let recipient_bytes = hex32(recipient)?;
 
-    let action_hash = compute_action_hash(&multisig_id, action.as_bytes());
+    // Refused here rather than after minutes of proving: the on-chain program
+    // rejects it with E_BAD_AMOUNT (5017), and so does the SDK.
+    if amount == 0 {
+        bail!("a proposal must move a non-zero amount: the threshold would gate nothing");
+    }
+
+    let memo_hash = compute_memo_hash(memo.as_bytes());
+    let action_hash =
+        compute_transfer_action_hash(&multisig_id, &recipient_bytes, amount, &memo_hash);
     let proposal_ref = compute_proposal_ref(&multisig_id, &config_hash, &pid, &action_hash);
 
     let path = proposal_path(dir, proposal_id);
     if path.exists() {
         let existing: ProposalFile = read_json(&path)?;
-        if existing.action != action {
+        if existing.action_hash_hex != hex::encode(action_hash) {
             bail!(
                 "proposal {proposal_id} is already registered with a different action.\n\
-                 That is not an error you can force past: changing the action changes\n\
-                 proposal_ref, so the {} approval(s) already gathered do not carry over.\n\
-                 Use a fresh proposal id.",
+                 That is not an error you can force past: changing the recipient, the\n\
+                 amount or the memo changes proposal_ref, so the {} approval(s) already\n\
+                 gathered do not carry over. Use a fresh proposal id.",
                 existing.approvals.len()
             );
         }
@@ -324,7 +363,10 @@ fn propose(dir: &Path, proposal_id: &str, action: &str) -> Result<()> {
             &path,
             &ProposalFile {
                 proposal_id_hex: proposal_id.to_string(),
-                action: action.to_string(),
+                memo: memo.to_string(),
+                memo_hash_hex: hex::encode(memo_hash),
+                recipient_hex: hex::encode(recipient_bytes),
+                amount,
                 action_hash_hex: hex::encode(action_hash),
                 proposal_ref_hex: hex::encode(proposal_ref),
                 approvals: Vec::new(),
@@ -333,13 +375,51 @@ fn propose(dir: &Path, proposal_id: &str, action: &str) -> Result<()> {
     }
 
     println!("proposal id   {proposal_id}");
-    println!("action        {action}");
+    println!("memo          {memo}");
+    println!("pays          {amount} to {}", hex::encode(recipient_bytes));
     println!("action hash   {}", hex::encode(action_hash));
     println!(
-        "proposal ref  {}   (binds multisig + id + action)",
+        "proposal ref  {}   (binds multisig + id + recipient + amount + memo)",
         hex::encode(proposal_ref)
     );
     println!("wrote         {}", path.display());
+    Ok(())
+}
+
+fn fund_treasury_args(dir: &Path, amount: u128, out: &Path) -> Result<()> {
+    let ms: MultisigFile = read_json(&dir.join("multisig.json"))?;
+    if amount == 0 {
+        bail!("funding nothing: the program rejects this with E_BAD_AMOUNT (5017)");
+    }
+    let lines = [
+        format!("--multisig-id {}", quoted(&hex32(&ms.id_hex)?)),
+        format!("--config-hash {}", quoted(&hex32(&ms.config_hash_hex)?)),
+        format!("--amount {amount}"),
+    ];
+    std::fs::write(out, lines.join("\n") + "\n")?;
+    println!("wrote {}", out.display());
+    Ok(())
+}
+
+/// Print the treasury PDA's three seeds, ready for `scripts/pda.py`.
+///
+/// The address needs the verifier's ProgramId, which this client deliberately
+/// does not hold: a caller derives it from the binary they intend to call, so
+/// the address they compute belongs to the program they are actually talking to.
+fn treasury_seeds(dir: &Path) -> Result<()> {
+    let ms: MultisigFile = read_json(&dir.join("multisig.json"))?;
+    let seeds = multisig_sdk::Multisig::new(
+        hex32(&ms.id_hex)?,
+        hex32(&ms.member_root_hex)?,
+        ms.threshold,
+    )?
+    .treasury_seeds();
+    println!(
+        "{} {} {}",
+        hex::encode(seeds[0]),
+        hex::encode(seeds[1]),
+        hex::encode(seeds[2])
+    );
     Ok(())
 }
 
@@ -352,6 +432,9 @@ fn create_proposal_args(dir: &Path, proposal_id: &str, out: &Path) -> Result<()>
         format!("--proposal-id {}", quoted(&hex32(&p.proposal_id_hex)?)),
         format!("--action-hash {}", quoted(&hex32(&p.action_hash_hex)?)),
         format!("--proposal-ref {}", quoted(&hex32(&p.proposal_ref_hex)?)),
+        format!("--recipient {}", quoted(&hex32(&p.recipient_hex)?)),
+        format!("--amount {}", p.amount),
+        format!("--memo-hash {}", quoted(&hex32(&p.memo_hash_hex)?)),
     ];
     std::fs::write(out, lines.join("\n") + "\n")?;
     println!("wrote {}", out.display());
@@ -490,7 +573,8 @@ fn status(dir: &Path, proposal_id: &str) -> Result<()> {
     let t = ms.threshold as usize;
 
     println!("proposal      {}", p.proposal_id_hex);
-    println!("action        {}", p.action);
+    println!("memo          {}", p.memo);
+    println!("pays          {} to {}", p.amount, p.recipient_hex);
     println!("proposal ref  {}", p.proposal_ref_hex);
     println!("threshold     {}-of-{}", ms.threshold, ms.member_count);
     println!(
@@ -569,11 +653,15 @@ fn main() -> Result<()> {
             out,
         } => new_multisig(members, threshold, id, &out),
         Cmd::CreateMultisigArgs { dir, out } => create_multisig_args(&dir, &out),
+        Cmd::FundTreasuryArgs { dir, amount, out } => fund_treasury_args(&dir, amount, &out),
+        Cmd::TreasurySeeds { dir } => treasury_seeds(&dir),
         Cmd::Propose {
             dir,
             proposal_id,
-            action,
-        } => propose(&dir, &proposal_id, &action),
+            recipient,
+            amount,
+            memo,
+        } => propose(&dir, &proposal_id, &recipient, amount, &memo),
         Cmd::CreateProposalArgs {
             dir,
             proposal_id,

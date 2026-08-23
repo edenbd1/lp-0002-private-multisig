@@ -17,9 +17,11 @@
 # `scripts/deploy-and-run.sh` produces against the public testnet — see
 # docs/DEPLOYMENT.md for the transaction hashes.
 #
-# The last step reads the live deployment straight off the public testnet, using
-# the manifest committed under artifacts/testnet/ — so it works from a clean
-# clone with no local state.
+# The last step reads the public testnet straight off the chain, from the hashes
+# committed in this repository — so it works from a clean clone with no local
+# state. It reports the *pending* state honestly: the membership program on chain
+# is the binary committed here, and the verifier committed here has not been
+# deployed yet. See docs/DEPLOYMENT.md.
 #
 #   ./scripts/demo.sh
 #
@@ -50,7 +52,11 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 
 MSIG_ID=00000000000000000000000000000000000000000000000000000000000000a1
 PROP_ID=0000000000000000000000000000000000000000000000000000000000000001
-ACTION="transfer 100 LEZ to the grants treasury"
+MEMO="transfer 250 LEZ to the grants treasury"
+# A payee, and an amount. A proposal that moves nothing would give the threshold
+# nothing to gate, which is why the program refuses one.
+RECIPIENT=5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e
+AMOUNT=250
 
 rule() { printf '\n\033[1m== %s\033[0m\n' "$1"; }
 
@@ -81,20 +87,26 @@ else
   echo "   program_id_pin recomputes them from these same committed binaries."
 fi
 
-rule "1. the seven bindings, in the circuit"
+rule "1. the seven bindings, in the circuit — and the account layouts"
 echo "25 adversarial tests over the approval logic: non-members, borrowed paths,"
 echo "invented roots, forged nullifiers, bait-and-switch actions, padding leaves,"
 echo "and a member listed twice still getting exactly one vote."
+echo "Plus 9 over the published account layouts: exact lengths, refused formats,"
+echo "refused trailing bytes, and a round trip through the documented offsets."
 cargo test -p multisig-core --quiet 2>&1 \
   | grep -E 'test result' | grep -v ' 0 passed' | sed 's/^/   /'
 
 rule "2. the on-chain checks, through the sequencer's executor"
-echo "30 tests against the built verifier binary: five honest controls — one per"
-echo "instruction, plus an over-threshold approval set that must still be accepted"
-echo "— and 25 rejections. 19 of those name a documented error code; the other 6"
-echo "are caught one layer earlier, by SPEL's address validation or LEZ's init"
-echo "guard, and assert that instead."
-echo "Plus 2 that pin the verifier to the exact membership binary it chains to."
+echo "Tests against the built verifier binary, in three groups:"
+echo "  · what cannot be forced — 25 rejections and five honest controls."
+echo "  · what the threshold DOES — the treasury falls by the proposed amount"
+echo "    and the recipient rises by it, read out of the guest's own journal,"
+echo "    which is the state the sequencer would write."
+echo "  · what a stranger can read afterwards — every account decoded from the"
+echo "    byte offsets docs/account-layout.md publishes, by a decoder that has"
+echo "    never heard of borsh."
+echo "Plus 2 that pin the verifier to the exact membership binary it chains to,"
+echo "and 5 that hold the IDL and the error-code table to the guest's source."
 # These drive the guest through r0vm, which is how the sequencer's own executor
 # runs it. Without r0vm the step cannot run at all, so it is skipped rather than
 # reported as anything. The 2 pin tests decode the committed binaries directly
@@ -116,8 +128,9 @@ cargo build --release --quiet -p multisig-cli
 M=target/release/msig
 $M new-multisig --members 5 --threshold 3 --id "$MSIG_ID" --out "$WORK"
 
-rule "4. a proposal, bound to its exact action"
-$M propose --dir "$WORK" --proposal-id "$PROP_ID" --action "$ACTION"
+rule "4. a proposal to pay 250 out of the treasury, bound to its exact action"
+$M propose --dir "$WORK" --proposal-id "$PROP_ID" \
+  --recipient "$RECIPIENT" --amount "$AMOUNT" --memo "$MEMO"
 
 rule "5. three members approve, independently"
 for i in 0 3 4; do
@@ -133,8 +146,11 @@ if $M approve-args --dir "$WORK" --proposal-id "$PROP_ID" --member 0 --out "$WOR
 fi
 
 rule "7. the action cannot be swapped under the same id"
-if $M propose --dir "$WORK" --proposal-id "$PROP_ID" --action "transfer 1000000 LEZ to the attacker" 2>&1 \
-   | sed 's/^/   /'; then
+echo "Same proposal id, same memo — a different payee and a larger amount."
+echo "That is a different proposal_ref, so the approvals above do not carry."
+if $M propose --dir "$WORK" --proposal-id "$PROP_ID" \
+     --recipient "6666666666666666666666666666666666666666666666666666666666666666" \
+     --amount 1000000 --memo "$MEMO" 2>&1 | sed 's/^/   /'; then
   echo "   UNEXPECTED: the action was swapped" >&2; exit 1
 fi
 
@@ -189,26 +205,31 @@ else
   echo "  python3 scripts/package-lgx.py"
 fi
 
-rule "12. the live deployment, read straight off the chain"
-echo "The multisig above is local. This checks the one that is actually deployed:"
-echo "its manifest is committed under artifacts/testnet/, so anyone can re-run this."
+rule "12. the chain, read straight off the chain"
+echo "The multisig above is local. This checks what is actually on the public"
+echo "testnet, from hashes committed in this repository — no local state needed."
+echo
+echo "It will report the verifier as NOT YET DEPLOYED, and that is the truthful"
+echo "answer: persisting state and giving the threshold a treasury changed the"
+echo "guest, so its ImageID changed, so it needs redeploying. The membership"
+echo "program did not change and is still on chain. docs/DEPLOYMENT.md has the"
+echo "redeploy checklist."
 echo
 # verify-onchain.sh refuses to run without spel/python3/curl rather than derive
 # wrong addresses and report a false negative. Check the same three here so a
 # missing tool reads as a skip and not as an unreachable chain.
 MISSING=""
-for t in spel python3 curl; do have "$t" || MISSING="$MISSING $t"; done
+for t in jq python3 curl; do have "$t" || MISSING="$MISSING $t"; done
 if [ -n "$MISSING" ]; then
-  skip "12. the live deployment" "${MISSING# }"
-  echo "   Without them every PDA would be derived wrong and this would report a"
-  echo "   healthy deployment as missing. The transaction hashes are in"
-  echo "   docs/DEPLOYMENT.md and can be checked with any JSON-RPC client."
-elif ! ./scripts/verify-onchain.sh artifacts/testnet "$(cat artifacts/testnet/proposal_id)"; then
+  skip "12. the chain" "${MISSING# }"
+  echo "   The transaction hashes are in docs/DEPLOYMENT.md and can be checked"
+  echo "   with any JSON-RPC client."
+elif ! ./scripts/verify-onchain-lifecycle.sh; then
   echo
   echo "If this failed, the public testnet may be unreachable from here."
   echo "The transaction hashes are in docs/DEPLOYMENT.md and can be checked with"
   echo "any JSON-RPC client."
-  SKIPPED="${SKIPPED}   - 12. the live deployment — not verified: the public testnet did not answer
+  SKIPPED="${SKIPPED}   - 12. the chain — not verified: the public testnet did not answer
 "
 fi
 

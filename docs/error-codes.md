@@ -15,13 +15,22 @@ where the `11NNN` form is SPEL's envelope around the program's own `5NNN`.
 | `5004` | No proposal is committed at this `proposal_ref` | `approve`, `execute` | Approving or executing a proposal that was never published |
 | `5005` | The nullifier is not the one the witness yields | `approve` | Proving a real membership while occupying another member's marker |
 | `5006` | A marker seed does not commit to what it claims | `approve`, `execute` | Landing an approval or execution at an address that misrepresents it |
-| `5007` | `proposal_ref` is not `H(multisig_id ‖ proposal_id ‖ action_hash)` | `create_proposal` | Publishing a proposal whose reference does not bind its action |
+| `5007` | `proposal_ref` is not `H(multisig_id ‖ config_hash ‖ proposal_id ‖ action_hash)` | `create_proposal` | Publishing a proposal whose reference does not bind its action |
 | `5008` | Threshold is zero | `create_multisig` | A 0-of-N multisig, which anyone could execute |
 | `5009` | Approval accounts and nullifiers differ in count | `execute` | Unpairing accounts from the nullifiers they are checked against |
 | `5010` | Fewer approvals than the anchored threshold | `execute` | Executing under-approved |
 | `5011` | The same nullifier appeared twice | `execute` | **The replay attack**: one member's approval presented M times |
 | `5012` | An approval account is not the marker PDA for its nullifier on this proposal | `execute` | Counting a marker earned on a different proposal, or an unrelated account |
 | `5013` | An approval marker was never claimed by this program | `execute` | Pre-creating an account at a marker address without ever proving membership |
+| `5014` | The treasury is not this program's, or not the one the multisig names | `fund_treasury`, `execute` | Paying out of, or into, an account this program has no right to move |
+| `5015` | A balance cannot cover the move, or would overflow | `fund_treasury`, `execute` | A partial payment: the transfer is refused whole rather than truncated |
+| `5016` | The funder is not held by the native transfer program | `fund_treasury` | **Chaining into a program the caller wrote**, which could report a funding it never performed |
+| `5017` | A zero amount | `create_proposal`, `fund_treasury` | A proposal the threshold would gate for nothing |
+| `5018` | The action fields do not re-derive the address they live at | `create_proposal`, `execute` | **The bait-and-switch, at the record layer**: paying a recipient or an amount the approvals were never bound to |
+| `5019` | The recipient presented is not the one the proposal names | `execute` | An executor redirecting the payment to themselves |
+| `5020` | The recipient cannot spend what it receives, or is the treasury | `create_proposal`, `execute` | Burning the treasury into an account nobody controls |
+| `5021` | The proposal is already marked executed | `execute` | Paying twice, if the marker's `init` guard were ever bypassed |
+| `5022` | An account this program owns holds no readable record | `create_proposal`, `fund_treasury`, `execute` | Computing a payment from bytes that did not parse |
 
 ## The second layer
 
@@ -47,21 +56,34 @@ executor:
 cargo test -p multisig-verifier-tests
 ```
 
-30 tests: five honest controls — one per instruction, plus an over-threshold
-approval set that must still be accepted — and 25 rejections. 19 of those name
-one of the thirteen codes documented above, and all thirteen are covered. The
-remaining 6 are rejected one layer earlier than the program body, by SPEL's
-address validation or LEZ's init guard, so they assert that rejection rather
-than a code: `the_framework_rejects_a_multisig_at_the_wrong_address`,
+**59 tests there**, in four files:
+
+| File | Tests | What it establishes |
+|---|---:|---|
+| `verifier_rejects.rs` | 30 | The gate cannot be forced: 25 forgeries, 5 honest controls |
+| `state_and_transfer.rs` | 22 | Passing the gate moves real balances, and every account it claims comes out readable |
+| `idl_contract.rs` | 5 | The IDL, this document and `scripts/pda.py` still agree with the guest source |
+| `program_id_pin.rs` | 2 | The verifier chains only to the exact membership binary committed here |
+
+Every one of the twenty-two codes is named by at least one test. The
+`state_and_transfer.rs` file covers `5014`–`5022`; `verifier_rejects.rs` covers
+`5001`–`5013`. A further 6 rejections in `verifier_rejects.rs` are caught one
+layer earlier than the program body — by SPEL's address validation or LEZ's init
+guard — so they assert that rejection rather than a code:
+`the_framework_rejects_a_multisig_at_the_wrong_address`,
 `executing_the_same_proposal_twice_is_rejected`, and the four foreign-multisig
-and second-config cases. Every instruction — including `create_multisig` and
-`create_proposal` — has coverage here.
+and second-config cases.
+
+The claim that *every* code is covered is itself checked, rather than asserted:
+`the_error_code_document_covers_every_code_the_guest_declares` compares this
+table against the `const E_*` block in the guest source, and
+`the_idl_carries_every_error_code_the_guest_declares` compares the IDL against
+the same source. Adding a code without documenting it fails `cargo test`. That
+matters because this document once claimed full coverage at a moment when three
+codes had none.
 
 The circuit-side bindings are covered separately by 25 tests in
-`cargo test -p multisig-core`, and the pin between the verifier and the
-membership binary by 2 more in `--test program_id_pin`. **57 in total** for the
-error-code story.
+`cargo test -p multisig-core`, plus 9 for the account layouts, and the client
+surface by 2 in `multisig-sdk` (one of them a doctest) and 2 in `multisig-cli`.
 
-That 57 is a subset of the 61 the README itemises: 30 + 25 + 2 here, with
-`multisig-sdk` (2) and `multisig-cli` (2) left out because neither asserts
-anything about a verifier error code. `cargo test --workspace` runs all 61.
+**97 in total.** `cargo test --workspace` runs all of them.

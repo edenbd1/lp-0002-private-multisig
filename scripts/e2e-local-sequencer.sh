@@ -122,7 +122,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-say "[1/5] starting a real sequencer in standalone mode on $RPC"
+say "[1/6] starting a real sequencer in standalone mode on $RPC"
 python3 - "$CONFIG_SRC" "$SEQ_HOME" <<'PY'
 import json, sys
 cfg = json.load(open(sys.argv[1]))
@@ -146,7 +146,7 @@ curl -s -m 3 -X POST "$RPC" -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"getAccount","params":["'"$TEST_SIGNER"'"]}' \
   | grep -q '"result"' || die "sequencer never answered on $RPC"
 
-say "[2/5] a throwaway wallet pointed at it"
+say "[2/6] a throwaway wallet pointed at it"
 # LEZ v0.2.2 made the wallet multi-sequencer: the single `sequencer_addr` became
 # a `sequencers` array. An old-format config does not fail over to a default —
 # the wallet refuses to deserialize it and dies before doing anything.
@@ -161,7 +161,7 @@ printf 'lp0002\n' | wallet_run account import public --private-key "$TEST_SIGNER
   || die "could not import the test signer"
 echo "  imported Public/$TEST_SIGNER"
 
-say "[3/5] funding it from the genesis vault"
+say "[3/6] funding it from the genesis vault"
 wallet_run vault claim --account-id "Public/$TEST_SIGNER" --amount 5000 </dev/null >/dev/null 2>&1
 for _ in $(seq 1 30); do
   bal=$(curl -s -m 3 -X POST "$RPC" -H 'Content-Type: application/json' \
@@ -172,7 +172,7 @@ for _ in $(seq 1 30); do
 done
 [ "${bal:-0}" -gt 0 ] 2>/dev/null || die "vault claim did not land"
 
-say "[4/5] one private account per approval"
+say "[4/6] one private account per approval"
 # Diff the account list around each creation instead of taking the tail of it.
 #
 # `account list` prints a derivation tree — `/`, `/0`, `/0/0`, `/1` — so a newly
@@ -196,10 +196,36 @@ done
 APPROVERS=$(IFS=,; echo "${APPROVER_LIST[*]}")
 echo "  $APPROVERS"
 
-say "[5/5] the lifecycle, against that sequencer"
+say "[5/6] a payee the treasury is allowed to pay"
+# The verifier refuses to pay an account the native transfer program does not
+# own (E_RECIPIENT_UNUSABLE, 5020): a balance in an account nobody can spend
+# from is a burn wearing a payment's clothes. `auth-transfer init` is what puts
+# a fresh public account under that program.
+list_public() {
+  wallet_run account list </dev/null 2>/dev/null \
+    | grep -oE 'Public/[1-9A-HJ-NP-Za-km-z]+' | sed 's|Public/||' | sort
+}
+before=$(list_public)
+wallet_run account new public </dev/null >/dev/null 2>&1 || die "could not create the payee"
+RECIPIENT=$(comm -13 <(printf '%s\n' "$before") <(list_public) | head -1)
+[ -n "$RECIPIENT" ] || die "account new public produced nothing new"
+wallet_run auth-transfer init --account-id "Public/$RECIPIENT" </dev/null >/dev/null 2>&1 \
+  || die "could not initialise the payee under the native transfer program"
+for _ in $(seq 1 30); do
+  owner=$(curl -s -m 3 -X POST "$RPC" -H 'Content-Type: application/json' \
+          -d '{"jsonrpc":"2.0","id":1,"method":"getAccount","params":["'"$RECIPIENT"'"]}' \
+          | python3 -c 'import json,sys; r=json.load(sys.stdin).get("result") or {}; print(r.get("program_owner",[0]*8)[0])' 2>/dev/null)
+  [ "${owner:-0}" != "0" ] && break
+  sleep 2
+done
+[ "${owner:-0}" != "0" ] || die "the payee is still unowned; auth-transfer init did not land"
+echo "  Public/$RECIPIENT, held by the native transfer program"
+
+say "[6/6] the lifecycle, against that sequencer"
 echo "  RISC0_DEV_MODE=0, $THRESHOLD real proof(s) — timed per machine below"
 SIGNER="$TEST_SIGNER" \
 APPROVERS="$APPROVERS" \
+RECIPIENT="$RECIPIENT" \
 MEMBERS="$MEMBERS" \
 THRESHOLD="$THRESHOLD" \
 SEQUENCER_URL="$RPC" \

@@ -24,6 +24,28 @@
           }
         },
         {
+          "name": "treasury",
+          "writable": true,
+          "signer": false,
+          "init": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "multisig_id"
+              },
+              {
+                "kind": "arg",
+                "path": "config_hash"
+              },
+              {
+                "kind": "const",
+                "value": "treasury"
+              }
+            ]
+          }
+        },
+        {
           "name": "authority",
           "writable": false,
           "signer": true,
@@ -61,6 +83,81 @@
         {
           "name": "threshold",
           "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "fund_treasury",
+      "accounts": [
+        {
+          "name": "multisig",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "multisig_id"
+              },
+              {
+                "kind": "arg",
+                "path": "config_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "multisig_id"
+              },
+              {
+                "kind": "arg",
+                "path": "config_hash"
+              },
+              {
+                "kind": "const",
+                "value": "treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "funder",
+          "writable": true,
+          "signer": true,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "multisig_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "config_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u128"
         }
       ]
     },
@@ -153,6 +250,28 @@
         },
         {
           "name": "proposal_ref",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "recipient",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u128"
+        },
+        {
+          "name": "memo_hash",
           "type": {
             "array": [
               "u8",
@@ -330,7 +449,7 @@
         },
         {
           "name": "proposal",
-          "writable": false,
+          "writable": true,
           "signer": false,
           "init": false,
           "pda": {
@@ -349,6 +468,34 @@
               }
             ]
           }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "multisig_id"
+              },
+              {
+                "kind": "arg",
+                "path": "config_hash"
+              },
+              {
+                "kind": "const",
+                "value": "treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient",
+          "writable": true,
+          "signer": false,
+          "init": false
         },
         {
           "name": "executor",
@@ -426,6 +573,355 @@
           }
         }
       ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "MultisigRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "format",
+            "type": "u8"
+          },
+          {
+            "name": "multisig_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "member_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "threshold",
+            "type": "u32"
+          },
+          {
+            "name": "treasury",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "authority",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "TreasuryRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "format",
+            "type": "u8"
+          },
+          {
+            "name": "multisig_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "config_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "format",
+            "type": "u8"
+          },
+          {
+            "name": "multisig_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "config_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "proposal_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "action_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "recipient",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "amount",
+            "type": "u128"
+          },
+          {
+            "name": "memo_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ApprovalMarkerRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "format",
+            "type": "u8"
+          },
+          {
+            "name": "proposal_ref",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "nullifier",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ExecutionMarkerRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "format",
+            "type": "u8"
+          },
+          {
+            "name": "proposal_ref",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "recipient",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "amount",
+            "type": "u128"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "nullifiers",
+            "type": {
+              "vec": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    {
+      "code": 5001,
+      "name": "E_BAD_WITNESS",
+      "msg": "The witness bytes did not decode as an `ApproveWitness`."
+    },
+    {
+      "code": 5002,
+      "name": "E_CONFIG_MISMATCH",
+      "msg": "`config_hash` is not `H(member_root || threshold)` for the supplied pair."
+    },
+    {
+      "code": 5003,
+      "name": "E_MULTISIG_NOT_ANCHORED",
+      "msg": "No multisig is committed at this `(multisig_id, config_hash)`: the member set or the threshold is not anchored."
+    },
+    {
+      "code": 5004,
+      "name": "E_PROPOSAL_NOT_ANCHORED",
+      "msg": "No proposal is committed at this `proposal_ref`."
+    },
+    {
+      "code": 5005,
+      "name": "E_NULLIFIER_MISMATCH",
+      "msg": "The supplied nullifier is not the one the witness yields."
+    },
+    {
+      "code": 5006,
+      "name": "E_MARKER_SEED_MISMATCH",
+      "msg": "A marker seed does not commit to the proposal and nullifier it claims to."
+    },
+    {
+      "code": 5007,
+      "name": "E_PROPOSAL_REF_MISMATCH",
+      "msg": "`proposal_ref` is not `H(multisig_id || config_hash || proposal_id || action_hash)`."
+    },
+    {
+      "code": 5008,
+      "name": "E_BAD_THRESHOLD",
+      "msg": "A threshold of zero would make the multisig meaningless."
+    },
+    {
+      "code": 5009,
+      "name": "E_APPROVAL_COUNT_MISMATCH",
+      "msg": "Fewer approval accounts than nullifiers, or vice versa."
+    },
+    {
+      "code": 5010,
+      "name": "E_THRESHOLD_NOT_MET",
+      "msg": "Fewer distinct approvals than the anchored threshold."
+    },
+    {
+      "code": 5011,
+      "name": "E_DUPLICATE_APPROVAL",
+      "msg": "The same nullifier was presented twice in one execution."
+    },
+    {
+      "code": 5012,
+      "name": "E_APPROVAL_NOT_FOR_PROPOSAL",
+      "msg": "An approval account is not the marker PDA for the nullifier it was paired with, or not for this proposal."
+    },
+    {
+      "code": 5013,
+      "name": "E_APPROVAL_NOT_ANCHORED",
+      "msg": "An approval marker exists at the right address but was never claimed by this program, so no membership proof was ever verified for it."
+    },
+    {
+      "code": 5014,
+      "name": "E_TREASURY_UNOWNED",
+      "msg": "The treasury account is not owned by this program, so this program may not debit it and must not pretend it can."
+    },
+    {
+      "code": 5015,
+      "name": "E_TREASURY_SHORT",
+      "msg": "The treasury cannot cover the proposed amount, or a balance would overflow."
+    },
+    {
+      "code": 5016,
+      "name": "E_FUNDER_NOT_TRANSFERABLE",
+      "msg": "The funding account is not held by the native transfer program, so chaining into that program with it would reach an account it does not own."
+    },
+    {
+      "code": 5017,
+      "name": "E_BAD_AMOUNT",
+      "msg": "A zero amount: a proposal that moves nothing, or a funding of nothing."
+    },
+    {
+      "code": 5018,
+      "name": "E_ACTION_MISMATCH",
+      "msg": "The action fields do not hash to the `action_hash`, or `action_hash` and `proposal_id` do not re-derive the `proposal_ref` the address commits to."
+    },
+    {
+      "code": 5019,
+      "name": "E_RECIPIENT_MISMATCH",
+      "msg": "The recipient account presented is not the one the proposal names."
+    },
+    {
+      "code": 5020,
+      "name": "E_RECIPIENT_UNUSABLE",
+      "msg": "The recipient is not held by the native transfer program, so it could never spend what it received; or it is the treasury itself."
+    },
+    {
+      "code": 5021,
+      "name": "E_ALREADY_EXECUTED",
+      "msg": "The proposal is already marked executed."
+    },
+    {
+      "code": 5022,
+      "name": "E_STATE_DECODE",
+      "msg": "An account this program owns does not hold the record it should."
     }
   ]
 }

@@ -133,6 +133,77 @@ approved* is what has to stay hidden, and it does. See
 [`security.md`](security.md) for the full statement of what is and is not
 hidden.
 
+## Balances and data: what a program may write
+
+`validate_execution` (`lee/state_machine/core/src/program/mod.rs:670-760`) is
+eight rules. Three of them decide whether a threshold can move money at all, and
+they are worth quoting because the first reading of them is usually wrong.
+
+**Rule 5 — a program may not *decrease* a balance it does not own.**
+
+```rust
+if post.account.balance < pre.account.balance
+    && account_program_owner != executing_program_id
+{
+    return Err(ExecutionValidationError::UnauthorizedBalanceDecrease { .. });
+}
+```
+
+Note what is *not* there: no condition on increases. Any program may raise any
+account's balance, and the payee needs no signature and no relationship with the
+payer. So a payout does not need a transfer authority over anybody — provided the
+payer is the program itself.
+
+That is why each multisig owns a **treasury PDA**. Debiting it is this program
+debiting its own account, which rule 5 permits; crediting the recipient is the
+direction rule 5 says nothing about. `execute` therefore moves value with no
+chained call and no second signature, and the recipient is not a signer.
+
+The mirror image is `fund_treasury`, where the payer is a *user's* account. That
+decrease is not this program's to make, so it is declared as a chained call into
+the program that owns the balance — `authenticated_transfer`, **pinned by
+ProgramId** rather than read off the account, because LEZ deployment is
+permissionless and a caller could otherwise hand over an account owned by a
+program they wrote.
+
+**Rule 8 — total balance is preserved across the instruction.** The debit and the
+credit must both appear in the same post-state list and must be equal. They are,
+and `execute_preserves_the_total_balance` asserts it against the guest's own
+journal, because a program that fails rule 8 fails it *after* a proof has been
+generated.
+
+**Rule 6 — data changes only if the program owns the account, or the pre-state is
+default.**
+
+```rust
+if pre.account.data != post.account.data
+    && pre.account != Account::default()
+    && account_program_owner != executing_program_id
+{
+    return Err(ExecutionValidationError::UnauthorizedDataModification { .. });
+}
+```
+
+The second clause is what lets an `init` account be claimed and written in one
+instruction: its pre-state *is* default. Every record this program writes is
+either into a PDA it is claiming right now (`create_multisig`, `create_proposal`,
+`approve`, `execute`'s marker) or into one it already owns (`execute` flipping the
+proposal's status). The layouts are in [`account-layout.md`](account-layout.md).
+
+### Two shapes the platform refuses, learned by being refused
+
+**An account cannot be initialised and paid into in the same transaction.** The
+chained transfer reads a pre-state the initialisation has not written yet. So
+`create_multisig` opens the treasury and `fund_treasury` fills it, in a second
+transaction — the same split `lez-payment-streams` makes between
+`initialize_vault` and `deposit`.
+
+**A transaction cannot both chain a call that credits an account and write that
+account's balance itself**: two competing post-states for one account, refused.
+`fund_treasury` therefore declares the chained call and touches no balance of its
+own, which `fund_treasury_chains_into_the_pinned_transfer_program` asserts by
+comparing the pre and post balances it emits.
+
 ## Summary
 
 | Constraint | Where it binds | How LP-0002 handles it |
@@ -142,3 +213,7 @@ hidden.
 | Private accounts are owned by the privacy protocol | Would bind if the program had to own member accounts | It does not — it owns only PDAs it creates itself |
 | `program_owner` on an uninitialised PDA | Every account the program reads | Used as the anchoring test: forged roots and lowered thresholds resolve to unowned addresses (`5003`, `5004`) |
 | `program_owner` on an approval marker | `execute` | Required to be this program (`5013`), which only `approve` can bring about, and only after a verified membership proof |
+| Rule 5: no decreasing a balance you do not own | `execute`'s payout | The treasury is a PDA of this program, so the debit is self-owned; the credit needs no authority because increases are unrestricted |
+| Rule 5, from the other side | `fund_treasury` | The funder's balance belongs to `authenticated_transfer`, so the decrease is a chained call into it — pinned by ProgramId (`5016`) |
+| Rule 8: total balance preserved | `execute` | Debit and credit are equal and both post-states are emitted together, asserted against the guest's journal |
+| Rule 6: data only on owned or default accounts | Every record written | Written either into a PDA being claimed in the same instruction, or into one the program already owns |

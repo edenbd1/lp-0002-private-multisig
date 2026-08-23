@@ -1430,6 +1430,7 @@ dependencies = [
 name = "multisig-verifier-guest"
 version = "0.1.0"
 dependencies = [
+ "borsh",
  "lee_core",
  "multisig-core",
  "risc0-zkvm",

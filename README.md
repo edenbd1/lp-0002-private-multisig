@@ -26,10 +26,23 @@ threshold lowered at execution time, resolves to an address nobody ever
 initialised. There is no code path that reads a threshold from caller-supplied
 data.
 
-**Approvals bind to the exact action.** `proposal_ref` commits to
-`(multisig_id, proposal_id, action_hash)`. Approvals gathered for a benign
-action are worthless for a malicious one published under the same proposal id —
-and, symmetrically, a junk action cannot burn the real proposal's markers.
+**Approvals bind to the exact action, and the action moves money.** Each
+multisig owns a treasury PDA. A proposal names a recipient and an amount;
+`proposal_ref` commits to `(multisig_id, config_hash, proposal_id, action_hash)`
+and `action_hash` commits to those fields, so approvals gathered for a benign
+payment are worthless for a malicious one published under the same proposal id.
+Reaching the threshold **debits the treasury and credits the recipient**, in the
+`execute` transaction. That works with no transfer authority over anybody: LEZ
+forbids a program from *decreasing* a balance it does not own and permits any
+program to *increase* any balance, and the treasury is this program's own
+account.
+
+**Every account it claims carries a record.** A `getAccount` on the multisig
+returns the member root, the threshold and the treasury address; on the proposal,
+the recipient, the amount and an executed flag; on the execution marker, the
+exact nullifiers consumed. The byte offsets are published in
+[docs/account-layout.md](docs/account-layout.md), and `scripts/decode-account.py`
+reads them with no dependency on this repository's Rust.
 
 **M markers are M distinct members.** Each marker address is a function of a
 secret-bound nullifier, so two addresses imply two secrets. `execute` checks
@@ -48,9 +61,10 @@ cd lp-0002-private-multisig
 ```
 
 No network, no funded account, no sequencer required. The demo runs the 25
-circuit tests, the 30 tests against the built verifier binary through the
-sequencer's own executor — five honest controls and 25 attacks — a full 3-of-5
-lifecycle, and reports the measured compute cost.
+circuit tests, the 59 tests against the built verifier binary through the
+sequencer's own executor — the forgeries it refuses, the balances it moves, and
+the records it writes — a full 3-of-5 lifecycle, and reports the measured
+compute cost.
 
 The only hard requirement is a Rust toolchain. `r0vm`, `spel`, `python3` and
 `curl` are each optional and each gates exactly one step: without one, that step
@@ -105,29 +119,32 @@ To rebuild the on-chain programs (needs Docker and `cargo-risczero`):
 
 ### Test inventory
 
-`cargo test --workspace` runs **61** tests. Counted, so you can check the claim:
+`cargo test --workspace` runs **97** tests. Counted, so you can check the claim:
 
 | Suite | Count | What it establishes |
 |---|---:|---|
 | `multisig-core` — `approve_adversarial` | 25 | The circuit-side bindings: non-members, borrowed Merkle paths, invented roots, forged nullifiers, bait-and-switch actions, the padding sentinel, tree construction |
-| `multisig-verifier-tests` — `verifier_rejects` | 30 | The **built verifier binary** through the sequencer's own executor: 5 honest controls (one per instruction, plus an over-threshold approval set that must still be accepted) and 25 rejections — 19 asserting a documented error code, 6 caught one layer earlier by SPEL's address validation or LEZ's init guard |
+| `multisig-core` — `state` unit tests | 9 | The published account layouts: exact lengths, refused formats, refused trailing bytes, and a round trip through the offsets `docs/account-layout.md` gives |
+| `multisig-verifier-tests` — `verifier_rejects` | 30 | The **built verifier binary** through the sequencer's own executor: 5 honest controls and 25 rejections — 19 asserting a documented error code, 6 caught one layer earlier by SPEL's address validation or LEZ's init guard |
+| `multisig-verifier-tests` — `state_and_transfer` | 22 | What passing the gate *does*: the treasury falls by the proposed amount and the recipient rises by it, read out of the guest's own journal; every claimed account decodes at the published offsets; and fifteen ways of redirecting, draining, replaying or corrupting the payment are refused |
+| `multisig-verifier-tests` — `idl_contract` | 5 | The IDL carries every error code and every record layout the guest declares, the instruction order has not moved, `docs/error-codes.md` documents every code, and `scripts/pda.py` derives the same treasury address the program does |
 | `multisig-verifier-tests` — `program_id_pin` | 2 | The verifier pins the committed membership binary, and the pin is not a placeholder |
-| `multisig-sdk` — `cross_check` + doctest | 2 | Every SDK derivation equals the `multisig-core` one the chain re-derives, and the four client-side guards hold |
-| `multisig-cli` — `resumable` | 2 | Through the **built binary**, one process per step: a partial set of approvals survives client restarts, and a non-member is refused in milliseconds instead of after two and a half minutes of proving |
+| `multisig-sdk` — `cross_check` + doctest | 2 | Every SDK derivation equals the `multisig-core` one the chain re-derives, and the client-side guards hold |
+| `multisig-cli` — `resumable` | 2 | Through the **built binary**, one process per step: a partial set of approvals survives client restarts, and a non-member is refused in milliseconds instead of after minutes of proving |
 
-25 + 30 + 2 + 2 + 2 = 61, and every row's own breakdown adds up to its count.
+25 + 9 + 30 + 22 + 5 + 2 + 2 + 2 = 97, and every row's own breakdown adds up to
+its count.
 
 One further test is `#[ignore]`d: it reports the measured compute cost rather
 than asserting a property. Run it with
-`cargo test -p multisig-verifier-tests -- --ignored --nocapture`.
+`cargo test -p multisig-verifier-tests --test verifier_rejects -- --ignored --nocapture`.
 
-[`docs/error-codes.md`](docs/error-codes.md) counts **57** rather than 61. That
-is the same inventory minus the two suites that assert nothing about the
-verifier's error codes — `multisig-sdk` (2) and `multisig-cli` (2). 57 is the
-count of tests behind the error-code table; 61 is what `cargo test --workspace`
+[`docs/error-codes.md`](docs/error-codes.md) counts **59** rather than 97. That
+is `multisig-verifier-tests` alone — the suites that run the built binary — which
+is the inventory behind the error-code table. 97 is what `cargo test --workspace`
 runs. Both numbers are in CI: the `workspace` job runs `multisig-core`,
 `multisig-sdk` and `multisig-cli`, the `verifier` job runs
-`multisig-verifier-tests`, and between them all 61 run on every push.
+`multisig-verifier-tests`, and between them all 97 run on every push.
 
 **The deployed program is genuinely under test.** The two guest crates are
 excluded from the host workspace because they build for
@@ -142,7 +159,9 @@ that ships untested.
 ```bash
 msig new-multisig --members 5 --threshold 3 --out ms/
 msig create-multisig-args --dir ms/ --out ms/create.args
-msig propose --dir ms/ --proposal-id 01..01 --action "transfer 100 to the treasury"
+msig fund-treasury-args --dir ms/ --amount 500 --out ms/fund.args
+msig propose --dir ms/ --proposal-id 01..01 \
+     --recipient <64-hex account id> --amount 250 --memo "pay the auditors"
 msig create-proposal-args --dir ms/ --proposal-id 01..01 --out ms/prop.args
 msig approve-args --dir ms/ --proposal-id 01..01 --member 0 --out ms/a0.args
 msig approve-args --dir ms/ --proposal-id 01..01 --member 3 --out ms/a3.args
@@ -185,15 +204,18 @@ compute different commitments. Verified on **LogosBasecamp 0.2.2**.
    plugin resolves it from its own directory, so the *msig binary* field stays
    empty unless you are running out of a build tree.
 
-3. **Point *Multisig folder*** at a directory. `artifacts/testnet` is the live
-   deployment; any directory made by `msig new-multisig` also works.
+3. **Point *Multisig folder*** at a directory made by `msig new-multisig`.
+   (`artifacts/testnet` is the record of a *superseded* deployment and predates
+   the typed action, so the current `msig` will not parse its proposal file —
+   see the README inside that directory.)
 
 4. **Create** — set members and threshold, press *New multisig*. Writes
    `multisig.json` and `members.json` and prints the member root and the config
    hash that anchors the pair on chain.
 
-5. **Propose** — enter a proposal id and the action text, press *Bind*.
-   Re-binding the same id to a different action is refused, and the message
+5. **Propose** — enter a proposal id, the recipient's account id, the amount and
+   the memo, press *Bind*. All four are bound into the proposal reference, so
+   re-binding the same id to a different payment is refused and the message
    explains why.
 
 6. **Approve** — pick a member index, or paste a member's own secret, and press
@@ -201,9 +223,8 @@ compute different commitments. Verified on **LogosBasecamp 0.2.2**.
    privacy-preserving path; proving takes about two and a half minutes
    (measured — see [docs/cu-costs.md](docs/cu-costs.md)).
 
-7. **Status** — shows how many approvals have been gathered, and the marker
-   addresses. Against `artifacts/testnet` it reports the live
-   `2-of-3 · 2/2 READY TO EXECUTE`. It reads the resumable state file, so it
+7. **Status** — shows how many approvals have been gathered, the payment they
+   authorise, and the marker addresses. It reads the resumable state file, so it
    survives a Basecamp restart.
 
 8. **Build execution** — emits the execution arguments once the threshold is met.
@@ -217,10 +238,10 @@ all the chain records and all the other members can see.
 
 | Path | What |
 |---|---|
-| `crates/multisig-core` | Shared primitives and the in-circuit approval logic. `no_std`. 25 adversarial tests |
+| `crates/multisig-core` | Shared primitives, the in-circuit approval logic, and the account-layout codec. `no_std`. 34 tests |
 | `crates/membership-circuit/methods/guest-lez` | The membership proof as a native LEZ program, so the privacy circuit composes it with `env::verify` |
-| `crates/multisig-verifier-spel/methods/guest` | The on-chain verifier: `create_multisig`, `create_proposal`, `approve`, `execute` |
-| `crates/multisig-verifier-tests` | 32 tests against the built binary, through the sequencer's own executor: 30 on the instructions, 2 pinning the membership binary |
+| `crates/multisig-verifier-spel/methods/guest` | The on-chain verifier: `create_multisig`, `fund_treasury`, `create_proposal`, `approve`, `execute` |
+| `crates/multisig-verifier-tests` | 59 tests against the built binary, through the sequencer's own executor: 30 rejections and controls, 22 on the state it writes and the value it moves, 5 on the IDL and the docs, 2 pinning the membership binary |
 | `crates/multisig-sdk` | The reusable client library for Logos modules. Transport-agnostic |
 | `crates/multisig-cli` | `msig`, the command line client |
 | `app/` | The Basecamp GUI |
@@ -231,6 +252,9 @@ all the chain records and all the other members can see.
 
 - **[docs/security.md](docs/security.md)** — the threat model, what is hidden
   from whom, what is deliberately public, and the residual risks
+- **[docs/account-layout.md](docs/account-layout.md)** — what every account
+  holds, field by field, with byte offsets, so a stranger with `getAccount` can
+  decode one by hand
 - [docs/error-codes.md](docs/error-codes.md) — every rejection, the attack it
   stops, the test that proves it
 - **[docs/lez-account-model.md](docs/lez-account-model.md)** — how the nonce and
@@ -256,12 +280,17 @@ all the chain records and all the other members can see.
 guest lockfiles; `4.4.2` breaks the guest toolchain with *"rustc 1.88.0-dev is
 not supported"*.
 
-## Live on the public LEZ testnet
+## On the public LEZ testnet — superseded, pending a redeploy
 
-A **2-of-3** multisig, created, proposed, approved to threshold on the
-privacy-preserving path, and executed. Every hash is live — check any of them
-with `getTransaction` against `https://testnet.lez.logos.co`, or check all of
-them at once from a clean clone, with nothing to set up:
+**Read [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) before following any address
+here.** Giving the accounts state and the threshold a treasury changed the
+verifier guest, and on LEZ a program's identity *is* its ImageID. The seven
+transactions below are still on chain and still valid; what they are no longer is
+*this* program's, and the five account addresses they produced belong to the
+previous ImageID. `./scripts/deploy-and-run.sh` re-runs the whole lifecycle, and
+DEPLOYMENT.md lists what has to be renumbered when it does.
+
+The record of the run that happened, from ImageID `5bb40082…`:
 
 ```bash
 ./scripts/verify-onchain-lifecycle.sh
@@ -297,7 +326,7 @@ Full detail, including how to re-verify each one yourself, in
 | Program | ImageID |
 |---|---|
 | `membership_lez` | `56f784d6b37f5cbac85d2eca3e28f56346e8739e6c22cb15a1b7165616758e31` |
-| `multisig_verifier` | `5bb4008273ddc31d1c2b5bad8835daaf4c567e029dbb059c20c7e83ba5966f82` |
+| `multisig_verifier` | `1346b65293ac9b11d4b1029a0d02559462238582124062925a3ad24298ff4e1e` |
 
 The verifier pins the membership program id as a constant, so a chained call can
 only ever reach the audited binary. `./scripts/build-programs.sh --check` fails if

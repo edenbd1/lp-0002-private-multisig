@@ -51,7 +51,7 @@ jobs:
       # criteria — a partial set of approvals surviving client restarts, and a
       # proof failure surfacing a clear error instead of a panic. It drives the
       # built `msig` binary one process per step, needs no r0vm and no network,
-      # and was the only part of the claimed 61 tests that no workflow ran.
+      # and was the only part of the claimed test inventory that no workflow ran.
       - name: CLI reliability tests
         run: cargo test -p multisig-cli
 
@@ -62,8 +62,12 @@ jobs:
           M=target/release/msig
           W=$(mktemp -d)
           P=0000000000000000000000000000000000000000000000000000000000000001
+          R=5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e
           $M new-multisig --members 5 --threshold 3 --out "$W"
-          $M propose --dir "$W" --proposal-id $P --action "transfer 100 to the treasury"
+          $M fund-treasury-args --dir "$W" --amount 500 --out "$W/fund.args"
+          $M treasury-seeds --dir "$W"
+          $M propose --dir "$W" --proposal-id $P \
+            --recipient $R --amount 250 --memo "transfer 250 to the grants treasury"
           for i in 0 3 4; do
             $M approve-args --dir "$W" --proposal-id $P --member $i --out "$W/a$i.args"
           done
@@ -73,9 +77,17 @@ jobs:
           if $M approve-args --dir "$W" --proposal-id $P --member 0 --out "$W/dup.args"; then
             echo "FAIL: a double approval was accepted"; exit 1
           fi
-          echo "-- swapping the action under the same id must be refused"
-          if $M propose --dir "$W" --proposal-id $P --action "transfer 1000000 to the attacker"; then
+          echo "-- swapping the payment under the same id must be refused"
+          if $M propose --dir "$W" --proposal-id $P \
+               --recipient 6666666666666666666666666666666666666666666666666666666666666666 \
+               --amount 1000000 --memo "transfer 250 to the grants treasury"; then
             echo "FAIL: the action was swapped"; exit 1
+          fi
+          echo "-- a proposal that moves nothing must be refused"
+          if $M propose --dir "$W" --proposal-id \
+               0000000000000000000000000000000000000000000000000000000000000002 \
+               --recipient $R --amount 0 --memo "nothing at all"; then
+            echo "FAIL: a zero-amount proposal was accepted"; exit 1
           fi
           echo "-- state survives a restart"
           test -f "$W/proposals/$P.json"
@@ -113,7 +125,14 @@ jobs:
         run: cargo test -p multisig-verifier-tests
 
       - name: Report compute cost
-        run: cargo test -p multisig-verifier-tests -- --ignored --nocapture
+        run: cargo test -p multisig-verifier-tests --test verifier_rejects -- --ignored --nocapture
+
+      # `spel generate-idl` always emits `errors: []`, so the codes are merged
+      # into the committed IDL by a script. A generation step nobody runs is a
+      # gap that survives review, so the artefact is checked rather than the
+      # habit.
+      - name: The IDL carries the guest's error codes
+        run: python3 scripts/idl-errors.py --check
 
       # The verifier hard-codes MEMBERSHIP_LEZ_PROGRAM_ID so a chained call can
       # only reach the audited membership binary. Drift is a security bug, so it

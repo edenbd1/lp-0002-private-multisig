@@ -37,10 +37,22 @@ fn sdk_derivations_match_core_exactly() {
         compute_config_hash(&core_root, 3),
         "SDK config_hash != core"
     );
-    let action = b"transfer 100 to the treasury";
-    let p = Proposal::new(&ms, [0x11; 32], action);
-    let ah = compute_action_hash(&[0xA0; 32], action);
+    let memo = b"transfer 250 to the grants treasury";
+    let recipient = [0x5E; 32];
+    let p = Proposal::new(&ms, [0x11; 32], recipient, 250, memo);
+    let memo_hash = compute_memo_hash(memo);
+    let ah = compute_transfer_action_hash(&[0xA0; 32], &recipient, 250, &memo_hash);
     assert_eq!(p.action_hash(), ah, "SDK action_hash != core");
+    assert_eq!(p.memo_hash(), memo_hash, "SDK memo_hash != core");
+    assert_eq!(p.recipient(), recipient);
+    assert_eq!(p.amount(), 250);
+    // The canonical action bytes are what the digest above commits to, and the
+    // on-chain program rebuilds them from the record it stores.
+    assert_eq!(
+        ah,
+        compute_action_hash(&[0xA0; 32], &encode_action(&recipient, 250, &memo_hash)),
+        "the transfer helper must equal the long form"
+    );
     assert_eq!(
         p.proposal_ref(),
         compute_proposal_ref(&[0xA0; 32], &ms.config_hash(), &[0x11; 32], &ah),
@@ -85,4 +97,20 @@ fn sdk_derivations_match_core_exactly() {
         p.execute_args(&[a.clone(), a.clone(), a.clone()]).is_err(),
         "duplicates must be refused"
     );
+    // A payment of nothing is refused before it can be published, with the same
+    // verdict the chain would give minutes later.
+    let empty = Proposal::new(&ms, [0x12; 32], recipient, 0, memo);
+    assert_eq!(
+        empty.create_args().unwrap_err(),
+        SdkError::ZeroAmount,
+        "a zero-amount proposal must be refused"
+    );
+    assert_eq!(ms.fund_args(0).unwrap_err(), SdkError::ZeroAmount);
+    // The treasury seeds are the multisig's own two, then the literal.
+    assert_eq!(
+        ms.treasury_seeds(),
+        [[0xA0; 32], ms.config_hash(), TREASURY_SEED]
+    );
+    assert_eq!(&TREASURY_SEED[..8], b"treasury");
+    assert_eq!(&TREASURY_SEED[8..], &[0u8; 24]);
 }

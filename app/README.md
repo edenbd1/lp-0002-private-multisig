@@ -1,7 +1,7 @@
 # LP-0002 Basecamp app
 
-A Logos Basecamp surface for the private multisig: create a member set, bind an
-action to a proposal, approve as a member, watch the threshold fill, and build
+A Logos Basecamp surface for the private multisig: create a member set, bind a
+payment to a proposal, approve as a member, watch the threshold fill, and build
 the execution.
 
 Every button runs an `msig` subcommand through `MultisigBridge`, so the GUI and
@@ -107,8 +107,9 @@ its own `main_ui` plugin emits for `IComponent`.
 2. **Create** — pick N and M, press *New multisig*. This writes `multisig.json`
    and `members.json` and prints the member root and the config hash that anchors
    the pair on chain.
-3. **Propose** — enter a proposal id and the action text, press *Bind*.
-   Re-binding the same id to a different action is refused, and the message
+3. **Propose** — enter a proposal id, the recipient's account id, the amount and
+   the memo, press *Bind*. All four are bound into the proposal reference, so
+   re-binding the same id to a different payment is refused, and the message
    explains why: the approvals already gathered do not carry over.
 4. **Approve** — pick a member index, or paste a member's own secret, and press
    *Build approval*. Submit the emitted `.args` with `spel` on the
@@ -122,7 +123,7 @@ all the chain records, and all the other members can see.
 
 ## Packaged asset
 
-`app/lp-0002-multisig.lgx` (2.4 MB, SHA-256 `7937940c78c1f16604ac126a0292e4cd8a02c04819c5c4d06451589b2487ff52`) is the packaged
+`app/lp-0002-multisig.lgx` (2.5 MB, SHA-256 `50b6aa1caa1caddafbbbde445d53651dd28d7d11ad551de2b8e3a0f7cc551550`) is the packaged
 module. It carries **two variants** — `darwin-arm64` and `linux-amd64` — each
 with the plugin library, the QML view, the module metadata, and the `msig` CLI
 the bridge drives. Basecamp selects the one matching the host.
@@ -154,7 +155,8 @@ MainContainer: Added plugin dock to WorkspaceArea: "lp-0002-multisig"
 Successfully loaded UI module: "lp-0002-multisig"
 ```
 
-Pointing **Multisig folder** at `artifacts/testnet` and pressing **Status**
+Pointing **Multisig folder** at a directory made by `msig new-multisig` and
+pressing **Status**
 returns the live deployment's state — `2-of-3`, `2/2 READY TO EXECUTE`, and the
 two approval markers — with the `msig` field left empty, because the plugin
 resolves the CLI shipped inside the package.

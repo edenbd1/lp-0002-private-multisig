@@ -73,6 +73,10 @@ extern crate alloc;
 use alloc::vec::Vec;
 use sha2::{Digest, Sha256};
 
+/// The on-chain account layouts and their decoders. See `docs/account-layout.md`.
+#[cfg(feature = "records")]
+pub mod state;
+
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -149,6 +153,14 @@ pub const APPROVAL_MARKER_PREFIX: [u8; 32] = [
 pub const EXECUTION_MARKER_PREFIX: [u8; 32] = [
     b'/', b'l', b'p', b'-', b'0', b'0', b'0', b'2', b'/', b'v', b'0', b'.', b'1', b'/', b'E', b'x',
     b'e', b'c', b'M', b'a', b'r', b'k', b'/', 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
+/// The human-readable memo folded into an action.
+/// ASCII `"/lp-0002/v0.1/ActionMemo/"` (25 bytes) + 7 zero bytes.
+#[cfg(feature = "records")]
+pub const ACTION_MEMO_PREFIX: [u8; 32] = [
+    b'/', b'l', b'p', b'-', b'0', b'0', b'0', b'2', b'/', b'v', b'0', b'.', b'1', b'/', b'A', b'c',
+    b't', b'i', b'o', b'n', b'M', b'e', b'm', b'o', b'/', 0, 0, 0, 0, 0, 0, 0,
 ];
 
 /// Sentinel used to pad a member set up to a power of two. Domain-separated so
@@ -262,6 +274,88 @@ pub fn compute_action_hash(multisig_id: &[u8; 32], action: &[u8]) -> [u8; 32] {
     h.update(multisig_id);
     h.update(action);
     h.finalize().into()
+}
+
+// ---------------------------------------------------------------------------
+// The action, given a shape
+//
+// `action` used to be opaque bytes: the protocol bound them by hash and never
+// looked inside. That is enough to make approvals unforgeable, and not enough to
+// make an execution *do* anything — the chain had no way to know what the
+// approved action was, so the threshold gated a marker and nothing else.
+//
+// A v1 action is therefore a fixed 81-byte record. It is behind the `records`
+// feature, off for the membership guest, which has no business knowing what an
+// action is — see the note in Cargo.toml.
+//
+// A v1 action is a fixed 81-byte record. `create_proposal` checks that
+// the record it is handed hashes to the `action_hash` the proposal's address
+// commits to, and stores it; `execute` reads it back, re-derives the hash, and
+// pays it out. The memo keeps the human sentence bound without putting arbitrary
+// length inside the record.
+// ---------------------------------------------------------------------------
+
+/// The only action format this program understands. A leading version byte
+/// rather than a type tag: there is one shape, and a future second shape must
+/// announce itself rather than be inferred from a length.
+#[cfg(feature = "records")]
+pub const ACTION_FORMAT_V1: u8 = 1;
+
+/// Length of a v1 encoded action: `format(1) ‖ recipient(32) ‖ amount_le(16) ‖ memo_hash(32)`.
+#[cfg(feature = "records")]
+pub const ACTION_ENCODED_LEN: usize = 81;
+
+/// The canonical bytes of a v1 action.
+///
+/// `format(1) ‖ recipient(32) ‖ amount_le(16) ‖ memo_hash(32)`
+///
+/// Fixed width and little-endian throughout, so two clients that agree on the
+/// fields cannot disagree on the digest.
+#[cfg(feature = "records")]
+#[must_use]
+pub fn encode_action(
+    recipient: &[u8; 32],
+    amount: u128,
+    memo_hash: &[u8; 32],
+) -> [u8; ACTION_ENCODED_LEN] {
+    let mut out = [0u8; ACTION_ENCODED_LEN];
+    out[0] = ACTION_FORMAT_V1;
+    out[1..33].copy_from_slice(recipient);
+    out[33..49].copy_from_slice(&amount.to_le_bytes());
+    out[49..81].copy_from_slice(memo_hash);
+    out
+}
+
+/// The commitment to an action's human-readable memo.
+///
+/// `memo_hash = SHA256(ACTION_MEMO_PREFIX || memo)`
+///
+/// The memo is what a member reads before approving — "pay the auditors" — and
+/// it is bound as tightly as the recipient and the amount are, without letting
+/// an arbitrary-length string into the fixed record.
+#[cfg(feature = "records")]
+#[must_use]
+pub fn compute_memo_hash(memo: &[u8]) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update(ACTION_MEMO_PREFIX);
+    h.update(memo);
+    h.finalize().into()
+}
+
+/// The action hash of a v1 treasury transfer, from its fields.
+///
+/// Equivalent to `compute_action_hash(multisig_id, &encode_action(..))`, spelled
+/// out because every caller — the CLI, the SDK, the tests and the on-chain
+/// program — must agree on it exactly.
+#[cfg(feature = "records")]
+#[must_use]
+pub fn compute_transfer_action_hash(
+    multisig_id: &[u8; 32],
+    recipient: &[u8; 32],
+    amount: u128,
+    memo_hash: &[u8; 32],
+) -> [u8; 32] {
+    compute_action_hash(multisig_id, &encode_action(recipient, amount, memo_hash))
 }
 
 /// The proposal reference every approval is scoped to.

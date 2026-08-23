@@ -7,37 +7,79 @@ Measured by replaying each instruction through the **sequencer's own executor**
 Reproduce with:
 
 ```bash
-cargo test -p multisig-verifier-tests -- --ignored --nocapture
+cargo test -p multisig-verifier-tests --test verifier_rejects -- --ignored --nocapture
 ```
 
 ## Results
 
-Verifier ImageID `5bb4008273ddc31d1c2b5bad8835daaf4c567e029dbb059c20c7e83ba5966f82`.
+Verifier ImageID `1346b65293ac9b11d4b1029a0d02559462238582124062925a3ad24298ff4e1e`.
 
 | Instruction | Segments | User cycles | Proving cycles | Share of the public budget |
 |---|---:|---:|---:|---:|
-| `approve` | 1 | 337,105 | 524,288 | 1.56 % |
-| `execute` (M=1) | 1 | 267,055 | 524,288 | 1.56 % |
-| `execute` (M=3) | 1 | 363,510 | 524,288 | 1.56 % |
-| `execute` (M=5) | 1 | 461,604 | 524,288 | 1.56 % |
+| `approve` | 1 | 495,788 | 1,048,576 | 3.12 % |
+| `execute` (M=1) | 1 | 571,589 | 1,048,576 | 3.12 % |
+| `execute` (M=3) | 1 | 735,024 | 1,048,576 | 3.12 % |
+| `execute` (M=5) | 1 | 896,983 | 1,048,576 | 3.12 % |
+| `execute` (M=7) | 2 | 1,058,884 | 1,310,720 | 3.91 % |
 
-`create_multisig` and `create_proposal` do strictly less work than `execute`
-(M=1) — a hash, a comparison, and a PDA claim — and are bounded by it.
+`create_multisig`, `fund_treasury` and `create_proposal` do strictly less work
+than `execute` (M=1) — a few hashes, a comparison, and a PDA claim — and are
+bounded by it.
+
+Every row is a real accepted execution against a fixture of that size, which is
+why the M=7 row needs a 7-member set rather than a 5-member one with the
+threshold overwritten: the threshold is inside `config_hash`, which is inside
+every PDA address, so a fixture edited in place resolves to accounts that do not
+exist and the table would be measuring rejections.
+
+## These numbers went up, and by how much
+
+The previous revision — ImageID `5bb40082…`, the one currently on chain —
+measured `approve` at **337,105** and `execute` (M=1) at **267,055**. Both were
+re-measured from that exact committed binary rather than quoted from memory, so
+the comparison is between two runs of the same command.
+
+Persisting state and paying a treasury cost roughly **159,000 cycles on
+`approve`** and **305,000 on `execute` (M=1)**, and raised the per-approval slope
+from ~48,600 to ~81,700.
+
+Where it went, in rough order of size:
+
+* **Account data crosses the boundary twice.** Every account's `data` is read in
+  as a pre-state and written back as a post-state. The five records add 133, 65,
+  210, 65 and 86+32M bytes to instructions that previously moved none — and on
+  `execute` the marker records are paid for once per approval, which is most of
+  the slope increase.
+* **Borsh, in both directions**, on the multisig and proposal records.
+* **Two more SHA-256 per execution**, re-deriving `action_hash` and
+  `proposal_ref` from the stored action and requiring them to equal the address
+  the approvals were bound to.
+
+That is the price of the accounts being readable and the threshold being worth
+something, and it is stated rather than absorbed.
 
 ## Reading the numbers
 
 **User cycles** is the guest's real work. **Proving cycles** is the padded
-power-of-two segment the prover actually commits to, which is why all four rows
-show the same 524,288: every instruction fits comfortably inside one segment, and
-a segment is billed whole. The practical headroom is therefore large — the
-budget share stays at 1.56 % until an instruction crosses 524,288 user cycles.
+power-of-two segment the prover actually commits to, which is why the first four
+rows show the same 1,048,576: they fit inside one segment, and a segment is
+billed whole. That is also where the previous revision sat one power of two
+lower, at 524,288 — crossing that boundary is what doubled the *billed* figure
+while the real work rose by about half.
 
-**`execute` scales linearly in M**, at roughly **48,600 user cycles per
+**`execute` scales linearly in M**, at roughly **81,700 user cycles per
 additional approval**. That is one SHA-256 for the marker seed, one for the PDA
-derivation, plus the pairwise distinctness comparisons. The distinctness check is
-quadratic in M by choice: M is a multisig threshold, a small number, and a sort
-would cost more cycles than it saves at these sizes. Extrapolating, a 10-of-N
-execution lands near 700k user cycles and still fits one segment.
+derivation, the marker account's own 65 bytes in and out, plus the pairwise
+distinctness comparisons. The distinctness check is quadratic in M by choice: M
+is a multisig threshold, a small number, and a sort would cost more cycles than
+it saves at these sizes.
+
+**M=7 is the first row that spans two segments**, at 3.91 % of the budget. It is
+measured rather than extrapolated, which is why it is in the table: the previous
+revision's comment claimed the measurements covered M up to 7 while the loop
+generating them stopped at 5. Extrapolating from the slope, a 10-of-N execution
+lands near 1.3M user cycles — still two segments, and still under 4 % of the
+32M-cycle public budget.
 
 **What is excluded.** These are the guest's own cycles. They do not include
 LEZ's privacy circuit recursively verifying the chained membership call — that
@@ -45,7 +87,11 @@ is the platform's cost, not this program's, and it is identical for any program
 that composes a chained call.
 
 **Wall-clock is a different number entirely.** Executing `approve` takes
-milliseconds; *proving* it with `RISC0_DEV_MODE=0` is what costs time.
+milliseconds; *proving* it with `RISC0_DEV_MODE=0` is what costs time. The
+wall-clock figures below were measured against the **previous** verifier, whose
+`approve` was about a third cheaper in cycles; they have not been re-measured
+against this one, and each is labelled with the run it came from rather than
+quietly carried forward.
 
 ## Proof generation time, measured
 
@@ -165,11 +211,12 @@ transaction lands even though the transaction is fine.
 
 These numbers are for the verifier *after* the proposal PDA was reseeded to
 `[multisig_id, config_hash, proposal_ref]` and `config_hash` was folded into
-`proposal_ref` (see [`security.md`](security.md)). The extra seed costs one more
+`proposal_ref` (see [`security.md`](security.md)), and *after* the accounts were
+given records to carry and the threshold a treasury to spend (see
+[`account-layout.md`](account-layout.md)). The extra PDA seed costs one more
 SHA-256 in the address derivation SPEL performs before the body runs — about
-150-650 cycles depending on the instruction, visible in the numbers above and
-material to nothing: every instruction still fits one segment at 1.56 % of the
-budget.
+150-650 cycles depending on the instruction, and material to nothing next to the
+record encoding above.
 
 ## Method note
 

@@ -1,15 +1,45 @@
 # Deployment
 
-## Status
+## Status: the programs in this repository have not been deployed yet
 
-**Deployed, and the full lifecycle has been run on the public LEZ testnet.**
-Every hash below is live; re-check any of them with `getTransaction` against
-`https://testnet.lez.logos.co`.
+Read this before any address below.
 
-## The lifecycle, on chain
+Giving the accounts state, and giving the threshold a treasury to spend, changed
+the verifier guest. On LEZ a program's identity **is** its ImageID, and every PDA
+address is derived from it, so:
+
+| | previously deployed | this repository |
+|---|---|---|
+| `multisig_verifier` ImageID | `5bb4008273ddc31d1c2b5bad8835daaf4c567e029dbb059c20c7e83ba5966f82` | **`1346b65293ac9b11d4b1029a0d02559462238582124062925a3ad24298ff4e1e`** |
+| `membership_lez` ImageID | `56f784d6b37f5cbac85d2eca3e28f56346e8739e6c22cb15a1b7165616758e31` | `56f784d6b37f5cbac85d2eca3e28f56346e8739e6c22cb15a1b7165616758e31` — unchanged |
+
+**The seven transactions listed below are still on chain and still valid.** What
+they are no longer is *this* program's: they were signed against the previous
+ImageID, and the five account addresses they produced belong to that program.
+Deriving those addresses from the binary committed here yields five different
+addresses, and `getAccount` on them returns nothing.
+
+So the table below is kept as a record of a lifecycle that really happened, and
+**every address in this document is superseded** until the lifecycle is re-run.
+`./scripts/deploy-and-run.sh` re-runs it end to end; the checklist at the bottom
+of this file lists what has to be renumbered afterwards.
+
+**The membership program did not move, and that took work.** It links
+`multisig-core`, and with `lto = "fat"` even unreachable code in a linked crate
+shifts the ELF — the first build of this revision moved the membership ImageID to
+`f369cff3…` purely because the crate had gained an account-layout module the
+membership guest never calls. Putting that vocabulary behind a `records` feature
+the membership guest does not enable brings it back to `56f784d6…` byte for byte.
+
+So the deployed membership binary is still exactly the source committed here, its
+deployment transaction is still live, and `MEMBERSHIP_LEZ_PROGRAM_ID` — the pin
+that stops a chained call reaching anything else — is unchanged. **One program
+needs redeploying, not two.**
+
+## The lifecycle, on chain — from the previous ImageID
 
 A **2-of-3** multisig: created, a proposal published, two approvals gathered on
-the privacy-preserving path, and executed.
+the privacy-preserving path, and executed. Superseded, per the note above.
 
 | Step | Transaction | On the explorer |
 |---|---|---|
@@ -102,6 +132,26 @@ with `scripts/pda.py` and query `getAccount`.
 | approval marker B | `FMj5yL8cpcrQzN7xhENHC2vysTrNwbtokPbTYjr98rPt` |
 | execution marker | `CpiuicNDii6uCeMXtjd1W6hek6Vq35HJ7k3mz1Q82Fui` |
 
+Those five are from the previous ImageID and they carry **no data**: that
+verifier claimed addresses and wrote nothing behind them, which is the defect
+this revision exists to remove. A re-run produces six accounts — the five above
+plus the **treasury** — and every one of them decodes, field by field, per
+[`account-layout.md`](account-layout.md):
+
+```bash
+scripts/decode-account.py multisig <address>
+scripts/decode-account.py treasury <address>
+scripts/decode-account.py proposal <address>
+```
+
+The treasury's address is derived like any other PDA, with the `literal` seed
+spelled `str:`:
+
+```bash
+scripts/pda.py artifacts/programs/multisig_verifier.bin \
+    <multisig_id> <config_hash> str:treasury
+```
+
 **The two approval markers are the whole claim.** Each exists only because
 `approve` ran and claimed it; `approve` declares a `ChainedCall` to
 `membership_lez`; and on the privacy path LEZ's circuit composes that call with a
@@ -123,7 +173,7 @@ counted them against the threshold anchored in the multisig's address.
 | Program | ImageID | ProgramId (hex) |
 |---|---|---|
 | `membership_lez` | `56f784d6b37f5cbac85d2eca3e28f56346e8739e6c22cb15a1b7165616758e31` | `d684f756,ba5c7fb3,ca2e5dc8,63f5283e,9e73e846,15cb226c,5616b7a1,318e7516` |
-| `multisig_verifier` | `5bb4008273ddc31d1c2b5bad8835daaf4c567e029dbb059c20c7e83ba5966f82` | `8200b45b,1dc3dd73,ad5b2b1c,afda3588,027e564c,9c05bb9d,3be8c720,826f96a5` |
+| `multisig_verifier` | `1346b65293ac9b11d4b1029a0d02559462238582124062925a3ad24298ff4e1e` | `52b64613,119bac93,9a02b1d4,9455020d,82852362,92624012,42d23a5a,1e4eff98` |
 
 Verify for yourself:
 
@@ -134,8 +184,11 @@ spel program-id artifacts/programs/multisig_verifier.bin
 
 **The build is reproducible.** Rebuilding the verifier guest from a clean
 `cargo risczero build` reproduces ImageID
-`5bb4008273ddc31d1c2b5bad8835daaf4c567e029dbb059c20c7e83ba5966f82` exactly —
-checked, not assumed. That matters because the ImageID *is* the program's
+`1346b65293ac9b11d4b1029a0d02559462238582124062925a3ad24298ff4e1e` exactly —
+checked, not assumed. The membership guest reproduces
+`56f784d6b37f5cbac85d2eca3e28f56346e8739e6c22cb15a1b7165616758e31` — the id it had before this
+revision and the one already on chain — which is the check that the `records`
+feature gate does what it claims. That matters because the ImageID *is* the program's
 identity on chain: an evaluator who rebuilds and gets the same id knows the
 committed binary is the source in this repository, compiled.
 
@@ -180,13 +233,42 @@ export LEE_WALLET_HOME_DIR=~/.lee/wallet
 export SIGNER=<funded Public account id>
 # ONE private account per approval, comma separated — see the warning below.
 export APPROVERS=<private-id-1>,<private-id-2>,<private-id-3>
+# The account the proposal pays. It must be held by the native transfer program
+# and must not be the signer.
+export RECIPIENT=<Public account id>
 
 ./scripts/deploy-and-run.sh
 ```
 
-It deploys both programs, creates a multisig, publishes a proposal, gathers
-`THRESHOLD` approvals on the privacy-preserving path, and executes. Every
-transaction hash is appended to `.testnet/lifecycle.tsv`.
+It deploys both programs, creates a multisig **and its treasury**, funds the
+treasury, publishes a proposal to pay `AMOUNT` out of it, gathers `THRESHOLD`
+approvals on the privacy-preserving path, executes, and then reads both balances
+back off the chain and **fails if they did not move by exactly `AMOUNT`**. Every
+transaction hash is appended to `.testnet/lifecycle.tsv`, along with the treasury
+address and the before/after balances.
+
+### Making a recipient
+
+The verifier refuses to pay an account the native transfer program does not own
+(`E_RECIPIENT_UNUSABLE`, 5020): a balance in an account nobody can spend from is
+a burn wearing a payment's clothes. A fresh public account is default-owned, so
+it needs one instruction to become payable:
+
+```bash
+wallet account new public                                 # note the id
+wallet auth-transfer init --account-id Public/<that id>   # claims it
+```
+
+Confirm it before running the lifecycle — `getAccount` must show a non-zero
+`program_owner`:
+
+```bash
+curl -s -X POST https://testnet.lez.logos.co -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"getAccount","params":["<recipient>"]}'
+```
+
+`scripts/e2e-local-sequencer.sh` does all of this itself against its throwaway
+wallet, which is the reference for the sequence.
 
 **Budget several hours.** Proving one approval with `RISC0_DEV_MODE=0` takes
 about two and a half minutes; the run is dominated entirely by proving. Set `MEMBERS`
@@ -233,7 +315,7 @@ an account view, and it renders all three PDAs with their owner:
 - execution marker `/account/CpiuicNDii6uCeMXtjd1W6hek6Vq35HJ7k3mz1Q82Fui`
 
 Each shows `Program Owner: 7AyJ7x4DuAa58ALGqLXYwqdhEvQLCz5A2GFdcDrwyzUZ`, which
-base58-decodes to `5bb4008273ddc31d1c2b5bad8835daaf4c567e029dbb059c20c7e83ba5966f82`
+base58-decodes to the verifier's ImageID
 — exactly what `spel program-id artifacts/programs/multisig_verifier.bin` prints
 for the binary committed here. That is the whole claim, checkable in a browser.
 
@@ -286,3 +368,71 @@ Argument encoding, since it is easy to get wrong:
 - `Vec<u32>` (`--witness-words`) takes **comma-separated decimals**
 - `Vec<[u8; 32]>` (`--approval-nullifiers`) takes **comma-separated hex**
 - variadic accounts (`--approvals`) take **one comma-separated flag**
+
+## Redeploying: what has to be re-run and what has to be renumbered
+
+The programs here have never been deployed. When they are, this is the order and
+these are the documents that go stale.
+
+**Re-run, in this order.**
+
+1. `./scripts/build-programs.sh` — rebuild both guests, re-check the membership
+   pin, regenerate the IDL and merge the error codes back into it. Confirm the
+   two ImageIDs it prints match the "Built artifacts" table above; if they do
+   not, everything below is derived from the wrong binary. The membership id
+   must still be `56f784d6b37f5cbac85d2eca3e28f56346e8739e6c22cb15a1b7165616758e31`;
+   if it is not, something outside the `records` feature changed in
+   `multisig-core` and the membership program needs redeploying as well.
+2. Provision a recipient — `wallet account new public`, then
+   `wallet auth-transfer init`, then confirm a non-zero `program_owner`.
+3. Fund the signer if needed — `wallet vault claim --amount <n>`. The lifecycle
+   needs at least `FUND` (default 500) on top of whatever the deploys cost.
+4. `SIGNER=… APPROVERS=… RECIPIENT=… ./scripts/deploy-and-run.sh` — deploy, create,
+   fund, propose, approve to threshold, execute. It fails if the balances do not
+   move by exactly `AMOUNT`, so a run that reports success moved the money.
+5. `./scripts/verify-onchain.sh .testnet <proposal-id>` — reads all six accounts,
+   confirms the verifier owns them, and decodes each record.
+
+**Renumber afterwards.**
+
+| Where | What |
+|---|---|
+| this file, "Status" | delete it: the programs are deployed and the ImageID table above it is the current one |
+| this file, "The lifecycle, on chain" | eight transaction hashes now, not seven — `fund_treasury` is a new step |
+| this file, "The accounts" | six addresses, and the treasury's balance before and after |
+| this file, multisig id / member root / config hash | all three change: the id is random per run |
+| `README.md`, "Live on the public LEZ testnet" | the same eight hashes and the same six addresses |
+| `README.md`, "Programs" | the verifier's ImageID, if it was not already updated by the rebuild. The membership id does not move unless `crates/membership-circuit/` or the non-`records` half of `multisig-core` does |
+| `artifacts/testnet/` | replace its contents with the new run's `multisig.json`, `proposals/<id>.json` and `proposal_id`, and delete the SUPERSEDED note inside it |
+| `scripts/verify-onchain-lifecycle.sh` | the eight hashes, and delete `PENDING_VERIFIER_REDEPLOY` |
+| `app/README.md` | the `.lgx` SHA-256, if the package was rebuilt |
+| `docs/cu-costs.md` | the wall-clock rows, if the run is timed — the cycle table is already current for this ImageID |
+
+**What does not change.** The deployment hash of a program is
+`SHA256(borsh(bytecode))`, so re-deploying a byte-identical binary reproduces an
+identical hash and the deploy step is idempotent. The two deploy hashes in a
+re-run are therefore a function of the committed binaries alone, and can be
+computed before deploying anything:
+
+```bash
+python3 -c "
+import hashlib,struct,sys
+b=open(sys.argv[1],'rb').read()
+print(hashlib.sha256(struct.pack('<I',len(b))+b).hexdigest())" \
+  artifacts/programs/multisig_verifier.bin
+```
+
+For the binary committed here that is
+`2d6f720e3c6dd8d876c8617eada5ddcd3c13a978b2edcb1921a3de73231e82e2`, and
+`getTransaction` on it returns `null` today. It is the single value that says
+whether the redeploy landed, and `scripts/verify-onchain-lifecycle.sh` asserts
+today's answer rather than skipping the question. `membership_lez` keeps
+`fb8eb10f7f394286c109cb6502a1c95294180523f30d06f707fc087a589bea98`, which already
+resolves — its bytecode did not change.
+
+**One thing to decide before running it.** The old deployment stays on chain
+forever, and its five empty accounts are still reachable at the addresses printed
+above. Anyone who follows a stale link finds exactly the account state this
+revision exists to fix. Every reference to them in this repository is marked as
+superseded rather than deleted — a link that quietly disappears is worse than one
+labelled — but the marking is the only mitigation there is.

@@ -44,6 +44,9 @@ step "Tests         cargo test --workspace"       cargo test --workspace --quiet
 
 # The workflow files are only exercised on the runner, so at least catch the
 # syntax here rather than in an email.
+step "Hashes        every quoted sha256 is that file's" \
+     python3 scripts/check-quoted-hashes.py
+
 step "Workflows     yaml parse" python3 - <<'PY'
 import glob, sys
 try:

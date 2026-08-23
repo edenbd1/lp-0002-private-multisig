@@ -122,7 +122,7 @@ all the chain records, and all the other members can see.
 
 ## Packaged asset
 
-`app/lp-0002-multisig.lgx` (2.4 MB, SHA-256 `0b6907f18fa7002a6167653871af0e4da8ff91e4d3e0d447b7df1740e297e0ac`) is the packaged
+`app/lp-0002-multisig.lgx` (2.4 MB, SHA-256 `7937940c78c1f16604ac126a0292e4cd8a02c04819c5c4d06451589b2487ff52`) is the packaged
 module. It carries **two variants** — `darwin-arm64` and `linux-amd64` — each
 with the plugin library, the QML view, the module metadata, and the `msig` CLI
 the bridge drives. Basecamp selects the one matching the host.

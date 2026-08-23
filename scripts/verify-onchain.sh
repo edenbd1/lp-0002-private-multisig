@@ -17,6 +17,12 @@
 # Addresses are derived by `scripts/pda.py`, whose output is checked against the
 # live chain by this very script: if the derivation were wrong, the multisig and
 # proposal accounts would read as absent.
+#
+# It also *decodes* each account, through `scripts/decode-account.py`, which
+# parses by byte offset out of docs/account-layout.md and knows nothing about
+# this repository's Rust. Ownership says the verifier claimed the address; the
+# decoded record says what it claimed it for, and the treasury's balance says
+# whether the threshold actually moved anything.
 
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -57,8 +63,8 @@ echo
 
 fail=0
 
-check() { # label address
-  local label="$1" addr="$2"
+check() { # label kind address
+  local label="$1" kind="$2" addr="$3"
   local out state
   out=$(curl -s -m 20 -X POST "$RPC" -H 'Content-Type: application/json' \
         -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getAccount\",\"params\":[\"$addr\"]}" 2>/dev/null || echo '{}')
@@ -87,22 +93,40 @@ else:                print('OWNED-BY-ANOTHER-PROGRAM')
     VERIFIER-OWNED) printf '  \033[32m✅\033[0m %-20s %s\n' "$label" "$addr" ;;
     *)              printf '  \033[31m❌\033[0m %-20s %s   (%s)\n' "$label" "$addr" "$state"; fail=1 ;;
   esac
+  # An owned account with no data is the defect this submission had: five
+  # addresses the verifier owned and not one byte of state behind them. Decoding
+  # is therefore part of the verdict, not a nicety.
+  if [ "$state" = VERIFIER-OWNED ]; then
+    if ! printf '%s' "$out" | python3 scripts/decode-account.py "$kind" --stdin \
+         | sed 's/^/    /'; then
+      printf '  \033[31m❌\033[0m %-20s the account holds no readable %s record\n' "$label" "$kind"
+      fail=1
+    fi
+  fi
 }
 
-echo "multisig instance — its address anchors the member root AND the threshold"
-check "multisig" "$(python3 scripts/pda.py "$VERIFIER" "$MSIG_ID" "$CONFIG_HASH")"
+echo "multisig instance — its address anchors the member root AND the threshold,"
+echo "and its record makes both readable to somebody who knows neither"
+check "multisig" multisig "$(python3 scripts/pda.py "$VERIFIER" "$MSIG_ID" "$CONFIG_HASH")"
 
+echo
+echo "treasury — the account the threshold spends from. Its balance is the only"
+echo "number here that cannot be produced by anything except a real execution"
+TREASURY=$(python3 scripts/pda.py "$VERIFIER" "$MSIG_ID" "$CONFIG_HASH" str:treasury)
+check "treasury" treasury "$TREASURY"
+
+echo
 echo "proposal — its address anchors the exact action AND its multisig"
 # The proposal PDA is seeded by the config too, so a proposal belongs to one
 # (member_root, threshold) and not merely to a multisig id. See docs/security.md.
-check "proposal" "$(python3 scripts/pda.py "$VERIFIER" "$MSIG_ID" "$CONFIG_HASH" "$PROPOSAL_REF")"
+check "proposal" proposal "$(python3 scripts/pda.py "$VERIFIER" "$MSIG_ID" "$CONFIG_HASH" "$PROPOSAL_REF")"
 
 echo "approval markers — each is an approval whose membership proof the privacy"
 echo "circuit verified on chain, and none of them names a member"
 n=0
 while read -r seed; do
   [ -z "$seed" ] && continue
-  check "approval $n" "$(python3 scripts/pda.py "$VERIFIER" "$seed")"
+  check "approval $n" approval "$(python3 scripts/pda.py "$VERIFIER" "$seed")"
   n=$((n+1))
 done < <(python3 -c "
 import json
@@ -113,7 +137,28 @@ EXEC_SEED=$(python3 -c "
 import hashlib
 pref=bytes('/lp-0002/v0.1/ExecMark/','ascii').ljust(32,b'\x00')
 print(hashlib.sha256(pref+bytes.fromhex('$PROPOSAL_REF')).hexdigest())")
-check "execution" "$(python3 scripts/pda.py "$VERIFIER" "$EXEC_SEED")"
+check "execution" execution "$(python3 scripts/pda.py "$VERIFIER" "$EXEC_SEED")"
+
+# The payee. Not owned by the verifier — it is an ordinary public account held by
+# the native transfer program — so it is reported rather than asserted on.
+RECIPIENT_HEX=$(python3 -c "import json;print(json.load(open('$PROPOSAL_JSON'))['recipient_hex'])" 2>/dev/null || true)
+if [ -n "${RECIPIENT_HEX:-}" ]; then
+  echo
+  echo "recipient — where the money went. Owned by the native transfer program,"
+  echo "not by the verifier, which is what makes the balance spendable"
+  RECIPIENT_B58=$(python3 -c "
+import sys
+sys.path.insert(0, 'scripts')
+from importlib import import_module
+pda = import_module('pda')
+print(pda.b58encode(bytes.fromhex('$RECIPIENT_HEX')))")
+  curl -s -m 20 -X POST "$RPC" -H 'Content-Type: application/json' \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getAccount\",\"params\":[\"$RECIPIENT_B58\"]}" \
+    | python3 -c "
+import json,sys
+r = json.load(sys.stdin).get('result')
+print('    %-20s %s' % ('$RECIPIENT_B58', 'ABSENT' if not r else 'balance %s' % r['balance']))"
+fi
 
 echo
 if [ "$fail" = 0 ]; then

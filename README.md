@@ -260,7 +260,18 @@ not supported"*.
 
 A **2-of-3** multisig, created, proposed, approved to threshold on the
 privacy-preserving path, and executed. Every hash is live — check any of them
-with `getTransaction` against `https://testnet.lez.logos.co`.
+with `getTransaction` against `https://testnet.lez.logos.co`, or check all of
+them at once from a clean clone, with nothing to set up:
+
+```bash
+./scripts/verify-onchain-lifecycle.sh
+```
+
+It recomputes each deploy hash from the committed bytecode rather than trusting
+the table below, and asserts the variant every transaction carries — the two
+approvals are `PrivacyPreserving` and not `Public`, which is the part a block
+explorer cannot show you. A hash that was never deployed runs first as the
+control; if it ever resolves the run is abandoned rather than reported green.
 
 | Step | Transaction |
 |---|---|

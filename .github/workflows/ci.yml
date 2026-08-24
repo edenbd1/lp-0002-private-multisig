@@ -212,3 +212,96 @@ jobs:
           [ -n "$p" ] && [ -n "$l" ] || { echo "it printed no coverage line"; exit 1; }
           [ "$p" -ge 40 ] || { echo "only $p path(s) examined, under the floor of 40: the matcher is not seeing the documents"; exit 1; }
           [ "$l" -ge 20 ] || { echo "only $l link(s) examined, under the floor of 20: the matcher is not seeing the documents"; exit 1; }
+
+  # The prize asks for a GUI "loadable in Logos app (Basecamp)". Shipping a
+  # `.lgx` is not that claim, and until this job existed nothing in this
+  # repository checked it: the darwin-arm64 variant had been loaded by hand once,
+  # and the linux-amd64 variant inside the same package had been loaded by
+  # nobody. A variant that ships and has never been loaded is a tile that will be
+  # inert on somebody's machine, with the reason on a stderr they never see.
+  #
+  # WHAT IT RUNS AGAINST: the committed package, unpacked — not a rebuild. A
+  # rebuild would test the source; what a reviewer installs is the `.lgx`.
+  #
+  # Qt 6.9.2 from aqtinstall rather than ubuntu's own: Basecamp bundles 6.9.2 and
+  # Qt refuses a plugin whose minor version exceeds the host's, so ubuntu's 6.4
+  # would refuse this plugin and the refusal would read as a defect in it.
+  #
+  # No liblogos_core here, unlike a plugin that leans on the host: this one names
+  # `LogosAPI` only as an opaque pointer type, so it binds with RTLD_NOW on its
+  # own — which the harness asserts rather than assumes, because "it loaded"
+  # means a different thing for each design.
+  basecamp-loads:
+    name: The shipped module loads the way Basecamp loads a ui plugin
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      # libgl1 and glib are not optional: official Qt's libQt6Gui and libQt6Core
+      # reference glX* and g_main_context_* by soname, and without them the link
+      # below fails inside Qt with "undefined reference to glXGetConfig", which
+      # reads as a problem with the harness and is not.
+      - name: What a bare runner does not have
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            --no-install-recommends \
+            libgl1 libglx0 libopengl0 libegl1 libxkbcommon0 libfontconfig1 \
+            libfreetype6 libdbus-1-3 libharfbuzz0b
+          # glib carries the `t64` suffix since 24.04's time_t transition and did
+          # not before it. Named both ways so an image bump does not break a step
+          # that has nothing to do with it.
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            --no-install-recommends libglib2.0-0t64 \
+            || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+                 --no-install-recommends libglib2.0-0
+
+      - name: Qt 6.9.2, the version Basecamp bundles
+        run: |
+          set -euo pipefail
+          python3 -m venv /opt/aqt
+          /opt/aqt/bin/pip -q install aqtinstall
+          /opt/aqt/bin/python -m aqt install-qt linux desktop 6.9.2 linux_gcc_64 \
+            --archives qtbase icu --outputdir /opt/Qt
+          for want in include/QtWidgets/QApplication lib/libQt6Widgets.so.6 \
+                      plugins/platforms/libqoffscreen.so; do
+            test -e "/opt/Qt/6.9.2/gcc_64/$want" || {
+              echo "aqtinstall did not deliver $want for Qt 6.9.2 linux_gcc_64."
+              echo "Nothing in this repository selects that: the Qt mirrors retire"
+              echo "point releases and aqtinstall is installed unpinned above."
+              exit 1
+            }
+          done
+
+      - name: Build the load harness
+        run: |
+          set -euo pipefail
+          QT=/opt/Qt/6.9.2/gcc_64
+          clang++ -std=c++17 -Wall -Wextra -fPIC \
+            -I$QT/include -I$QT/include/QtCore -I$QT/include/QtGui \
+            -I$QT/include/QtWidgets \
+            app/tests/ui_plugin_load_test.cpp \
+            -L$QT/lib -lQt6Widgets -lQt6Gui -lQt6Core -ldl \
+            -Wl,-rpath,$QT/lib -o ui_plugin_load_test
+          test -x ui_plugin_load_test
+
+      - name: The shipped linux-amd64 variant loads
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -euo pipefail
+          tar tzf app/lp-0002-multisig.lgx > pkg.list
+          grep -qxF 'variants/linux-amd64/lp_0002_multisig.so' pkg.list \
+            || { echo "app/lp-0002-multisig.lgx ships no linux-amd64 variant"; cat pkg.list; exit 1; }
+          rm -f pkg.list
+          mkdir -p unpacked && tar xzf app/lp-0002-multisig.lgx -C unpacked variants/linux-amd64
+          export QT_PLUGIN_PATH=/opt/Qt/6.9.2/gcc_64/plugins
+          ./ui_plugin_load_test unpacked/variants/linux-amd64/lp_0002_multisig.so lp_0002_multisig 2>&1 | tee load.out
+          # The banner is printed only when every assertion ran. Asserted here as
+          # well, because a harness that dies early still exits non-zero and this
+          # step would already fail — but a harness that is silently rebuilt into
+          # something that prints nothing would not.
+          grep -q "assertions, all of them ran" load.out \
+            || { echo "the harness did not report a complete run"; exit 1; }

@@ -304,6 +304,14 @@ jobs:
           rm -f pkg.list
           mkdir -p unpacked && tar xzf app/lp-0002-multisig.lgx -C unpacked variants/linux-amd64
           export QT_PLUGIN_PATH=/opt/Qt/6.9.2/gcc_64/plugins
+          # LD_LIBRARY_PATH, and it is not redundant with the harness's -rpath.
+          # Modern ld emits RUNPATH rather than RPATH, and RUNPATH is not searched
+          # for a dependency's own dependencies — so the harness finds Qt and the
+          # plugin it loads does not. Measured: with qtdeclarative installed and
+          # verified on disk by the step above, the plugin still reported
+          # `libQt6QuickWidgets.so.6: cannot open shared object file`, which reads
+          # as a missing library and was a missing search path.
+          export LD_LIBRARY_PATH=/opt/Qt/6.9.2/gcc_64/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
           ./ui_plugin_load_test unpacked/variants/linux-amd64/lp_0002_multisig.so lp_0002_multisig 2>&1 | tee load.out
           # The banner is printed only when every assertion ran. Asserted here as
           # well, because a harness that dies early still exits non-zero and this

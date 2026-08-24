@@ -205,9 +205,9 @@ compute different commitments. Verified on **LogosBasecamp 0.2.2**.
    empty unless you are running out of a build tree.
 
 3. **Point *Multisig folder*** at a directory made by `msig new-multisig`.
-   (`artifacts/testnet` is the record of a *superseded* deployment and predates
-   the typed action, so the current `msig` will not parse its proposal file —
-   see the README inside that directory.)
+   (`artifacts/testnet` holds the deployed run's own `multisig.json` and
+   proposal file, so it works as a folder to point at — see the README inside
+   that directory.)
 
 4. **Create** — set members and threshold, press *New multisig*. Writes
    `multisig.json` and `members.json` and prints the member root and the config
@@ -280,17 +280,11 @@ all the chain records and all the other members can see.
 guest lockfiles; `4.4.2` breaks the guest toolchain with *"rustc 1.88.0-dev is
 not supported"*.
 
-## On the public LEZ testnet — superseded, pending a redeploy
+## On the public LEZ testnet
 
-**Read [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) before following any address
-here.** Giving the accounts state and the threshold a treasury changed the
-verifier guest, and on LEZ a program's identity *is* its ImageID. The seven
-transactions below are still on chain and still valid; what they are no longer is
-*this* program's, and the five account addresses they produced belong to the
-previous ImageID. `./scripts/deploy-and-run.sh` re-runs the whole lifecycle, and
-DEPLOYMENT.md lists what has to be renumbered when it does.
-
-The record of the run that happened, from ImageID `5bb40082…`:
+**Deployed 2026-08-24**, blocks 20856-20880: both programs, a 2-of-3 multisig, a
+funded treasury, a proposal, two approvals on the privacy-preserving path, and an
+execution that moved the money.
 
 ```bash
 ./scripts/verify-onchain-lifecycle.sh
@@ -302,21 +296,47 @@ approvals are `PrivacyPreserving` and not `Public`, which is the part a block
 explorer cannot show you. A hash that was never deployed runs first as the
 control; if it ever resolves the run is abandoned rather than reported green.
 
-| Step | Transaction |
-|---|---|
-| deploy `membership_lez` | `fb8eb10f7f394286c109cb6502a1c95294180523f30d06f707fc087a589bea98` |
-| deploy `multisig_verifier` | `517efe12a0b592abe4d21a03246866b95c4379483e87af62fd9f26f7b8fe45ff` |
-| `create_multisig` | `2930c1db4521b7c0b912278f4025e430704cfb9a7ebfcb5d22c374fd7ce85b70` |
-| `create_proposal` | `68d5127e1e5570936f8d78e9a2da4d485562566cd8b7487a59322bf059406978` |
-| `approve` (member A, **privacy tx**) | `41f5bb99346a0bef6aa0c69243473a554b84f0f0ad65e460bbb6890b11644942` |
-| `approve` (member B, **privacy tx**) | `ae006465f5f945b8ba2666f28a5357d0a2aab4af05508c9c2811e0101d0ac649` |
-| `execute` | `b43e46505f571e31d6051f7da43563db605b6a74b90c670da2d3582d53412ecd` |
+| Step | Transaction | Block |
+|---|---|---|
+| deploy `membership_lez` | `fb8eb10f7f394286c109cb6502a1c95294180523f30d06f707fc087a589bea98` | 4459 |
+| deploy `multisig_verifier` | `2d6f720e3c6dd8d876c8617eada5ddcd3c13a978b2edcb1921a3de73231e82e2` | 20856 |
+| `create_multisig` | `a8d8422ae2c46566b15c31954647974d3e95eadbe0b560eac4ab609c9a25ab55` | 20857 |
+| `fund_treasury` | `2844eef12695ab0d3c6d55832e94ae316638dd7400735d2f393875a30bb6a5c2` | 20858 |
+| `create_proposal` | `b194da9ba24e1a17a7bec0d64da0d252a96c6edc96208a778a7e77e71fed9826` | 20859 |
+| `approve` (member A, **privacy tx**) | `d13813094f36c1b60c02350adbc272ce5aa88dd7d87ab409a3e36436e70a91c0` | 20869 |
+| `approve` (member B, **privacy tx**) | `9f7c541c187c6ed284f67b0f5c6f0942de0ed98ff7e589dc81955ceed7219719` | 20879 |
+| `execute` | `00ea68384758097dba8b648605b4ecf65d9535ba6b497af335d4fcf2be7f75ae` | 20880 |
 
-The two approval markers — `DaG2Qan1ie5YhEpcti2LMCsvbkYi7WjWxnNKvxiqxi7B` and
-`FMj5yL8cpcrQzN7xhENHC2vysTrNwbtokPbTYjr98rPt` — and the execution marker
-`CpiuicNDii6uCeMXtjd1W6hek6Vq35HJ7k3mz1Q82Fui` are all owned by the verifier
-program. Neither approval marker could exist without a membership proof having
-been verified on chain, and neither names a member.
+Only the verifier was redeployed. `membership_lez` rebuilds to the same ImageID
+byte for byte, and a LEZ deployment hash is `SHA256(borsh(bytecode))`, so its
+block-4459 deployment is still the live one.
+
+Six accounts came out of it, all owned by the verifier program:
+
+| Account | Address | Balance |
+|---|---|---|
+| multisig | `Hx7Ni2riURJfgng4QAXb3RBq9ZMjrvwj7JREjut9PuBC` | 0 |
+| treasury | `xtngupTp3tcQU9faCbND73KhCpYqfBqKhmoepQAXoVx` | **2 → 1** |
+| proposal | `9EjLSnKjXB4r8SgBEHcgqf36nkqfyUVXuqSsDzCTRvg7` | 0 |
+| approval marker A | `Awd6RNVpMdPkvALi6ubdZyffKb3Bw3HimbUKtUP7YV6F` | 0 |
+| approval marker B | `6dmnyiGZu6KtVy6jxyEMvb4HG8N59AuKey7wB9RjbCTV` | 0 |
+| execution marker | `BP6buTDdFThPYWU3NFGSsD8k3ymewStQo4hj86tAwq1a` | 0 |
+
+The recipient — `8kexXda8j5hPegPeHXzUM9PhvjYNFLpN8wN8PvG5iDhn`, owned by the
+native transfer program and not by the verifier — went **0 → 1**. The treasury
+falling by exactly what the recipient gained is the claim that no marker on its
+own can make.
+
+Neither approval marker could exist without a membership proof having been
+verified on chain, and neither names a member. Read them back with
+`./scripts/verify-onchain.sh .testnet 5bc829bb9a9efab4adb7446201f3a94113293bc51b63ef9356a254671f2b96fc`.
+
+**Addresses from before this deployment are still reachable and still empty.**
+The previous verifier ImageID `5bb40082…` claimed five accounts and wrote nothing
+behind them — the defect this revision removes. Those five, and the six
+transactions that produced them, are listed under *Superseded addresses* in
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) rather than deleted, so a stale link
+found elsewhere can be recognised instead of mistaken for a broken claim.
 
 Full detail, including how to re-verify each one yourself, in
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).

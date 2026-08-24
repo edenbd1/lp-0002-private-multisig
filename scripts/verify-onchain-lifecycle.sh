@@ -12,10 +12,8 @@
 #
 #   - the deployed programs are the binaries committed here, by recomputing the
 #     deploy transaction hash from the bytecode rather than trusting a hash
-#     written down next to it — and, while a redeploy is pending, that the
-#     *verifier* committed here is NOT on chain, which is the honest reading of
-#     the current state rather than a check quietly dropped;
-#   - the seven transactions of the lifecycle resolve;
+#     written down next to it;
+#   - the eight transactions of the lifecycle resolve;
 #   - and each carries the variant it must carry. That last one is the point of
 #     the submission: if the two approvals were Public, threshold approval would
 #     be linkable and there would be nothing here worth reviewing. A run that
@@ -31,17 +29,6 @@ cd "$(dirname "$0")/.."
 
 RPC="${SEQUENCER_URL:-https://testnet.lez.logos.co}"
 NEVER=dededededededededededededededededededededededededededededededede
-
-# The verifier guest changed — it persists account state and pays a treasury —
-# so its ImageID changed and the binary committed here has not been deployed.
-# The membership guest did not change and is still on chain.
-#
-# While this is 1 the script *asserts the pending state*: the committed verifier
-# bytecode must NOT resolve, and the previously deployed one must. That is a
-# falsifiable statement, unlike skipping the check. Set it to 0 after running
-# ./scripts/deploy-and-run.sh — see docs/DEPLOYMENT.md.
-PENDING_VERIFIER_REDEPLOY=1
-DEPLOYED_VERIFIER_TX=517efe12a0b592abe4d21a03246866b95c4379483e87af62fd9f26f7b8fe45ff
 
 fail=0
 ok()  { printf '  \033[32mok\033[0m    %s\n' "$1"; }
@@ -87,23 +74,7 @@ for prog in membership_lez multisig_verifier; do
   bin="artifacts/programs/$prog.bin"
   if [ ! -f "$bin" ]; then bad "$prog  $bin is missing"; continue; fi
   h=$(deploy_tx_hash "$bin")
-  on_chain=$([ -n "$(tx_field "$h")" ] && echo 1 || echo 0)
-  if [ "$prog" = multisig_verifier ] && [ "$PENDING_VERIFIER_REDEPLOY" = 1 ]; then
-    # Asserted, not skipped: if the committed verifier suddenly resolved, either
-    # somebody deployed it and forgot to clear the flag, or the hash is being
-    # computed wrong. Both are worth failing over.
-    if [ "$on_chain" = 1 ]; then
-      bad "$prog  ${h:0:16}… IS on chain — clear PENDING_VERIFIER_REDEPLOY"
-    else
-      printf '  \033[33mpending\033[0m  %s  %s… is not deployed yet (docs/DEPLOYMENT.md)\n' \
-        "$prog" "${h:0:16}"
-    fi
-    if [ -n "$(tx_field "$DEPLOYED_VERIFIER_TX")" ]; then
-      ok "$prog  the superseded ${DEPLOYED_VERIFIER_TX:0:16}… is still on chain"
-    else
-      bad "$prog  the superseded ${DEPLOYED_VERIFIER_TX:0:16}… has gone"
-    fi
-  elif [ "$on_chain" = 1 ]; then
+  if [ -n "$(tx_field "$h")" ]; then
     ok "$prog  SHA256(len‖bytecode) = ${h:0:16}… is on chain"
   else
     bad "$prog  computed ${h:0:16}… is NOT on chain"
@@ -112,10 +83,6 @@ done
 echo
 
 echo "[3/3] the lifecycle, and the variant each transaction must carry"
-if [ "$PENDING_VERIFIER_REDEPLOY" = 1 ]; then
-  echo "      these seven ran against the superseded verifier. They are real and"
-  echo "      they resolve; they are simply not this repository's program."
-fi
 # variant 0 is Public, 1 is PrivacyPreserving; the deploys carry 2. The
 # approvals are the two that must not be 0 — that is the claim being made.
 check() { # label expected-variant hash
@@ -130,22 +97,17 @@ check() { # label expected-variant hash
   fi
 }
 check "deploy membership_lez"    2 fb8eb10f7f394286c109cb6502a1c95294180523f30d06f707fc087a589bea98
-check "deploy multisig_verifier" 2 517efe12a0b592abe4d21a03246866b95c4379483e87af62fd9f26f7b8fe45ff
-check "create_multisig"          0 2930c1db4521b7c0b912278f4025e430704cfb9a7ebfcb5d22c374fd7ce85b70
-check "create_proposal"          0 68d5127e1e5570936f8d78e9a2da4d485562566cd8b7487a59322bf059406978
-check "approve (member A)"       1 41f5bb99346a0bef6aa0c69243473a554b84f0f0ad65e460bbb6890b11644942
-check "approve (member B)"       1 ae006465f5f945b8ba2666f28a5357d0a2aab4af05508c9c2811e0101d0ac649
-check "execute"                  0 b43e46505f571e31d6051f7da43563db605b6a74b90c670da2d3582d53412ecd
+check "deploy multisig_verifier" 2 2d6f720e3c6dd8d876c8617eada5ddcd3c13a978b2edcb1921a3de73231e82e2
+check "create_multisig"          0 a8d8422ae2c46566b15c31954647974d3e95eadbe0b560eac4ab609c9a25ab55
+check "fund_treasury"            0 2844eef12695ab0d3c6d55832e94ae316638dd7400735d2f393875a30bb6a5c2
+check "create_proposal"          0 b194da9ba24e1a17a7bec0d64da0d252a96c6edc96208a778a7e77e71fed9826
+check "approve (member A)"       1 d13813094f36c1b60c02350adbc272ce5aa88dd7d87ab409a3e36436e70a91c0
+check "approve (member B)"       1 9f7c541c187c6ed284f67b0f5c6f0942de0ed98ff7e589dc81955ceed7219719
+check "execute"                  0 00ea68384758097dba8b648605b4ecf65d9535ba6b497af335d4fcf2be7f75ae
 echo
 
-if [ "$fail" -eq 0 ] && [ "$PENDING_VERIFIER_REDEPLOY" = 1 ]; then
-  echo "The membership program on chain is the bytecode in this repository; the"
-  echo "verifier committed here is not deployed yet, and the seven transactions"
-  echo "below it ran against the one it replaces. The two approvals among them"
-  echo "are PrivacyPreserving rather than Public — which is the part a block"
-  echo "explorer cannot show you, and the part the redeploy has to reproduce."
-elif [ "$fail" -eq 0 ]; then
-  echo "Both programs on chain are the bytecode in this repository, the seven"
+if [ "$fail" -eq 0 ]; then
+  echo "Both programs on chain are the bytecode in this repository, the eight"
   echo "transactions resolve, and the two approvals are PrivacyPreserving rather"
   echo "than Public — which is the part a block explorer cannot show you."
 else

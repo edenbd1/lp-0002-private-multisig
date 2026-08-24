@@ -1,7 +1,7 @@
 {
-  "id_hex": "df2c8c3d0a036414cd819aa04c023c489f4a5ca2c0e7e99cca80363d14ab8472",
+  "id_hex": "95d44c351a586e2e37d748ca14e4108904cf1c627b3d8ec51bf9b38851662e04",
   "threshold": 2,
   "member_count": 3,
-  "member_root_hex": "2e6fa5feaacec254fe7a2124cf6a2e62f7e5be8f0e14b37a0e4b42767ccc5a7d",
-  "config_hash_hex": "92100d32ab976481e74fcaf28d1ab99f5f1be27421e190bb07ba09185a305475"
+  "member_root_hex": "5372f377b5c1b94df954d7c0751edfa4bd2d76d6ab0f30f76ff9bc442bbc5970",
+  "config_hash_hex": "3310d0fb1321e48f0a8a8fc7f539aa232dc783ce02d4fa384da6b360aad25269"
 }

@@ -1,28 +1,37 @@
-# A superseded deployment
+# The deployed lifecycle
 
-These files record the LP-0002 lifecycle that ran on the public LEZ testnet
-against verifier ImageID
-`5bb4008273ddc31d1c2b5bad8835daaf4c567e029dbb059c20c7e83ba5966f82` — a 2-of-3
-multisig created, proposed, approved to threshold on the privacy-preserving
-path, and executed. The seven transactions are still on chain and still valid.
+These files are the client-side record of the LP-0002 lifecycle that ran on the
+public LEZ testnet on **2026-08-24**, against verifier ImageID
+`1346b65293ac9b11d4b1029a0d02559462238582124062925a3ad24298ff4e1e` — a 2-of-3
+multisig created, its treasury funded, a proposal published, two approvals
+gathered on the privacy-preserving path, and executed. Eight transactions, blocks
+20856-20880. [`docs/DEPLOYMENT.md`](../../docs/DEPLOYMENT.md) has every hash and
+every address.
 
-**They are not this repository's program.** Giving the accounts state and the
-threshold a treasury changed the verifier guest, and on LEZ a program's identity
-is its ImageID, so the five account addresses here belong to a program the
-repository no longer contains. `docs/DEPLOYMENT.md` has the full account.
+No member secret is here. `members.json` holds the member secret keys and is
+deliberately not committed; what is here is what a stranger is allowed to hold.
 
-Two consequences, stated rather than left to be discovered:
+Point `msig` at this directory and it reads:
 
-* **`msig` cannot read `proposals/<id>.json`.** It predates the typed action, so
-  it carries an `action` string where the current schema carries `recipient`,
-  `amount` and `memo_hash`. A `status --dir artifacts/testnet` fails to parse it,
-  which is correct: the values in it were derived by a different action encoding
-  and migrating them in place would produce a file whose `action_hash` did not
-  match its own fields.
-* **`scripts/verify-onchain.sh` against this directory reports every account
-  absent**, because it derives addresses from the committed binary and that is a
-  different program now.
+```bash
+msig status --dir artifacts/testnet \
+    --proposal-id 5bc829bb9a9efab4adb7446201f3a94113293bc51b63ef9356a254671f2b96fc
+```
 
-What still checks out is `./scripts/verify-onchain-lifecycle.sh`, which reads the
-transaction hashes directly. It is kept, not deleted, because a link that quietly
-disappears is worse than one labelled.
+which prints the payment, the threshold, and the two marker seeds — the same
+values the chain re-derived. The Basecamp module reads the same two files, so
+pointing **Multisig folder** here shows the deployed state.
+
+Read the chain rather than these files:
+
+```bash
+./scripts/verify-onchain-lifecycle.sh          # the eight transactions
+./scripts/verify-onchain.sh .testnet 5bc829bb9a9efab4adb7446201f3a94113293bc51b63ef9356a254671f2b96fc
+```
+
+**An earlier run's files used to live here** and were replaced rather than kept
+alongside, because two `multisig.json` in one directory is a directory `msig`
+cannot read. The addresses and hashes that run produced are not lost: they are
+listed under *Superseded addresses* in
+[`docs/DEPLOYMENT.md`](../../docs/DEPLOYMENT.md), which is where a stale link
+found elsewhere can be recognised for what it is.

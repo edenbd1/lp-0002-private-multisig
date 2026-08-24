@@ -92,17 +92,34 @@ at all — and it is not true now. Re-measured **2026-08-15** and again
 an *indexed* transaction from an impossible one:
 
 ```bash
-# an indexed transaction: ~366 kB, and the body carries its type and proof size
-curl -s https://explorer.testnet.lez.logos.co/transaction/41f5bb99346a0bef6aa0c69243473a554b84f0f0ad65e460bbb6890b11644942 | wc -c
+# one of this lifecycle's privacy transactions: ~371 kB
+curl -s https://explorer.testnet.lez.logos.co/transaction/d13813094f36c1b60c02350adbc272ce5aa88dd7d87ab409a3e36436e70a91c0 | wc -c
+
+# one of its public transactions: ~5 kB, and complete
+curl -s https://explorer.testnet.lez.logos.co/transaction/a8d8422ae2c46566b15c31954647974d3e95eadbe0b560eac4ab609c9a25ab55 | wc -c
 
 # a hash that cannot exist: 2416 bytes, and the body says why
 curl -s "https://explorer.testnet.lez.logos.co/transaction/$(python3 -c 'print("ff"*32)')" | wc -c
 ```
 
-Compare the bodies rather than only the sizes — a size is a weaker signal that
-happens to work today. And note the limit of the whole method: a hash the
-explorer has *not indexed yet* and a hash that *cannot exist* produce the same
-2416-byte page. The explorer cannot tell those two apart at all, which is
+**Match on the body, never on the length.** Measured 2026-08-24 on this
+lifecycle's own eight hashes, the render is proportional to what a transaction
+carries, so there are three sizes and not two:
+
+| what | over `curl` | why |
+|---|---|---|
+| a hash that cannot exist | **2,416 bytes** | the page stops at the loading shell |
+| a **public** transaction | **~4.5-5 kB** | *complete* — `Type: Public Transaction`, `Program ID`, instruction-data size, signature count, and every account with its nonce |
+| a deployment or a privacy-preserving transaction | **370-640 kB** | the same page plus the proof bytes, which are almost all of it |
+
+A public transaction's page is short because a public transaction carries no
+proof, not because anything is missing from it. So a size tells you which *kind*
+of transaction you fetched and nothing about whether it is there — `Type:` does,
+and both small and large pages carry it. `scripts/check-explorer.py` classifies
+on that marker for exactly this reason.
+
+And note the limit of the whole method: a hash the explorer has *not indexed
+yet* and a hash that *cannot exist* produce the same 2416-byte page. The explorer cannot tell those two apart at all, which is
 precisely why the RPC is the primary check here and the explorer is the second
 opinion rather than the other way round.
 

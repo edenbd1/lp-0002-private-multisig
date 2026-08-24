@@ -12,8 +12,8 @@ That is the canonical packager and it is always preferred.
 Only if none is found does this fall back to writing the package directly. The
 fallback is not guesswork: the manifest hash scheme is transcribed from
 `logos-package/src/crypto/signing.cpp`, and the transcription is checked against
-two packages built by the real tool — LP-0003's and LP-0005's — before anything
-is written. Both paths were confirmed to produce **identical manifest hashes**
+the package built by the real tool and committed in this repository before
+anything is written. Both paths were confirmed to produce **identical manifest hashes**
 for this module.
 
 Either way the metadata fields are patched in afterwards, which is what
@@ -112,16 +112,13 @@ def build_manifest(stage: Path, name: str, version: str, meta: dict, plugin: str
 
 def self_test() -> int:
     """Check the transcription against packages built by the real tool."""
-    refs = [
-        ROOT.parent / "lp-0003/app/lp-0003-airdrop.lgx",
-        ROOT.parent / "lp-0005/app/lp-0005-attestation.lgx",
-        # Sibling packages only exist on the machine that built them, so from a
-        # clean clone the check would otherwise pass by having nothing to test.
-        # This module's own committed package was written by the real `lgx`
-        # too, and it ships in the repository — so there is always at least one
-        # real reference to reproduce.
-        ROOT / "app/lp-0002-multisig.lgx",
-    ]
+    # This module's own committed package was written by the real `lgx` tool
+    # and ships in the repository, so a clean clone always has one real
+    # reference to reproduce. An earlier version also reached into neighbouring
+    # working directories, which exist only on the machine that built them —
+    # from anywhere else the check passed by having nothing to test, which is
+    # the failure a self-test exists to prevent.
+    refs = [ROOT / "app/lp-0002-multisig.lgx"]
     found = [r for r in refs if r.is_file()]
     if not found:
         print("self-test: no reference .lgx to check against — refusing to "

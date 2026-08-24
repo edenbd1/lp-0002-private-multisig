@@ -40,6 +40,12 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# CI sets CARGO_TERM_COLOR=always, and cargo paints the `Running` banner but not
+# the `test result:` line. Anchored on `^\s*Running`, this matched nothing on a
+# runner and every suite came back empty — the gate then reported the README
+# wrong about numbers that were right, and turned the default branch red on its
+# first run. Escapes are stripped before anything is parsed.
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 RUNNING = re.compile(r"^\s*Running (?:unittests )?(\S+)", re.M)
 RESULT = re.compile(r"^test result: ok\. (\d+) passed", re.M)
 
@@ -65,14 +71,21 @@ def suites(pkg):
     if pkg not in _ran:
         r = subprocess.run(["cargo", "test", "-p", pkg, "--release"],
                            cwd=ROOT, capture_output=True, text=True)
-        out = r.stdout + r.stderr
+        out = ANSI.sub("", r.stdout + r.stderr)
         if r.returncode != 0:
-            _ran[pkg] = (None, out)
+            _ran[pkg] = (None, "build", out)
         else:
             names = [os.path.splitext(os.path.basename(m))[0].split(" ")[0]
                      for m in RUNNING.findall(out)]
             counts = [int(n) for n in RESULT.findall(out)]
-            _ran[pkg] = (dict(zip(names, counts)) if names else {}, out)
+            # A parse that finds results but no suite banners has not measured a
+            # suite of zero — it has failed to read the output, which is exactly
+            # what colourised `Running` lines did here. Silence made that look
+            # like a README stating the wrong number. It is an error now.
+            if counts and not names:
+                _ran[pkg] = (None, "parse", out)
+            else:
+                _ran[pkg] = (dict(zip(names, counts)), None, out)
     return _ran[pkg]
 
 
@@ -94,12 +107,19 @@ def main():
                             "cannot tell which is meant" % (pattern, ", ".join(sorted(set(found)))))
             continue
         claimed = int(found[0])
-        per, out = suites(pkg)
-        if per is None:
+        per, why, out = suites(pkg)
+        if why == "build":
             print("`cargo test -p %s --release` did not build. A suite that does not\n"
                   "build passes zero tests, and zero against a README is a mismatch\n"
                   "about the wrong thing. The build is the failure:\n" % pkg)
             print("\n".join(out.strip().splitlines()[-12:]))
+            return 1
+        if why == "parse":
+            print("`cargo test -p %s --release` ran and reported results, but not one\n"
+                  "`Running` banner could be read from its output. That is a failure to\n"
+                  "PARSE, not a suite of zero, and the difference matters: read as zero\n"
+                  "it accuses the README of being wrong about numbers that are right.\n"
+                  "This is what colourised output did on a runner." % pkg)
             return 1
         if suite is None:
             actual, what = sum(per.values()), "the whole %s suite" % pkg

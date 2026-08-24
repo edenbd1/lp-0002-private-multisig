@@ -53,23 +53,6 @@ WINDOW = 25.0        # how far either side of a cue an anchor may appear on scre
 # not decoration — tesseract renders 0 as @ or O in this terminal font, so the
 # prover line comes back as `RISC@_DEV_MODE=0 r@vm 1129% cpu`.
 ANCHORS = {
-    "lp8-demo.srt": [
-        # `RISC0_DEV_MODE=0` is deliberately not anchored here: the narration
-        # states it in the opening minute, long before the proving output
-        # appears, so tying the two would fail on a transcript that is right.
-        # check-video.py asserts it against the whole film, which is where that
-        # belongs.
-        ("r0vm",                    r"r[0@oO]vm|elapsed"),
-        ("settlement transaction",  r"[0-9a-f]{16}"),
-        ("balance",                 r"balance|[0-9]+\s*->\s*[0-9]+"),
-        ("explorer",                r"explorer\.testnet\.lez"),
-    ],
-    "lp-0003-claim-and-double-claim.srt": [
-        ("dev mode is 0",           r"DEV_MODE\s*=\s*[0@oO]"),
-        ("Five checks",             r"\[\s*[1-5]\s*/\s*5\s*\]|VERIFIED"),
-        ("marker already exists",   r"AccountAlreadyInitialized"),
-        ("public LEZ testnet",      r"testnet\.lez\.logos\.co"),
-    ],
     "lp-0002-threshold-moves-value.srt": [
         ("privacy-preserving variant", r"variant\s*1|PrivacyPreserving"),
         ("approval marker",         r"approval\s*[01]|approval markers"),

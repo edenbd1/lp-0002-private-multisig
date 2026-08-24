@@ -201,6 +201,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Every quoted path, link and line citation resolves
+
+      # One submission per repository. A reviewer reading this one should find
+      # the thing it is about and nothing else — not the identifier of a different
+      # prize entry, not the vocabulary of comparison. That is a judgement about
+      # what belongs in a deliverable, and nobody makes it while writing code.
+      #
+      # It has already been wrong here: check-transcript.py shipped an anchor
+      # table naming films from two different entries, and app/CMakeLists.txt cited
+      # a different entry's plugin in a build comment. Neither was noticed, because
+      # the only check that looks for this lived in one repository out of three
+      # and was run by nothing.
+      - name: Nothing here names a different prize entry
+        env:
+          OWN_PRIZE: LP-0002
+        run: ./scripts/check-no-cross-submission.py
         run: |
           set -e -o pipefail
           ./scripts/check-docs.py | tee docs.out

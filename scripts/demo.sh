@@ -209,11 +209,15 @@ rule "12. the chain, read straight off the chain"
 echo "The multisig above is local. This checks what is actually on the public"
 echo "testnet, from hashes committed in this repository — no local state needed."
 echo
-echo "It will report the verifier as NOT YET DEPLOYED, and that is the truthful"
-echo "answer: persisting state and giving the threshold a treasury changed the"
-echo "guest, so its ImageID changed, so it needs redeploying. The membership"
-echo "program did not change and is still on chain. docs/DEPLOYMENT.md has the"
-echo "redeploy checklist."
+# No narration about what the check is *going to* say. This paragraph used to
+# announce "it will report the verifier as NOT YET DEPLOYED" — true when it was
+# written, and false from the redeploy onwards, so a reviewer running the demo
+# from a clean clone read a prediction of failure and then watched every line
+# come back ok. A script that tells you what to expect has to be re-read every
+# time the thing it describes changes, and nothing was re-reading it. What the
+# check finds is printed by the check.
+echo "Whatever it reports is what the chain says right now; if a program is not"
+echo "there, docs/DEPLOYMENT.md has the redeploy checklist."
 echo
 # verify-onchain.sh refuses to run without spel/python3/curl rather than derive
 # wrong addresses and report a false negative. Check the same three here so a

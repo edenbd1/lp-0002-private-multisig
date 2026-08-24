@@ -263,9 +263,15 @@ jobs:
           set -euo pipefail
           python3 -m venv /opt/aqt
           /opt/aqt/bin/pip -q install aqtinstall
+          # qtdeclarative, not just qtbase: the shipped plugin embeds its QML in a
+          # QQuickWidget, so its DT_NEEDED names libQt6Qml and libQt6QuickWidgets.
+          # Measured, not guessed — the first run of this job installed qtbase alone
+          # and the harness reported `libQt6QuickWidgets.so.6: cannot open shared
+          # object file`, which reads as a broken package and was a missing archive.
           /opt/aqt/bin/python -m aqt install-qt linux desktop 6.9.2 linux_gcc_64 \
-            --archives qtbase icu --outputdir /opt/Qt
+            --archives qtbase qtdeclarative qtshadertools icu --outputdir /opt/Qt
           for want in include/QtWidgets/QApplication lib/libQt6Widgets.so.6 \
+                      lib/libQt6QuickWidgets.so.6 lib/libQt6Qml.so.6 \
                       plugins/platforms/libqoffscreen.so; do
             test -e "/opt/Qt/6.9.2/gcc_64/$want" || {
               echo "aqtinstall did not deliver $want for Qt 6.9.2 linux_gcc_64."

@@ -112,7 +112,7 @@ int main(int argc, char **argv)
         const QString err = h == nullptr ? QString::fromUtf8(dlerror()) : QString();
         check(h != nullptr,
               h != nullptr
-                  ? QStringLiteral("binds every symbol on its own — no host runtime needed")
+                  ? QStringLiteral("binds every symbol against Qt alone — no Logos runtime in the process")
                   : QStringLiteral("RTLD_NOW failed, so a symbol is unresolved: %1").arg(err));
         if (h != nullptr) {
             check(dlsym(h, "qt_plugin_instance") != nullptr,

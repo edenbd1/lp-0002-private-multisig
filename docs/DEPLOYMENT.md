@@ -133,6 +133,16 @@ the table above, so it cannot drift from this document. It also prints the
 explorer's most recent indexed block, so the current lag is read off rather than
 quoted from here.
 
+**Which of these actually runs.** `scripts/check-chain-refs.py` resolves every
+explorer link in these documents through the node on every markdown push, and
+once a day it also fetches each transaction page and compares it against a
+freshly measured not-found shell — no browser, so it runs in CI rather than by
+hand. `scripts/check-explorer.py` drives a real browser and remains the stronger
+second opinion, but nothing schedules it: run it yourself when a rendering
+question matters. A gate that runs and a gate that could are not the same thing,
+and this says which is which.
+
+
 So do not judge these by clicking alone, in either direction: a link that does
 not render is evidence about the indexer, and a link that does render does not
 prove ownership of anything. Check the chain directly:

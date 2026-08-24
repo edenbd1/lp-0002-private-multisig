@@ -71,15 +71,35 @@ same bytes would be published verbatim, which is why the membership program must
 never be invoked there, and is not: the verifier reaches it only through a
 `ChainedCall` inside a privacy transaction.
 
-*Verified against a real transaction rather than asserted.* Decoding the
-`approve` transaction from the testnet run and searching its 230 kB payload:
-no member `msk`, no salt, no `account_id`, and not even the `member_root`
-appears anywhere in it. What *does* appear is the verifier's program id — eight
-times, in the `program_owner` field of the accounts carried in
-`public_post_states`. That is necessary and harmless: the whole point of the
-marker is that it exists and is owned by this program, so its owner must be
-published. Which program a multisig uses is public by design. **Which member
-approved is what has to stay hidden, and it does.**
+*Verified against a real transaction rather than asserted.* Decoding
+`d13813094f36c1b60c02350adbc272ce5aa88dd7d87ab409a3e36436e70a91c0` — the first
+`approve` of the deployed lifecycle — and searching its 274 kB payload for every
+secret of all three members: **no `msk`, no salt, no `account_id`, no leaf**, not
+once, for any of them.
+
+What *does* appear is public by design and worth naming exactly, because an
+earlier version of this paragraph claimed less was published than actually is.
+The verifier's program id appears eight times, in the `program_owner` field of
+the accounts carried in `public_post_states`. And the **`member_root` appears
+once**, together with the `multisig_id` and the `config_hash` — because this
+revision gives accounts records, the privacy path publishes post-states, and the
+multisig account is read and written back by `approve`, so its record rides
+along.
+
+That is a change from the previous revision, whose `approve` carried no root at
+all, and it is stated rather than left for whoever greps the payload. It costs
+nothing: the root is a commitment over salted leaves and is already readable with
+a single `getAccount` on the multisig PDA, which is the whole point of publishing
+the account layouts. Knowing the root tells you the member set was fixed in
+advance; it does not tell you who is in it, and it does not tell you who
+approved. **Which member approved is what has to stay hidden, and it is.**
+
+The inversion is worth one more line, because it is counter-intuitive: the
+*public* `create_multisig` transaction contains no `member_root` — it is 649
+bytes of program id, instruction data and signature, and the sequencer
+re-executes to derive the state — while the *privacy* `approve` transaction does,
+because at 274 kB it must publish its post-states precisely since nothing can
+re-execute it. Reproduce both with `getTransaction` and a byte search.
 
 ## What is not hidden
 
@@ -88,6 +108,7 @@ Stated plainly, because a privacy claim that overreaches is worse than none.
 | Public | Why |
 |---|---|
 | **N**, the member-set size | Committed at creation; the Merkle tree's shape is derivable |
+| **The `member_root`** | It is a field of the multisig record, so any `getAccount` returns it — and each `approve` republishes it in its public post-states. A commitment over salted leaves: it fixes the set without naming anyone in it |
 | **M**, the threshold | Inside `config_hash`, which is in the multisig PDA address |
 | **The number of approvals so far** | Each is a marker account; counting them is trivial |
 | **The proposed action** | `action_hash` is inside `proposal_ref`, which is in the proposal PDA address; the preimage is published so members can decide |
@@ -236,7 +257,8 @@ on a parameter that someone had to generate honestly and then forget.
 What *is* trusted is smaller and checkable: the two program ImageIDs. Those are
 content-addressed, so an evaluator who rebuilds from source either gets the same
 identity or learns immediately that the committed binary is not the source. A
-clean `cargo risczero build` reproduces `5bb40082…` exactly — see
+clean `cargo risczero build` reproduces the verifier's `1346b652…` and the
+membership program's `56f784d6…` exactly — see
 [`DEPLOYMENT.md`](DEPLOYMENT.md), which also shows the deployed bytes hashing to
 the deployment transaction id.
 

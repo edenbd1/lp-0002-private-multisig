@@ -1,0 +1,60 @@
+1
+00:00:00,000 --> 00:00:04,002
+This is LP-0002, at the commit on screen, live on
+
+2
+00:00:04,002 --> 00:00:05,880
+the public LEZ testnet.
+
+3
+00:00:07,080 --> 00:00:10,145
+Eight transactions, and both approvals carry the
+
+4
+00:00:10,145 --> 00:00:13,018
+privacy-preserving variant — the part a block
+
+5
+00:00:13,018 --> 00:00:14,614
+explorer cannot show you.
+
+6
+00:00:15,814 --> 00:00:19,083
+Every account decodes at its published offsets. Each
+
+7
+00:00:19,083 --> 00:00:22,163
+approval marker exists because a membership proof
+
+8
+00:00:22,163 --> 00:00:25,054
+was verified on chain, and neither one names a
+
+9
+00:00:25,054 --> 00:00:25,494
+member.
+
+10
+00:00:26,694 --> 00:00:29,902
+And passing the gate moves value. The recipient
+
+11
+00:00:29,902 --> 00:00:32,906
+holds one, in an account owned by the native
+
+12
+00:00:32,906 --> 00:00:36,387
+transfer program and not by the verifier — which is
+
+13
+00:00:36,387 --> 00:00:38,025
+what makes it spendable.
+
+14
+00:00:39,225 --> 00:00:43,036
+Both scripts are in the repository, and they take no
+
+15
+00:00:43,036 --> 00:00:45,308
+arguments. Thanks for watching.
+

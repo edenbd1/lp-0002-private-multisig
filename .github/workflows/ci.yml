@@ -140,3 +140,39 @@ jobs:
       # Docker and no network.
       - name: Membership program id pin
         run: cargo test -p multisig-verifier-tests --test program_id_pin
+
+  # A green run is the evidence for the criteria nobody re-runs: the end-to-end
+  # lifecycle against a standalone sequencer with RISC0_DEV_MODE=0 takes over two
+  # hours on a runner. What a reader does instead is follow the link — so the
+  # link IS the deliverable, and one that lands on a commit this branch does not
+  # contain reads as a history rewritten to hide something.
+  #
+  # `fetch-depth: 0` is load-bearing. The default depth-1 checkout leaves HEAD
+  # with no ancestors, under which every citation looks orphaned and none of that
+  # is true; the script refuses to run on a shallow clone rather than report it.
+  citations:
+    name: Every cited CI run is on a commit this branch has
+    runs-on: ubuntu-latest
+    # Stated rather than inherited. The gate asks the API which commit each
+    # cited run sat on, so it needs `actions: read`; the repository default
+    # grants it today, and a default is not a guarantee.
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Resolve every cited run through the GitHub API
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e -o pipefail
+          ./scripts/check-run-citations.py | tee citations.out
+          # The coverage floor, for the same reason every other floor here
+          # exists: "checked 0 cited run(s)" and "checked 2, all reachable" are
+          # the same exit code, and the first one means the matcher stopped
+          # seeing the documents rather than that the documents got cleaner.
+          n=$(sed -n 's/^checked \([0-9][0-9]*\) cited CI run(s).*/\1/p' citations.out)
+          [ -n "$n" ] || { echo "it printed no coverage line"; exit 1; }
+          [ "$n" -ge 2 ] || { echo "it resolved $n citation(s), fewer than the 2 this repository ships"; exit 1; }

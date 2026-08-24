@@ -102,9 +102,14 @@ Before pushing, run what CI runs:
 ./scripts/preflight.sh
 ```
 
-It is the same four commands `.github/workflows/ci.yml` uses, not an
-approximation of them — `fmt --check`, `clippy --all-targets -- -D warnings`,
-build, test. Wire it up as a pre-push hook with:
+It runs what CI runs rather than an approximation of it — `fmt --check`,
+`clippy --all-targets -- -D warnings`, build and test, then the three checks
+cheap enough to be worth doing before a push: every quoted sha256 against the
+file it names, the IDL against the error codes the guest declares, and a YAML
+parse of the workflows. Seven steps, not the four this sentence used to claim.
+The one CI gate it cannot reproduce is `scripts/check-run-citations.py`, which
+needs the GitHub API to resolve the runs the documents cite; run that one
+directly after touching a document that names a run. Wire it up as a pre-push hook with:
 
 ```bash
 printf '#!/usr/bin/env bash\nexec "$(git rev-parse --show-toplevel)/scripts/preflight.sh"\n' \

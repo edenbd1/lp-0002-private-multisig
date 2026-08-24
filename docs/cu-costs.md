@@ -163,12 +163,18 @@ otherwise idle machine, which is the variance to expect rather than a figure to
 average away. "About eight minutes" appeared here and in the README until this
 run; that was the v0.2.0 number and it no longer holds.
 
-**The same 2-of-3, on a GitHub `ubuntu-latest` runner** (run 31885000503):
+**The same 2-of-3, on a GitHub `ubuntu-latest` runner** (run
+[31885000503](https://github.com/edenbd1/lp-0002-private-multisig/actions/runs/31885000503)):
 **3752 s** and **3746 s**, 138 minutes end to end. That is roughly 6.5x the
 laptop, and it is the honest figure for a 4-vCPU shared runner with no GPU —
 worth stating because "about twenty minutes" is a laptop number, not a
 universal one. It is also the measurement behind the 180-minute job budget in
-`.github/workflows/e2e-local-sequencer.yml`.
+`.github/workflows/e2e-local-sequencer.yml`. Run
+[32619018169](https://github.com/edenbd1/lp-0002-private-multisig/actions/runs/32619018169), eight days later on `164d463`, took **139m 52s**
+end to end — the same shape on the same runner image, agreeing with the first
+to within two minutes, which is why that budget has not moved. Both run ids
+are resolved through the GitHub API by `scripts/check-run-citations.py`, which
+fails if either ran on a commit this branch does not contain.
 
 **Against the public testnet, measured too.** The 2026-08-03 redeploy recorded
 **360 s** and **179 s** for its two approvals. The gap between them is not the

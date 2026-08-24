@@ -34,8 +34,9 @@ exist and the table would be measuring rejections.
 
 ## These numbers went up, and by how much
 
-The previous revision — ImageID `5bb40082…`, the one currently on chain —
-measured `approve` at **337,105** and `execute` (M=1) at **267,055**. Both were
+The previous revision — ImageID `5bb40082…`, deployed before the 2026-08-24
+redeploy and now superseded — measured `approve` at **337,105** and `execute`
+(M=1) at **267,055**. Both were
 re-measured from that exact committed binary rather than quoted from memory, so
 the comparison is between two runs of the same command.
 
@@ -87,11 +88,12 @@ is the platform's cost, not this program's, and it is identical for any program
 that composes a chained call.
 
 **Wall-clock is a different number entirely.** Executing `approve` takes
-milliseconds; *proving* it with `RISC0_DEV_MODE=0` is what costs time. The
-wall-clock figures below were measured against the **previous** verifier, whose
-`approve` was about a third cheaper in cycles; they have not been re-measured
-against this one, and each is labelled with the run it came from rather than
-quietly carried forward.
+milliseconds; *proving* it with `RISC0_DEV_MODE=0` is what costs time. Most of
+the wall-clock figures below were measured against the **previous** verifier,
+whose `approve` was about a third cheaper in cycles. Two were not — the
+2026-08-24 local run (482 s) and the 2026-08-24 public-testnet redeploy
+(614 s / 609 s) are this binary — and each figure is labelled with the run it
+came from rather than quietly carried forward.
 
 ## The whole lifecycle, against a real sequencer, on this binary
 
@@ -176,8 +178,16 @@ what contention costs — both are in that run's `lifecycle.tsv`, and neither is
 rounded in this document's favour.
 
 **Re-measured on 2026-08-12, after the migration to LEZ v0.2.4**: **440 s** and
-**469 s** on the same laptop against the public testnet. It is quoted because it
-is the run the current deployment came from, and it is left as measured.
+**469 s** on the same laptop against the public testnet.
+
+**And again on 2026-08-24, which is the run the current deployment came from**:
+**614 s** and **609 s** for the two approvals of the 2-of-3, against the public
+testnet on the same laptop. Both figures are in that run's
+`.testnet/lifecycle.tsv` next to the transaction hashes
+`d1381309…` and `9f7c541c…`, so the timing and the on-chain evidence come out of
+the same run rather than being paired up afterwards. Two approvals within 5 s of
+each other is what an uncontended machine looks like; compare the 440/469 pair
+above and the 444/704 pair below, both taken under load.
 
 **Contention matters more than it looks, so it was controlled for.** The same
 `MEMBERS=2 THRESHOLD=1` local-sequencer run measured **935 s** while a second,
@@ -220,6 +230,7 @@ honest way to read every number here is *per machine*:
 | Apple silicon laptop, local sequencer, LEZ v0.2.4, one other proof running | **935 s** |
 | Apple silicon laptop, public testnet | **179 s** (360 s under CPU contention) |
 | Apple silicon laptop, public testnet, LEZ v0.2.4 | **440-469 s** (under contention) |
+| Apple silicon laptop, public testnet, LEZ v0.2.4, the deployed run | **609-614 s** |
 | GitHub `ubuntu-latest`, local sequencer, LEZ v0.2.0 | **1264 s** |
 | GitHub `ubuntu-latest`, local sequencer, LEZ v0.2.4 | **4033 s** |
 

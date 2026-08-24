@@ -176,3 +176,26 @@ jobs:
           n=$(sed -n 's/^checked \([0-9][0-9]*\) cited CI run(s).*/\1/p' citations.out)
           [ -n "$n" ] || { echo "it printed no coverage line"; exit 1; }
           [ "$n" -ge 2 ] || { echo "it resolved $n citation(s), fewer than the 2 this repository ships"; exit 1; }
+
+  # Documentation rots in three ways that are decidable from the tree alone: a
+  # path in backticks that is not there, a link whose target does not resolve
+  # from the document that carries it, and a line citation past the end of its
+  # file. None of them needs judgement about what a sentence meant, so none of
+  # them needs a human to notice.
+  docs:
+    name: The documentation points at things that exist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Every quoted path, link and line citation resolves
+        run: |
+          set -e -o pipefail
+          ./scripts/check-docs.py | tee docs.out
+          # Floors, because every class here can pass by matching nothing: a
+          # regex that stops seeing documents reports zero failures, which is
+          # the same exit code and the same green tick as a clean tree.
+          p=$(sed -n 's/^examined \([0-9]*\) repository path(s), \([0-9]*\) link(s).*/\1/p' docs.out)
+          l=$(sed -n 's/^examined \([0-9]*\) repository path(s), \([0-9]*\) link(s).*/\2/p' docs.out)
+          [ -n "$p" ] && [ -n "$l" ] || { echo "it printed no coverage line"; exit 1; }
+          [ "$p" -ge 40 ] || { echo "only $p path(s) examined, under the floor of 40: the matcher is not seeing the documents"; exit 1; }
+          [ "$l" -ge 20 ] || { echo "only $l link(s) examined, under the floor of 20: the matcher is not seeing the documents"; exit 1; }

@@ -121,6 +121,19 @@ jobs:
           test -f artifacts/programs/multisig_verifier.bin
           test -f artifacts/programs/membership_lez.bin
 
+      # README.md states three test counts — 25 for the circuit's adversarial
+      # suite, 34 for multisig-core, 59 against the built binary — and all three
+      # are quoted outward. Nothing compared them to the suites: a suite that
+      # grows does not fail, it just runs more tests than the sentence about it
+      # admits, and this file stays green through the drift.
+      #
+      # Counting `#[test]` attributes would be wrong here on purpose:
+      # multisig-verifier-tests holds 60 of them and the README says 59, because
+      # one is `#[ignore]`d — it reports a measurement rather than asserting a
+      # property, and the compute-cost step below runs it separately.
+      - name: Every stated test count is what its suite passes
+        run: ./scripts/check-test-count.py
+
       - name: Adversarial suite against the built binary
         run: cargo test -p multisig-verifier-tests
 

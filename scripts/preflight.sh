@@ -50,6 +50,9 @@ step "Hashes        every quoted sha256 is that file's" \
 step "IDL           carries the error codes the guest declares" \
      python3 scripts/idl-errors.py --check
 
+step "Counts        every stated test count is what its suite passes" \
+     python3 scripts/check-test-count.py
+
 step "Docs          every quoted path, link and line citation resolves" \
      python3 scripts/check-docs.py
 

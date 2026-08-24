@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prove the committed transcript belongs to the film it claims to transcribe.
 
-    ./scripts/check-transcript.py recordings/lp8-demo.srt <film.mp4>
+    ./scripts/check-transcript.py recordings/lp-0002-threshold-moves-value.srt <film.mp4>
 
 A transcript shipped next to a video is a convenience, and a convenience nobody
 checks is a claim nobody checks. This asserts three things, and none of them is
@@ -23,6 +23,15 @@ checks is a claim nobody checks. This asserts three things, and none of them is
 
 No skip path: a missing ffmpeg, ffprobe or tesseract exits non-zero. A checker
 that passes when it cannot look is the failure it exists to prevent.
+
+THIS ONE RUNS BY HAND, AND THAT IS NOT AN OVERSIGHT
+
+It needs the film, and the film is not in this repository: it is an attachment
+on the pull request, where a reader watches it. Committing a video to carry a
+check would be the tail wagging the dog. So no workflow runs this, and saying so
+here is the point — a gate nobody schedules and nobody mentions is indis-
+tinguishable, from the outside, from one that passes. Run it against the file
+you uploaded, before you upload it.
 """
 import os
 import re

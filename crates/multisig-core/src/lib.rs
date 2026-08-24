@@ -174,7 +174,7 @@ pub fn padding_leaf() -> [u8; 32] {
 }
 
 // ---------------------------------------------------------------------------
-// Reused LEZ primitives (byte-identical to LP-0005 / LP-0003 / upstream LEZ)
+// Reused LEZ primitives (byte-identical to upstream LEZ)
 // ---------------------------------------------------------------------------
 
 /// Re-derive a LEZ regular private-account id from `(npk, identifier)`.
@@ -484,9 +484,8 @@ pub enum ApproveError {
 /// [`ApproveError`] naming exactly which binding failed. The guest calls this
 /// and emits its `ProgramOutput` only if it returns `Ok`.
 ///
-/// Deliberately the same shape as LP-0003's `claim` and LP-0005's `attest`:
-/// witness plus a public statement it must satisfy, so all three share an audit
-/// vocabulary.
+/// The shape is deliberate: a witness plus a public statement it must satisfy,
+/// which is the vocabulary an auditor already reads elsewhere in this codebase.
 pub fn approve(
     witness: &ApproveWitness,
     statement: &ApproveStatement,

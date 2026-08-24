@@ -56,6 +56,11 @@ step "Counts        every stated test count is what its suite passes" \
 step "Docs          every quoted path, link and line citation resolves" \
      python3 scripts/check-docs.py
 
+# Touche le réseau : le nœud public, pas GitHub. Laissé en dernier pour que
+# les contrôles hors-ligne aient déjà parlé si celui-ci ne peut pas joindre.
+step "Chain refs    every explorer link resolves" \
+     python3 scripts/check-chain-refs.py
+
 step "Workflows     yaml parse" python3 - <<'PY'
 import glob, sys
 try:

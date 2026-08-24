@@ -106,7 +106,7 @@ It runs what CI runs rather than an approximation of it — `fmt --check`,
 `clippy --all-targets -- -D warnings`, build and test, then the three checks
 cheap enough to be worth doing before a push: every quoted sha256 against the
 file it names, the IDL against the error codes the guest declares, and a YAML
-parse of the workflows. Nine steps, not the four this sentence used to claim; the last three are
+parse of the workflows. Ten steps, not the four this sentence used to claim; the last three are
 cheap because they read the tree rather than build it.
 The one CI gate it cannot reproduce is `scripts/check-run-citations.py`, which
 needs the GitHub API to resolve the runs the documents cite; run that one

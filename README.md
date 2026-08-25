@@ -125,7 +125,7 @@ To rebuild the on-chain programs (needs Docker and `cargo-risczero`):
 
 ### Test inventory
 
-`cargo test --workspace` runs **130** tests. Counted, so you can check the claim:
+`cargo test --workspace` runs **131** tests. Counted, so you can check the claim:
 
 | Suite | Count | What it establishes |
 |---|---:|---|
@@ -137,21 +137,21 @@ To rebuild the on-chain programs (needs Docker and `cargo-risczero`):
 | `multisig-verifier-tests` — `idl_contract` | 6 | The IDL carries every error code and every record layout the guest declares, the instruction order has not moved, `docs/error-codes.md` documents every code, and `scripts/pda.py` derives the same treasury address the program does |
 | `multisig-verifier-tests` — `program_id_pin` | 3 | The verifier pins the committed membership binary, and the pin is not a placeholder |
 | `multisig-sdk` — `cross_check` + doctest | 3 | Every SDK derivation equals the `multisig-core` one the chain re-derives, and the client-side guards hold |
-| `multisig-cli` — `resumable` | 2 | Through the **built binary**, one process per step: a partial set of approvals survives client restarts, and a non-member is refused in milliseconds instead of after minutes of proving |
+| `multisig-cli` — `resumable` | 3 | Through the **built binary**, one process per step: a partial set of approvals survives client restarts, and a non-member is refused in milliseconds instead of after minutes of proving |
 
-25 + 16 + 30 + 22 + 23 + 6 + 3 + 3 + 2 = 130, and every row's own breakdown adds
+25 + 16 + 30 + 22 + 23 + 6 + 3 + 3 + 3 = 131, and every row's own breakdown adds
 up to its count.
 
 One further test is `#[ignore]`d: it reports the measured compute cost rather
 than asserting a property. Run it with
 `cargo test -p multisig-verifier-tests --test verifier_rejects -- --ignored --nocapture`.
 
-[`docs/error-codes.md`](docs/error-codes.md) counts **84** rather than 130. That
+[`docs/error-codes.md`](docs/error-codes.md) counts **84** rather than 131. That
 is `multisig-verifier-tests` alone — the suites that run the built binary — which
-is the inventory behind the error-code table. 130 is what
+is the inventory behind the error-code table. 131 is what
 `cargo test --workspace` runs. Both numbers are in CI: the `workspace` job runs
 `multisig-core`, `multisig-sdk` and `multisig-cli`, the `verifier` job runs
-`multisig-verifier-tests`, and between them all 130 run on every push.
+`multisig-verifier-tests`, and between them all 131 run on every push.
 
 **The deployed program is genuinely under test.** The two guest crates are
 excluded from the host workspace because they build for

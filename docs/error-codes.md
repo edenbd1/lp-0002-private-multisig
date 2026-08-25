@@ -95,4 +95,4 @@ The circuit-side bindings are covered separately by 25 tests in
 format, and the client surface by 2 in `multisig-sdk` (one of them a doctest) and
 2 in `multisig-cli`.
 
-**130 in total.** `cargo test --workspace` runs all of them.
+**131 in total.** `cargo test --workspace` runs all of them.

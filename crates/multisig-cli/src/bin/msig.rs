@@ -876,22 +876,49 @@ fn status(dir: &Path, proposal_id: &str) -> Result<()> {
     let ms: MultisigFile = read_json(&dir.join("multisig.json"))?;
     let p: ProposalFile = read_json(&proposal_path(dir, proposal_id))?;
     let n = p.approvals.len();
-    let t = ms.threshold as usize;
+
+    // What this proposal actually costs, not what the multisig charges by
+    // default. A rotation is always the default threshold — `rotate_config`
+    // never reads the tier table for its own count — while a transfer may be
+    // priced down by a tier that covers its amount. `execute-args` has always
+    // computed it this way; `status` used to print the default and tell an
+    // operator to gather an approval the chain would not ask for, which is
+    // several minutes of proving spent for nothing.
+    let tiers = tier_table(&ms);
+    let need = if p.rotate_to_hex.is_some() {
+        ms.threshold
+    } else {
+        required_threshold(p.amount, ms.threshold, &tiers)
+    } as usize;
 
     println!("proposal      {}", p.proposal_id_hex);
     println!("memo          {}", p.memo);
-    println!("pays          {} to {}", p.amount, p.recipient_hex);
+    if let Some(target) = &p.rotate_to_hex {
+        println!("rotates to    {target}");
+    } else {
+        println!("pays          {} to {}", p.amount, p.recipient_hex);
+    }
     println!("proposal ref  {}", p.proposal_ref_hex);
     println!("threshold     {}-of-{}", ms.threshold, ms.member_count);
+    if need != ms.threshold as usize {
+        println!(
+            "needs         {need} for this one, because {}",
+            if p.rotate_to_hex.is_some() {
+                "a rotation always costs the default threshold".to_string()
+            } else {
+                format!("an anchored tier covers an amount of {}", p.amount)
+            }
+        );
+    }
     println!(
-        "gathered      {n}/{t}{}",
-        if n >= t { "  READY TO EXECUTE" } else { "" }
+        "gathered      {n}/{need}{}",
+        if n >= need { "  READY TO EXECUTE" } else { "" }
     );
     for (i, a) in p.approvals.iter().enumerate() {
         println!("  approval {i}   marker {}", a.marker_seed_hex);
     }
-    if n < t {
-        println!("\nneed {} more approval(s)", t - n);
+    if n < need {
+        println!("\nneed {} more approval(s)", need - n);
     }
     Ok(())
 }

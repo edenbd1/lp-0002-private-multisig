@@ -156,10 +156,17 @@ Successfully loaded UI module: "lp-0002-multisig"
 ```
 
 Pointing **Multisig folder** at a directory made by `msig new-multisig` and
-pressing **Status**
-returns the live deployment's state — `2-of-3`, `2/2 READY TO EXECUTE`, and the
-two approval markers — with the `msig` field left empty, because the plugin
-resolves the CLI shipped inside the package.
+pressing **Status** returns that deployment's live state — when this was driven,
+the then-current 2-of-3 with its `2/2 READY TO EXECUTE` and both approval
+markers — with the `msig` field left empty, because the plugin resolves the CLI
+shipped inside the package.
+
+The tile renders whatever that CLI prints rather than computing anything itself,
+so against the deployment now in `artifacts/testnet` the same button shows the
+3-of-3, the line explaining that an anchored tier prices this transfer at two,
+and `2/2 READY TO EXECUTE`. That is the CLI's current output, reproduced by
+`msig status --dir artifacts/testnet --proposal-id "$(cat artifacts/testnet/proposal_id)"`;
+the GUI session quoted above predates the redeploy and is not re-quoted for it.
 
 ### The `linux-amd64` half, verified on Linux
 

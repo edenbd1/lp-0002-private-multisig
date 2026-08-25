@@ -87,7 +87,7 @@ It starts the actual `sequencer_service` binary in standalone mode, points a
 throwaway wallet at it, and drives the whole lifecycle over JSON-RPC — deploy,
 create, propose, gather a threshold of **real Risc0 approvals** with
 `RISC0_DEV_MODE=0`, execute — then reads the resulting accounts back off that
-local chain. About 22 minutes for a 2-of-3 on LEZ v0.2.4 — measured, not
+local chain. About 22 minutes for a 3-of-3 on LEZ v0.2.4 — measured, not
 estimated: 1333 s end to end on an Apple-silicon laptop, of which 444 s and
 704 s were the two real proofs. It prints its own per-approval wall clock, which
 is the number to trust on your machine. Needs a `logos-execution-zone` checkout
@@ -344,9 +344,16 @@ not supported"*.
 
 ## On the public LEZ testnet
 
-**Deployed 2026-08-24**, blocks 23028-23066: both programs, a 2-of-3 multisig, a
-funded treasury, a proposal, two approvals on the privacy-preserving path, and an
-execution that moved the money.
+**Deployed 2026-08-24**, blocks 23028-23554: both programs, a **3-of-3** multisig
+with a spending tier, a funded treasury, a proposal, **two** approvals on the
+privacy-preserving path, and an execution that moved the money — two against a
+threshold of three, because the anchored tier covers the amount.
+
+Then a **rotation**: the same members voted to replace their own configuration,
+three more approvals on the proving path, and a second configuration anchored at
+its own address with the first marked superseded. **Thirteen transactions, five of
+them privacy-preserving.** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) has both
+tables and the two records side by side.
 
 ```bash
 ./scripts/verify-onchain-lifecycle.sh

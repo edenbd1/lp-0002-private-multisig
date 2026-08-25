@@ -13,7 +13,7 @@
 #   - the deployed programs are the binaries committed here, by recomputing the
 #     deploy transaction hash from the bytecode rather than trusting a hash
 #     written down next to it;
-#   - the eight transactions of the lifecycle resolve;
+#   - the thirteen transactions of the lifecycle and the rotation resolve;
 #   - and each carries the variant it must carry. That last one is the point of
 #     the submission: if the two approvals were Public, threshold approval would
 #     be linkable and there would be nothing here worth reviewing. A run that
@@ -104,11 +104,21 @@ check "create_proposal"          0 54a300eb8c0bec27adb40b3ab36ff653b6234dc4deab2
 check "approve (member A)"       1 1a5e529d8b9c87ec781b6e8cc2d4bc71c149e7f45f9ce66711108a22dbf6fcd5
 check "approve (member B)"       1 28a07e8df970322b643d7d5d6c74640f49e6d0260964255909181fdc815e8397
 check "execute"                  0 d0bab2943f09d3a27a10610c49c2a6cce1a2c94b93ded6f341ce29005ba8ca7c
+
+# The rotation. Three approvals rather than two: the tier that priced the
+# transfer does not apply to governance, and `rotate_config` never reads it for
+# its own count. These are variant 1 for the same reason the transfer's are —
+# an approval is an approval, whatever it approves.
+check "rotation: proposal"       0 7a9331a9db536f710689b31861e7a3c94462fa1e090140e9fc3af66bc9eee773
+check "rotation: approve A"      1 664fa866c041d39733dadadf84e266b1ec9a36e033a2cc271d2032c87dc2b563
+check "rotation: approve B"      1 87aeffe96c98d4ed58601bbb5707f5c6516ca602e4a7aff1e274ba2188bb58a0
+check "rotation: approve C"      1 6fcc674ae1c198651181afc74b47e005dc90aee4729301e79fb709019a314160
+check "rotate_config"            0 cb8a3f8b07db5039b48aefc32e3770e9919b2ce7af0792ef31fb8b47ea942554
 echo
 
 if [ "$fail" -eq 0 ]; then
-  echo "Both programs on chain are the bytecode in this repository, the eight"
-  echo "transactions resolve, and the two approvals are PrivacyPreserving rather"
+  echo "Both programs on chain are the bytecode in this repository, the thirteen"
+  echo "transactions resolve, and the five approvals are PrivacyPreserving rather"
   echo "than Public — which is the part a block explorer cannot show you."
 else
   echo "Something above did not hold." >&2

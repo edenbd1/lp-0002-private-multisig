@@ -1,6 +1,6 @@
 # Deployment
 
-**Deployed to the public LEZ testnet on 2026-08-24**, in blocks 23028-23066.
+**Deployed to the public LEZ testnet on 2026-08-24**, in blocks 23028-23554.
 Every hash and every address below was read back off the chain rather than
 derived on paper: `./scripts/verify-onchain-lifecycle.sh` re-checks the
 transactions from a clean clone, and `./scripts/verify-onchain.sh` re-reads the
@@ -29,10 +29,15 @@ are reachable forever, and they are listed under
 
 ## The lifecycle, on chain
 
-A **2-of-3** multisig: created, its treasury funded, a proposal published, two
-approvals gathered on the privacy-preserving path, and executed — and executing
-moved the money. Eight transactions, every one of them live on the public
-sequencer.
+A **3-of-3** multisig with a spending tier: created, its treasury funded, a
+proposal published, **two** approvals gathered on the privacy-preserving path,
+and executed — and executing moved the money. Two approvals against a threshold
+of three, because the anchored tier covers this amount; the tier is counted in
+proofs not generated rather than asserted in prose.
+
+Then the same members rotated the configuration: a second one anchored at its own
+address, and the first marked superseded. **Thirteen transactions**, every one of
+them live on the public sequencer, five of them on the proving path.
 
 | Step | Transaction | Block |
 |---|---|---|
@@ -45,12 +50,47 @@ sequencer.
 | `approve` (member B, **privacy tx**) | [`28a07e8df970322b643d7d5d6c74640f49e6d0260964255909181fdc815e8397`](https://explorer.testnet.lez.logos.co/transaction/28a07e8df970322b643d7d5d6c74640f49e6d0260964255909181fdc815e8397) | 23065 |
 | `execute` | [`d0bab2943f09d3a27a10610c49c2a6cce1a2c94b93ded6f341ce29005ba8ca7c`](https://explorer.testnet.lez.logos.co/transaction/d0bab2943f09d3a27a10610c49c2a6cce1a2c94b93ded6f341ce29005ba8ca7c) | 23066 |
 
+### The rotation, five transactions later
+
+The same member set then voted to replace itself. `rotate_config` does not
+rewrite the configuration above: it anchors a **second** one at its own PDA, with
+its own treasury, and writes that address into the first as `superseded_by`.
+
+| Step | Transaction | Block |
+|---|---|---:|
+| `create_proposal` (rotation) | [`7a9331a9db536f710689b31861e7a3c94462fa1e090140e9fc3af66bc9eee773`](https://explorer.testnet.lez.logos.co/transaction/7a9331a9db536f710689b31861e7a3c94462fa1e090140e9fc3af66bc9eee773) | 23527 |
+| `approve` (member A, **privacy tx**) | [`664fa866c041d39733dadadf84e266b1ec9a36e033a2cc271d2032c87dc2b563`](https://explorer.testnet.lez.logos.co/transaction/664fa866c041d39733dadadf84e266b1ec9a36e033a2cc271d2032c87dc2b563) | 23536 |
+| `approve` (member B, **privacy tx**) | [`87aeffe96c98d4ed58601bbb5707f5c6516ca602e4a7aff1e274ba2188bb58a0`](https://explorer.testnet.lez.logos.co/transaction/87aeffe96c98d4ed58601bbb5707f5c6516ca602e4a7aff1e274ba2188bb58a0) | 23544 |
+| `approve` (member C, **privacy tx**) | [`6fcc674ae1c198651181afc74b47e005dc90aee4729301e79fb709019a314160`](https://explorer.testnet.lez.logos.co/transaction/6fcc674ae1c198651181afc74b47e005dc90aee4729301e79fb709019a314160) | 23553 |
+| `rotate_config` | [`cb8a3f8b07db5039b48aefc32e3770e9919b2ce7af0792ef31fb8b47ea942554`](https://explorer.testnet.lez.logos.co/transaction/cb8a3f8b07db5039b48aefc32e3770e9919b2ce7af0792ef31fb8b47ea942554) | 23554 |
+
+**Three approvals, not two.** The tier that priced the transfer at two does not
+apply here: a rotation costs the *default* threshold, always. Pricing governance
+by tier would make the cheapest action available the one that rewrites who may
+act, and `rotate_config` refuses to read the tier table for its own count.
+
+What the two records say afterwards, read with `scripts/decode-account.py`:
+
+| | Old, `C9CgRDNf…` | New, `9S9hg1gs…` |
+|---|---|---|
+| `member_root` @33 | `cee4c224…` | `07fa037e…` |
+| `threshold` @65 | 3 | **2** |
+| `tiers_hash` @69 | `6b2eae58…` | `5b942bec…` (no tiers) |
+| `superseded_by` @101 | **`yes, by 39c7f3c0…`** | `no (live)` |
+
+The new configuration's treasury, `AL4CZ4eZJbGmZoHPf2ZhVspgmGVNdbTDAMnYR5enhuJi`,
+holds **0**. A rotation moves no value: the funds stay under the configuration
+that held them until someone proposes to move them under the new rules. And the
+old record is still there, still decodable at the offsets this document
+publishes — a rotation retires a configuration, it does not erase one.
+
 `membership_lez` sits three sequencer-lifetimes back at block 4459 because it was
 never redeployed. A LEZ deployment hash is `SHA256(borsh(bytecode))`, the
 membership bytecode is byte-identical to what is committed here, and deploying it
 again would reproduce that same hash rather than mint a new one.
 
-The two approvals took **614 s** and **609 s** of wall clock. `deploy-and-run.sh`
+The two transfer approvals took **484 s** and **550 s** of wall clock, and the
+three rotation approvals **514 s**, **504 s** and **533 s**. `deploy-and-run.sh`
 times each one and writes the figure into `.testnet/lifecycle.tsv` beside its
 hash, so the timing comes out of the same run as the evidence. That number is
 also the check that the run was real: proving on the privacy path costs minutes,
@@ -60,7 +100,7 @@ and an approval that returns in seconds proved nothing.
 
 **Measured 2026-08-24, hours after the redeploy: the explorer has not indexed
 these yet.** Its own index sat at block **20769** while the lifecycle above ran
-in blocks 23028-23066, so seven of the eight hashes return the 2416-byte
+in blocks 23028-23066, so seven of those eight hashes returned the 2416-byte
 `Failed to load transaction: error running server function: Transaction not
 found` page, and the account view answers
 `Program Owner: 11111111111111111111111111111111 … Data: 0 bytes` for accounts
@@ -476,14 +516,14 @@ this is what goes stale.
 
 | Where | What |
 |---|---|
-| this file, "The lifecycle, on chain" | eight transaction hashes and their block numbers |
+| this file, "The lifecycle, on chain" and "The rotation" | thirteen transaction hashes and their block numbers |
 | this file, "The accounts" | six addresses, the treasury's balance before and after, and the recipient's |
 | this file, multisig id / member root / config hash / proposal id | all four change: the id is random per run |
 | this file, "Superseded addresses" | append the run being replaced, do not overwrite it — the list is cumulative |
-| `README.md`, "On the public LEZ testnet" | the same eight hashes and the same six addresses |
+| `README.md`, "On the public LEZ testnet" | the same thirteen hashes and the same six addresses |
 | `README.md`, "Programs" | the verifier's ImageID, if it was not already updated by the rebuild. The membership id does not move unless `crates/membership-circuit/` or the non-`records` half of `multisig-core` does |
 | `artifacts/testnet/` | replace its contents with the new run's `multisig.json`, `proposals/<id>.json` and `proposal_id` |
-| `scripts/verify-onchain-lifecycle.sh` | the eight hashes and the expected variant of each |
+| `scripts/verify-onchain-lifecycle.sh` | the thirteen hashes and the expected variant of each |
 | `app/README.md` | the `.lgx` SHA-256, if the package was rebuilt — `scripts/preflight.sh` recomputes every digest quoted beside a path and fails on a stale one, so this row is enforced rather than remembered |
 | `docs/cu-costs.md` | the wall-clock rows, if the run is timed — the cycle table is current for as long as the ImageID is |
 | `.testnet/` | delete `pda_addresses.txt`, `msig_id` and `prop_id` if a run leaves them behind. They are pre-`lifecycle.tsv` scratch files that no script writes any more, and a manifest that disagrees with the chain is worse than no manifest |

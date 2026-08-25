@@ -229,3 +229,96 @@ fn a_witness_that_cannot_satisfy_the_statement_fails_before_proving() {
     );
     assert_eq!(gathered(dir), "0/3", "a refused approval changes no state");
 }
+
+/// `status` must price a proposal the way the chain does.
+///
+/// It did not. With a tier anchored, `execute-args` computed
+/// `required_threshold(amount, default, tiers)` and would happily build a
+/// transaction from two approvals, while `status` printed the *default*
+/// threshold and told the operator to gather a third. On the deployed 3-of-3
+/// that is one more real proof — several minutes — for an approval the verifier
+/// never asks for, and the two commands disagreed about the same file.
+///
+/// The assertion that fails against the old code is `2/2  READY TO EXECUTE`:
+/// it used to read `2/3` with `need 1 more approval(s)` underneath.
+#[test]
+fn status_prices_a_proposal_by_the_tier_the_chain_will_apply() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let dir = tmp.path();
+    let d = dir.to_str().unwrap();
+    const P: &str = "00000000000000000000000000000000000000000000000000000000000000ef";
+
+    // Default threshold 3, and a tier saying anything up to 1000 costs 2.
+    ok(&[
+        "new-multisig",
+        "--members",
+        "5",
+        "--threshold",
+        "3",
+        "--tier",
+        "1000:2",
+        "--id",
+        "00000000000000000000000000000000000000000000000000000000000000fe",
+        "--out",
+        d,
+    ]);
+    ok(&[
+        "propose",
+        "--dir",
+        d,
+        "--proposal-id",
+        P,
+        "--recipient",
+        RECIPIENT,
+        "--amount",
+        AMOUNT,
+        "--memo",
+        MEMO,
+    ]);
+
+    let fresh = ok(&["status", "--dir", d, "--proposal-id", P]);
+    assert!(
+        fresh.contains("needs         2 for this one"),
+        "status must say what this proposal actually costs:\n{fresh}"
+    );
+    assert!(
+        fresh.contains("threshold     3-of-5"),
+        "and must still show the multisig's default threshold:\n{fresh}"
+    );
+
+    for m in ["0", "3"] {
+        ok(&[
+            "approve-args",
+            "--dir",
+            d,
+            "--proposal-id",
+            P,
+            "--member",
+            m,
+            "--out",
+            &format!("{d}/a{m}.args"),
+        ]);
+    }
+
+    let status = ok(&["status", "--dir", d, "--proposal-id", P]);
+    assert!(
+        status.contains("gathered      2/2  READY TO EXECUTE"),
+        "two approvals satisfy the tier, so this is ready:\n{status}"
+    );
+    assert!(
+        !status.contains("need 1 more approval(s)"),
+        "it must not ask for an approval the verifier will not require:\n{status}"
+    );
+
+    // The claim `status` now makes is exactly the one `execute-args` acts on:
+    // if these two ever disagree again, this fails rather than costing a proof.
+    ok(&[
+        "execute-args",
+        "--dir",
+        d,
+        "--proposal-id",
+        P,
+        "--out",
+        &format!("{d}/exec.args"),
+    ]);
+}

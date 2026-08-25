@@ -41,6 +41,16 @@ all = { level = "warn", priority = -1 }
 # Demos and tests intentionally use unwrap/expect for clarity.
 unwrap_used = "allow"
 expect_used = "allow"
+# `decode_tier_table` reads fixed-width entries with `chunks_exact`, and a newer
+# clippy than this repository pins would rather see `as_chunks`. The rewrite is
+# refused rather than applied, and the reason is not taste: `multisig-core` is
+# linked into the verifier guest, RISC0 derives that guest's ImageID from its
+# memory image, and moving a line in this crate changes the program's identity on
+# chain. The deployed verifier was built from the code as it stands. Silencing a
+# style lint in a manifest costs nothing and reaches no compiled byte; taking the
+# suggestion would mean the committed source no longer rebuilds what is running.
+# Drop this at the next redeploy, with the two line-count notes it belongs to.
+chunks_exact_to_as_chunks = "allow"
 
 [profile.release]
 debug = 1

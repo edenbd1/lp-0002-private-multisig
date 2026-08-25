@@ -51,6 +51,7 @@ pub enum VerifierInstruction {
         config_hash: [u8; 32],
         member_root: [u8; 32],
         threshold: u32,
+        tiers: Vec<u8>,
     },
     FundTreasury {
         multisig_id: [u8; 32],
@@ -66,6 +67,7 @@ pub enum VerifierInstruction {
         recipient: [u8; 32],
         amount: u128,
         memo_hash: [u8; 32],
+        rotate_to: [u8; 32],
     },
     Approve {
         witness_words: Vec<u32>,
@@ -73,6 +75,7 @@ pub enum VerifierInstruction {
         config_hash: [u8; 32],
         member_root: [u8; 32],
         threshold: u32,
+        tiers: Vec<u8>,
         proposal_ref: [u8; 32],
         nullifier: [u8; 32],
         approval_marker_seed: [u8; 32],
@@ -82,6 +85,24 @@ pub enum VerifierInstruction {
         config_hash: [u8; 32],
         member_root: [u8; 32],
         threshold: u32,
+        tiers: Vec<u8>,
+        proposal_ref: [u8; 32],
+        approval_nullifiers: Vec<[u8; 32]>,
+        execution_marker_seed: [u8; 32],
+    },
+    /// Appended last, and it must stay last. risc0's serde puts the variant
+    /// index on the wire, so moving this renumbers every instruction after it
+    /// and silently changes the meaning of every already-signed payload.
+    RotateConfig {
+        multisig_id: [u8; 32],
+        config_hash: [u8; 32],
+        member_root: [u8; 32],
+        threshold: u32,
+        tiers: Vec<u8>,
+        new_config_hash: [u8; 32],
+        new_member_root: [u8; 32],
+        new_threshold: u32,
+        new_tiers: Vec<u8>,
         proposal_ref: [u8; 32],
         approval_nullifiers: Vec<[u8; 32]>,
         execution_marker_seed: [u8; 32],
@@ -354,6 +375,10 @@ pub struct Fixture {
     pub multisig_id: [u8; 32],
     pub member_root: [u8; 32],
     pub threshold: u32,
+    /// The spending tiers this fixture anchors. Empty by default: a tier table
+    /// only ever lowers the bar for small transfers, so "no tiers" is the plain
+    /// case every existing test means, and the tiered cases say so explicitly.
+    pub tiers: Vec<(u128, u32)>,
     pub config_hash: [u8; 32],
     pub proposal_id: [u8; 32],
     pub action_hash: [u8; 32],
@@ -399,7 +424,7 @@ impl Fixture {
         }
         let (member_root, paths) = build_member_tree(&leaves);
         let multisig_id = [0xA0; 32];
-        let config_hash = compute_config_hash(&member_root, threshold);
+        let config_hash = compute_config_hash(&member_root, threshold, &no_tiers_hash());
         let proposal_id = [0x11; 32];
         let memo_hash = compute_memo_hash(FIXTURE_MEMO);
         let action_hash = compute_transfer_action_hash(
@@ -425,6 +450,7 @@ impl Fixture {
             multisig_id,
             member_root,
             threshold,
+            tiers: Vec::new(),
             config_hash,
             proposal_id,
             action_hash,
@@ -484,7 +510,40 @@ impl Fixture {
             threshold: self.threshold,
             treasury: *self.treasury_addr().value(),
             authority: FIXTURE_AUTHORITY,
+            // Derived from `self.tiers`, never hardcoded: a record whose
+            // `tiers_hash` disagreed with the `config_hash` in its own address
+            // is a state the program rejects (E_TIERS_MISMATCH), so a fixture
+            // that built one would make every tiered test fail for a reason
+            // that has nothing to do with what it is testing.
+            tiers_hash: compute_tiers_hash(&self.tier_table()),
+            superseded_by: [0u8; 32],
         }
+    }
+
+    /// `self.tiers` as the typed table the core crate works in.
+    #[must_use]
+    pub fn tier_table(&self) -> Vec<TierPolicy> {
+        self.tiers
+            .iter()
+            .map(|&(max_amount, threshold)| TierPolicy {
+                max_amount,
+                threshold,
+            })
+            .collect()
+    }
+
+    /// The multisig record as it stands *after* a rotation has left it: still
+    /// anchored, still decodable, and pointing at its successor.
+    #[must_use]
+    pub fn multisig_account_superseded_by(&self, r: &Rotation) -> AccountWithMetadata {
+        let mut record = self.multisig_record();
+        record.superseded_by = r.new_config_hash;
+        owned_with(
+            self.verifier,
+            self.multisig_id_addr(),
+            0,
+            encode_multisig(&record),
+        )
     }
 
     #[must_use]
@@ -499,6 +558,7 @@ impl Fixture {
             amount: self.amount,
             memo_hash: self.memo_hash,
             status: STATUS_OPEN,
+            rotate_to: [0u8; 32],
         }
     }
 
@@ -629,6 +689,7 @@ impl Fixture {
             config_hash: self.config_hash,
             member_root: self.member_root,
             threshold: self.threshold,
+            tiers: encode_tier_table(&self.tier_table()),
         }
     }
 
@@ -661,6 +722,7 @@ impl Fixture {
             recipient: self.recipient,
             amount: self.amount,
             memo_hash: self.memo_hash,
+            rotate_to: [0u8; 32],
         }
     }
 
@@ -716,6 +778,7 @@ impl Fixture {
             proposal_ref: self.proposal_ref,
             nullifier,
             approval_marker_seed: compute_approval_marker(&self.proposal_ref, &nullifier),
+            tiers: encode_tier_table(&self.tier_table()),
         }
     }
 
@@ -746,6 +809,7 @@ impl Fixture {
             proposal_ref: self.proposal_ref,
             approval_nullifiers: members.iter().map(|&m| self.nullifier(m)).collect(),
             execution_marker_seed: compute_execution_marker(&self.proposal_ref),
+            tiers: encode_tier_table(&self.tier_table()),
         }
     }
 
@@ -769,4 +833,273 @@ impl Fixture {
         v.extend(members.iter().map(|&m| self.marker_account(m, true)));
         v
     }
+
+    // ── tiers ────────────────────────────────────────────────────────────
+
+    /// Anchor a tier table, which moves `config_hash` and therefore every
+    /// address and every hash derived from it.
+    ///
+    /// The recomputation is the point. A test that set `self.tiers` and left
+    /// `config_hash` alone would be asking the program to accept a table the
+    /// address does not commit to — which is a *different* test, and one that
+    /// belongs in `verifier_rejects.rs`.
+    #[must_use]
+    pub fn with_tiers(mut self, tiers: &[(u128, u32)]) -> Self {
+        self.tiers = tiers.to_vec();
+        let table: Vec<TierPolicy> = tiers
+            .iter()
+            .map(|&(max_amount, threshold)| TierPolicy {
+                max_amount,
+                threshold,
+            })
+            .collect();
+        self.config_hash = compute_config_hash(
+            &self.member_root,
+            self.threshold,
+            &compute_tiers_hash(&table),
+        );
+        self.rederive();
+        self
+    }
+
+    /// Propose a different amount. `amount` is inside `action_hash`, so this
+    /// moves the proposal address too.
+    #[must_use]
+    pub fn with_amount(mut self, amount: u128) -> Self {
+        self.amount = amount;
+        self.rederive();
+        self
+    }
+
+    /// Recompute everything downstream of `config_hash` and `amount`.
+    fn rederive(&mut self) {
+        self.action_hash = compute_transfer_action_hash(
+            &self.multisig_id,
+            &self.recipient,
+            self.amount,
+            &self.memo_hash,
+        );
+        self.proposal_ref = compute_proposal_ref(
+            &self.multisig_id,
+            &self.config_hash,
+            &self.proposal_id,
+            &self.action_hash,
+        );
+    }
+
+    // ── rotation ─────────────────────────────────────────────────────────
+
+    /// The configuration this fixture would rotate *into*: same members, a
+    /// different threshold, and whatever tiers are asked for.
+    #[must_use]
+    pub fn rotation(&self, new_threshold: u32, new_tiers: &[(u128, u32)]) -> Rotation {
+        let table: Vec<TierPolicy> = new_tiers
+            .iter()
+            .map(|&(max_amount, threshold)| TierPolicy {
+                max_amount,
+                threshold,
+            })
+            .collect();
+        let new_config_hash = compute_config_hash(
+            &self.member_root,
+            new_threshold,
+            &compute_tiers_hash(&table),
+        );
+        // A rotation proposal commits to the configuration it installs, and to
+        // nothing else — no recipient, no amount. The action shape is what tells
+        // `execute` and `rotate_config` apart on the same proposal record.
+        let action_hash = compute_rotate_action_hash(&self.multisig_id, &new_config_hash);
+        let proposal_ref = compute_proposal_ref(
+            &self.multisig_id,
+            &self.config_hash,
+            &self.proposal_id,
+            &action_hash,
+        );
+        Rotation {
+            new_member_root: self.member_root,
+            new_threshold,
+            new_tiers: new_tiers.to_vec(),
+            new_config_hash,
+            action_hash,
+            proposal_ref,
+        }
+    }
+
+    /// The address the rotated configuration will live at.
+    #[must_use]
+    pub fn rotated_multisig_addr(&self, r: &Rotation) -> AccountId {
+        public_pda(&self.verifier, &[self.multisig_id, r.new_config_hash])
+    }
+
+    /// The rotated configuration's treasury — a *second* treasury, empty on
+    /// creation. Nothing about a rotation moves value.
+    #[must_use]
+    pub fn rotated_treasury_addr(&self, r: &Rotation) -> AccountId {
+        public_pda(
+            &self.verifier,
+            &[
+                self.multisig_id,
+                r.new_config_hash,
+                literal_seed("treasury"),
+            ],
+        )
+    }
+
+    /// `create_proposal` for a rotation rather than a transfer.
+    #[must_use]
+    pub fn rotate_proposal_ix(&self, r: &Rotation) -> VerifierInstruction {
+        VerifierInstruction::CreateProposal {
+            multisig_id: self.multisig_id,
+            config_hash: self.config_hash,
+            proposal_id: self.proposal_id,
+            action_hash: r.action_hash,
+            proposal_ref: r.proposal_ref,
+            // A rotation carries no transfer. These are the zero values the
+            // program requires when `rotate_to` is set, and it checks them.
+            recipient: [0u8; 32],
+            amount: 0,
+            memo_hash: [0u8; 32],
+            rotate_to: r.new_config_hash,
+        }
+    }
+
+    #[must_use]
+    pub fn rotate_ix(&self, r: &Rotation, members: &[usize]) -> VerifierInstruction {
+        VerifierInstruction::RotateConfig {
+            multisig_id: self.multisig_id,
+            config_hash: self.config_hash,
+            member_root: self.member_root,
+            threshold: self.threshold,
+            tiers: encode_tier_table(&self.tier_table()),
+            new_config_hash: r.new_config_hash,
+            new_member_root: r.new_member_root,
+            new_threshold: r.new_threshold,
+            new_tiers: encode_tier_table(&r.tier_table()),
+            proposal_ref: r.proposal_ref,
+            approval_nullifiers: members.iter().map(|&m| self.nullifier(m)).collect(),
+            execution_marker_seed: compute_execution_marker(&r.proposal_ref),
+        }
+    }
+
+    /// `rotate_config`'s six fixed accounts, in declaration order.
+    #[must_use]
+    pub fn rotate_fixed(&self, r: &Rotation) -> Vec<AccountWithMetadata> {
+        vec![
+            uninitialised(public_pda(
+                &self.verifier,
+                &[compute_execution_marker(&r.proposal_ref)],
+            )),
+            self.multisig_account(true),
+            uninitialised(self.rotated_multisig_addr(r)),
+            uninitialised(self.rotated_treasury_addr(r)),
+            self.rotate_proposal_account(r, true),
+            signer([0xE1; 32]),
+        ]
+    }
+
+    #[must_use]
+    pub fn rotate_accounts(&self, r: &Rotation, members: &[usize]) -> Vec<AccountWithMetadata> {
+        let mut v = self.rotate_fixed(r);
+        v.extend(members.iter().map(|&m| self.rotate_marker_account(r, m, true)));
+        v
+    }
+
+    /// The proposal record a rotation votes on: `rotate_to` set, transfer
+    /// fields zero.
+    #[must_use]
+    pub fn rotate_proposal_account(&self, r: &Rotation, anchored: bool) -> AccountWithMetadata {
+        let id = public_pda(
+            &self.verifier,
+            &[self.multisig_id, self.config_hash, r.proposal_ref],
+        );
+        if !anchored {
+            return uninitialised(id);
+        }
+        let record = ProposalState {
+            format: STATE_FORMAT_V1,
+            multisig_id: self.multisig_id,
+            config_hash: self.config_hash,
+            proposal_id: self.proposal_id,
+            action_hash: r.action_hash,
+            recipient: [0u8; 32],
+            amount: 0,
+            memo_hash: [0u8; 32],
+            status: STATUS_OPEN,
+            rotate_to: r.new_config_hash,
+        };
+        owned_with(self.verifier, id, 0, encode_proposal(&record))
+    }
+
+    /// An approval marker under a rotation's `proposal_ref`.
+    #[must_use]
+    pub fn rotate_marker_account(
+        &self,
+        r: &Rotation,
+        member: usize,
+        anchored: bool,
+    ) -> AccountWithMetadata {
+        let seed = compute_approval_marker(&r.proposal_ref, &self.nullifier(member));
+        let id = public_pda(&self.verifier, &[seed]);
+        if anchored {
+            owned_by(self.verifier, id)
+        } else {
+            uninitialised(id)
+        }
+    }
+
+    /// `approve` against a rotation proposal rather than a transfer one.
+    #[must_use]
+    pub fn rotate_approve_ix(&self, r: &Rotation, member: usize) -> VerifierInstruction {
+        match self.approve_ix(member) {
+            VerifierInstruction::Approve {
+                witness_words,
+                multisig_id,
+                config_hash,
+                member_root,
+                threshold,
+                tiers,
+                nullifier,
+                ..
+            } => VerifierInstruction::Approve {
+                witness_words,
+                multisig_id,
+                config_hash,
+                member_root,
+                threshold,
+                tiers,
+                proposal_ref: r.proposal_ref,
+                nullifier,
+                approval_marker_seed: compute_approval_marker(&r.proposal_ref, &nullifier),
+            },
+            _ => unreachable!("approve_ix builds an Approve"),
+        }
+    }
+}
+
+/// A configuration a fixture can rotate into.
+///
+/// Held separately from `Fixture` because a rotation is not a mutation: both
+/// configurations exist at once, at their own addresses, and a test usually
+/// needs to reach for either one.
+impl Rotation {
+    /// `new_tiers` as the typed table.
+    #[must_use]
+    pub fn tier_table(&self) -> Vec<TierPolicy> {
+        self.new_tiers
+            .iter()
+            .map(|&(max_amount, threshold)| TierPolicy {
+                max_amount,
+                threshold,
+            })
+            .collect()
+    }
+}
+
+pub struct Rotation {
+    pub new_member_root: [u8; 32],
+    pub new_threshold: u32,
+    pub new_tiers: Vec<(u128, u32)>,
+    pub new_config_hash: [u8; 32],
+    pub action_hash: [u8; 32],
+    pub proposal_ref: [u8; 32],
 }

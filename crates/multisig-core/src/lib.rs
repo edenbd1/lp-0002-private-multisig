@@ -120,6 +120,18 @@ pub const MULTISIG_CONFIG_PREFIX: [u8; 32] = [
     b'i', b'g', b'C', b'o', b'n', b'f', b'i', b'g', b'/', 0, 0, 0, 0, 0, 0, 0,
 ];
 
+#[cfg(feature = "records")]
+/// The spending-tier commitment, folded into `config_hash` so a tier table is
+/// anchored by the multisig's address exactly as the member set and the default
+/// threshold are. A caller who invents a tier that needs one approval for a
+/// large transfer computes a different tiers hash, hence a different config
+/// hash, hence a PDA nobody created.
+/// ASCII `"/lp-0002/v0.1/TierPolicy/"` (25 bytes) + 7 zero bytes.
+pub const TIER_POLICY_PREFIX: [u8; 32] = [
+    b'/', b'l', b'p', b'-', b'0', b'0', b'0', b'2', b'/', b'v', b'0', b'.', b'1', b'/', b'T', b'i',
+    b'e', b'r', b'P', b'o', b'l', b'i', b'c', b'y', b'/', 0, 0, 0, 0, 0, 0, 0,
+];
+
 /// The action commitment for a proposal.
 /// ASCII `"/lp-0002/v0.1/Action/"` (21 bytes) + 11 zero bytes.
 pub const ACTION_PREFIX: [u8; 32] = [
@@ -251,12 +263,202 @@ pub fn compute_member_leaf(account_id: &[u8; 32], salt: &[u8; 32]) -> [u8; 32] {
 /// fixed by the account's address. Neither can be changed without landing on a
 /// different, uninitialised address.
 #[must_use]
-pub fn compute_config_hash(member_root: &[u8; 32], threshold: u32) -> [u8; 32] {
+pub fn compute_config_hash(
+    member_root: &[u8; 32],
+    threshold: u32,
+    tiers_hash: &[u8; 32],
+) -> [u8; 32] {
     let mut h = Sha256::new();
     h.update(MULTISIG_CONFIG_PREFIX);
     h.update(member_root);
     h.update(threshold.to_le_bytes());
+    h.update(tiers_hash);
     h.finalize().into()
+}
+
+#[cfg(feature = "records")]
+/// One spending tier: transfers of at most `max_amount` need `threshold`
+/// approvals instead of the default.
+///
+/// Tiers exist to make small payments cheap to authorise without weakening
+/// large ones, so the table is constrained rather than free-form — see
+/// [`validate_tiers`]. A table that does not satisfy those rules has no
+/// canonical hash and therefore no anchored configuration.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TierPolicy {
+    /// Inclusive upper bound on the transfer amount this tier covers.
+    pub max_amount: u128,
+    /// Approvals required for amounts at or below `max_amount`.
+    pub threshold: u32,
+}
+
+#[cfg(feature = "records")]
+/// Why a tier table is not a legal configuration.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TierError {
+    /// Caps must strictly increase, so exactly one tier covers each amount.
+    CapsNotStrictlyIncreasing,
+    /// A larger amount must never need fewer approvals than a smaller one.
+    ThresholdDecreases,
+    /// A tier of zero would let one caller move money alone.
+    ThresholdZero,
+    /// A tier may lower the requirement for small amounts. It may not raise it
+    /// above the default, because the default is what the address anchors and
+    /// what governance runs at.
+    ThresholdAboveDefault,
+    /// More tiers than the record can hold.
+    TooManyTiers,
+    /// The encoded table is not a whole number of fixed-width entries.
+    MalformedTable,
+}
+
+#[cfg(feature = "records")]
+/// The largest tier table a configuration may carry.
+pub const MAX_TIERS: usize = 8;
+
+#[cfg(feature = "records")]
+/// Checks the rules that make a tier table safe to anchor.
+///
+/// The rules are monotonicity rules, and together they say one thing: tiers may
+/// only ever *relax* the requirement, and only for amounts below a cap. There is
+/// no table that makes a large transfer easier than the default, which is the
+/// attack a free-form table would invite.
+///
+/// # Errors
+/// See [`TierError`].
+pub fn validate_tiers(tiers: &[TierPolicy], default_threshold: u32) -> Result<(), TierError> {
+    if tiers.len() > MAX_TIERS {
+        return Err(TierError::TooManyTiers);
+    }
+    let mut previous_cap: Option<u128> = None;
+    let mut previous_threshold = 0u32;
+    for tier in tiers {
+        if tier.threshold == 0 {
+            return Err(TierError::ThresholdZero);
+        }
+        if tier.threshold > default_threshold {
+            return Err(TierError::ThresholdAboveDefault);
+        }
+        if tier.threshold < previous_threshold {
+            return Err(TierError::ThresholdDecreases);
+        }
+        if let Some(cap) = previous_cap {
+            if tier.max_amount <= cap {
+                return Err(TierError::CapsNotStrictlyIncreasing);
+            }
+        }
+        previous_cap = Some(tier.max_amount);
+        previous_threshold = tier.threshold;
+    }
+    Ok(())
+}
+
+/// One encoded tier: `max_amount` little-endian, then `threshold`.
+#[cfg(feature = "records")]
+pub const TIER_ENTRY_LEN: usize = 16 + 4;
+
+/// The tier table as bytes — the wire form, and the preimage of its hash.
+///
+/// There is deliberately one encoding rather than two. The instruction carries
+/// these exact bytes and [`compute_tiers_hash`] hashes these exact bytes, so a
+/// table cannot be serialised one way for the chain and another way for the
+/// commitment that anchors it. It is also the only form the SPEL CLI can carry:
+/// a `Vec<(u128, u32)>` has no representation in the IDL — it types as
+/// `{"vec": "unknown"}` — and the CLI's serialiser has no case for it, so a
+/// tuple-shaped tier table would compile, pass every test that speaks Rust, and
+/// be unreachable from the command line that drives the deployment.
+///
+/// Layout: `count(1) ‖ (max_amount_le(16) ‖ threshold_le(4)) * count`. The two
+/// must agree, and a buffer that disagrees is refused rather than truncated.
+#[cfg(feature = "records")]
+#[must_use]
+pub fn encode_tier_table(tiers: &[TierPolicy]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(1 + tiers.len() * TIER_ENTRY_LEN);
+    // The leading count is not redundant with the length, and it is not there
+    // for parsing. It is there so the encoding of *no tiers* is one byte rather
+    // than zero: the SPEL CLI carries a `Vec<u8>` as comma-separated decimals
+    // and has no case for an empty one — `--tiers ""` parses as `Raw("")` and
+    // fails to serialise, while omitting the flag is a missing-argument error.
+    // A multisig with no tiers is the ordinary case, so an encoding it cannot
+    // express is an encoding that does not work. Measured against the vendored
+    // `spel --dry-run`, not assumed.
+    out.push(tiers.len() as u8);
+    for tier in tiers {
+        out.extend_from_slice(&tier.max_amount.to_le_bytes());
+        out.extend_from_slice(&tier.threshold.to_le_bytes());
+    }
+    out
+}
+
+/// Read a tier table back.
+///
+/// # Errors
+/// [`TierError::MalformedTable`] if the buffer is empty or its length disagrees
+/// with the count it declares, [`TierError::TooManyTiers`] beyond [`MAX_TIERS`].
+/// This does *not*
+/// check monotonicity — call [`validate_tiers`] for that, which needs the
+/// default threshold this table sits under.
+#[cfg(feature = "records")]
+pub fn decode_tier_table(bytes: &[u8]) -> Result<Vec<TierPolicy>, TierError> {
+    let Some((&count_byte, entries)) = bytes.split_first() else {
+        return Err(TierError::MalformedTable);
+    };
+    let count = count_byte as usize;
+    if count > MAX_TIERS {
+        return Err(TierError::TooManyTiers);
+    }
+    // The declared count and the actual length must agree. A table that says
+    // three and carries two is refused rather than truncated to what arrived.
+    if entries.len() != count * TIER_ENTRY_LEN {
+        return Err(TierError::MalformedTable);
+    }
+    let mut out = Vec::with_capacity(count);
+    for chunk in entries.chunks_exact(TIER_ENTRY_LEN) {
+        let mut amount = [0u8; 16];
+        amount.copy_from_slice(&chunk[..16]);
+        let mut threshold = [0u8; 4];
+        threshold.copy_from_slice(&chunk[16..]);
+        out.push(TierPolicy {
+            max_amount: u128::from_le_bytes(amount),
+            threshold: u32::from_le_bytes(threshold),
+        });
+    }
+    Ok(out)
+}
+
+/// `SHA256(TIER_POLICY_PREFIX ‖ encode_tier_table(tiers))`.
+#[cfg(feature = "records")]
+#[must_use]
+pub fn compute_tiers_hash(tiers: &[TierPolicy]) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update(TIER_POLICY_PREFIX);
+    h.update(encode_tier_table(tiers));
+    h.finalize().into()
+}
+
+#[cfg(feature = "records")]
+/// The tiers hash of a multisig that has none. Spelled out so "no tiers" is a
+/// value every party computes the same way rather than a zero somebody invents.
+#[must_use]
+pub fn no_tiers_hash() -> [u8; 32] {
+    compute_tiers_hash(&[])
+}
+
+#[cfg(feature = "records")]
+/// How many approvals a transfer of `amount` needs.
+///
+/// The first tier whose cap covers the amount decides; above every cap the
+/// default applies. Callers must have validated the table with
+/// [`validate_tiers`] — an unvalidated table cannot reach here through an
+/// anchored configuration, because its hash would not match one.
+#[must_use]
+pub fn required_threshold(amount: u128, default_threshold: u32, tiers: &[TierPolicy]) -> u32 {
+    for tier in tiers {
+        if amount <= tier.max_amount {
+            return tier.threshold;
+        }
+    }
+    default_threshold
 }
 
 /// The action commitment for a proposal.
@@ -324,6 +526,49 @@ pub fn encode_action(
     out[33..49].copy_from_slice(&amount.to_le_bytes());
     out[49..81].copy_from_slice(memo_hash);
     out
+}
+
+/// A governance action: replace this multisig's configuration with another.
+///
+/// `format(1) ‖ new_config_hash(32)` — 33 bytes.
+///
+/// **Why a rotation is not a mutation.** The configuration lives in the
+/// multisig's *address*: the PDA is seeded by `[multisig_id, config_hash]`. A
+/// rotation therefore does not edit anything — it anchors a second
+/// configuration at its own address and records, in the first, that it has been
+/// superseded. Every property the address gives the old configuration, the new
+/// one has by the same construction: a member set or threshold nobody approved
+/// still lands on a PDA nobody created.
+///
+/// It also means a proposal cannot outlive the configuration it was made under.
+/// `proposal_ref` already carries `config_hash`, so proposals of the old
+/// configuration live at addresses the new one never reads. There is no stale
+/// proposal to detect, because there is no shared mutable state to go stale.
+#[cfg(feature = "records")]
+pub const ACTION_FORMAT_V2_ROTATE: u8 = 2;
+
+/// Length of a v2 rotate action: `format(1) ‖ new_config_hash(32)`.
+#[cfg(feature = "records")]
+pub const ROTATE_ACTION_ENCODED_LEN: usize = 33;
+
+/// The canonical bytes of a rotation action.
+#[cfg(feature = "records")]
+#[must_use]
+pub fn encode_rotate_action(new_config_hash: &[u8; 32]) -> [u8; ROTATE_ACTION_ENCODED_LEN] {
+    let mut out = [0u8; ROTATE_ACTION_ENCODED_LEN];
+    out[0] = ACTION_FORMAT_V2_ROTATE;
+    out[1..33].copy_from_slice(new_config_hash);
+    out
+}
+
+/// The action hash of a rotation, from the configuration it moves to.
+#[cfg(feature = "records")]
+#[must_use]
+pub fn compute_rotate_action_hash(
+    multisig_id: &[u8; 32],
+    new_config_hash: &[u8; 32],
+) -> [u8; 32] {
+    compute_action_hash(multisig_id, &encode_rotate_action(new_config_hash))
 }
 
 /// The commitment to an action's human-readable memo.
@@ -559,4 +804,107 @@ pub fn build_member_tree(leaves: &[[u8; 32]]) -> ([u8; 32], Vec<MerklePath>) {
     }
 
     (nodes[0], paths)
+}
+
+#[cfg(all(test, feature = "records"))]
+mod tier_wire_tests {
+    use super::*;
+
+    fn tiers(pairs: &[(u128, u32)]) -> Vec<TierPolicy> {
+        pairs
+            .iter()
+            .map(|&(max_amount, threshold)| TierPolicy {
+                max_amount,
+                threshold,
+            })
+            .collect()
+    }
+
+    /// The encoding is the wire format *and* the preimage of `tiers_hash`, so a
+    /// round trip that loses anything would let the table a program applies
+    /// differ from the table its address commits to.
+    #[test]
+    fn a_tier_table_survives_a_round_trip() {
+        for table in [
+            vec![],
+            vec![(300u128, 2u32)],
+            vec![(100, 1), (500, 2), (u128::MAX, 3)],
+        ] {
+            let t = tiers(&table);
+            let encoded = encode_tier_table(&t);
+            assert_eq!(encoded.len(), 1 + table.len() * TIER_ENTRY_LEN);
+            let decoded = decode_tier_table(&encoded).expect("our own encoding decodes");
+            assert_eq!(decoded.len(), t.len());
+            for (a, b) in decoded.iter().zip(t.iter()) {
+                assert_eq!((a.max_amount, a.threshold), (b.max_amount, b.threshold));
+            }
+        }
+    }
+
+    /// The empty table must still encode to something, because the tool that
+    /// carries it cannot express an empty byte vector — `--tiers ""` reaches
+    /// SPEL's serialiser as `Raw("")` and fails, and omitting the flag is a
+    /// missing-argument error. One byte is what makes "no tiers" sendable.
+    #[test]
+    fn no_tiers_encodes_to_one_byte_rather_than_none() {
+        assert_eq!(encode_tier_table(&[]), vec![0u8]);
+    }
+
+    #[test]
+    fn an_empty_buffer_is_not_a_tier_table() {
+        assert_eq!(decode_tier_table(&[]), Err(TierError::MalformedTable));
+    }
+
+    /// A count that disagrees with the bytes present is refused, not truncated
+    /// to whatever arrived.
+    #[test]
+    fn a_declared_count_must_match_the_bytes_present() {
+        let mut short = encode_tier_table(&tiers(&[(300, 2)]));
+        short[0] = 2;
+        assert_eq!(decode_tier_table(&short), Err(TierError::MalformedTable));
+
+        let mut long = encode_tier_table(&tiers(&[(300, 2), (600, 3)]));
+        long[0] = 1;
+        assert_eq!(decode_tier_table(&long), Err(TierError::MalformedTable));
+
+        let truncated = &encode_tier_table(&tiers(&[(300, 2)]))[..10];
+        assert_eq!(decode_tier_table(truncated), Err(TierError::MalformedTable));
+    }
+
+    #[test]
+    fn more_tiers_than_the_maximum_are_refused() {
+        let many: Vec<(u128, u32)> = (1..=(MAX_TIERS as u128 + 1))
+            .map(|i| (i * 100, 1u32))
+            .collect();
+        let encoded = encode_tier_table(&tiers(&many));
+        assert_eq!(decode_tier_table(&encoded), Err(TierError::TooManyTiers));
+    }
+
+    /// Distinct tables must not collide, and the same table must always give the
+    /// same hash — this is the value folded into `config_hash`, so a collision
+    /// would be two configurations sharing one address.
+    #[test]
+    fn the_tiers_hash_separates_tables_that_differ() {
+        let a = compute_tiers_hash(&tiers(&[(300, 2)]));
+        let b = compute_tiers_hash(&tiers(&[(300, 3)]));
+        let c = compute_tiers_hash(&tiers(&[(301, 2)]));
+        let empty = no_tiers_hash();
+        assert_ne!(a, b);
+        assert_ne!(a, c);
+        assert_ne!(a, empty);
+        assert_eq!(a, compute_tiers_hash(&tiers(&[(300, 2)])));
+    }
+
+    /// `required_threshold` is what prices a transfer, and the tier table may
+    /// only ever lower the bar for amounts at or below a cap.
+    #[test]
+    fn a_tier_applies_at_its_cap_and_not_past_it() {
+        let table = tiers(&[(300, 2), (1000, 3)]);
+        assert_eq!(required_threshold(1, 4, &table), 2);
+        assert_eq!(required_threshold(300, 4, &table), 2, "the cap is inclusive");
+        assert_eq!(required_threshold(301, 4, &table), 3);
+        assert_eq!(required_threshold(1000, 4, &table), 3);
+        assert_eq!(required_threshold(1001, 4, &table), 4, "past every tier");
+        assert_eq!(required_threshold(u128::MAX, 4, &[]), 4, "no tiers, no change");
+    }
 }

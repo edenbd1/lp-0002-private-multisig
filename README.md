@@ -61,7 +61,7 @@ cd lp-0002-private-multisig
 ```
 
 No network, no funded account, no sequencer required. The demo runs the 25
-circuit tests, the 59 tests against the built verifier binary through the
+circuit tests, the 82 tests against the built verifier binary through the
 sequencer's own executor — the forgeries it refuses, the balances it moves, and
 the records it writes — a full 3-of-5 lifecycle, and reports the measured
 compute cost.
@@ -125,32 +125,33 @@ To rebuild the on-chain programs (needs Docker and `cargo-risczero`):
 
 ### Test inventory
 
-`cargo test --workspace` runs **97** tests. Counted, so you can check the claim:
+`cargo test --workspace` runs **127** tests. Counted, so you can check the claim:
 
 | Suite | Count | What it establishes |
 |---|---:|---|
 | `multisig-core` — `approve_adversarial` | 25 | The circuit-side bindings: non-members, borrowed Merkle paths, invented roots, forged nullifiers, bait-and-switch actions, the padding sentinel, tree construction |
-| `multisig-core` — `state` unit tests | 9 | The published account layouts: exact lengths, refused formats, refused trailing bytes, and a round trip through the offsets `docs/account-layout.md` gives |
+| `multisig-core` — unit tests | 16 | The published account layouts and the tier wire format: exact lengths, refused formats, refused trailing bytes, and a round trip through the offsets `docs/account-layout.md` gives |
 | `multisig-verifier-tests` — `verifier_rejects` | 30 | The **built verifier binary** through the sequencer's own executor: 5 honest controls and 25 rejections — 19 asserting a documented error code, 6 caught one layer earlier by SPEL's address validation or LEZ's init guard |
 | `multisig-verifier-tests` — `state_and_transfer` | 22 | What passing the gate *does*: the treasury falls by the proposed amount and the recipient rises by it, read out of the guest's own journal; every claimed account decodes at the published offsets; and fifteen ways of redirecting, draining, replaying or corrupting the payment are refused |
+| `multisig-verifier-tests` — `tiers_and_rotation` | 23 | Spending tiers may only ever lower the bar, a rotation replaces a configuration rather than adding one, and a retired one can no longer spend |
 | `multisig-verifier-tests` — `idl_contract` | 5 | The IDL carries every error code and every record layout the guest declares, the instruction order has not moved, `docs/error-codes.md` documents every code, and `scripts/pda.py` derives the same treasury address the program does |
 | `multisig-verifier-tests` — `program_id_pin` | 2 | The verifier pins the committed membership binary, and the pin is not a placeholder |
 | `multisig-sdk` — `cross_check` + doctest | 2 | Every SDK derivation equals the `multisig-core` one the chain re-derives, and the client-side guards hold |
 | `multisig-cli` — `resumable` | 2 | Through the **built binary**, one process per step: a partial set of approvals survives client restarts, and a non-member is refused in milliseconds instead of after minutes of proving |
 
-25 + 9 + 30 + 22 + 5 + 2 + 2 + 2 = 97, and every row's own breakdown adds up to
-its count.
+25 + 16 + 30 + 22 + 23 + 5 + 2 + 2 + 2 = 127, and every row's own breakdown adds
+up to its count.
 
 One further test is `#[ignore]`d: it reports the measured compute cost rather
 than asserting a property. Run it with
 `cargo test -p multisig-verifier-tests --test verifier_rejects -- --ignored --nocapture`.
 
-[`docs/error-codes.md`](docs/error-codes.md) counts **59** rather than 97. That
+[`docs/error-codes.md`](docs/error-codes.md) counts **82** rather than 127. That
 is `multisig-verifier-tests` alone — the suites that run the built binary — which
-is the inventory behind the error-code table. 97 is what `cargo test --workspace`
-runs. Both numbers are in CI: the `workspace` job runs `multisig-core`,
-`multisig-sdk` and `multisig-cli`, the `verifier` job runs
-`multisig-verifier-tests`, and between them all 97 run on every push.
+is the inventory behind the error-code table. 127 is what
+`cargo test --workspace` runs. Both numbers are in CI: the `workspace` job runs
+`multisig-core`, `multisig-sdk` and `multisig-cli`, the `verifier` job runs
+`multisig-verifier-tests`, and between them all 127 run on every push.
 
 **The deployed program is genuinely under test.** The two guest crates are
 excluded from the host workspace because they build for
@@ -182,6 +183,61 @@ A member who holds only their own key uses `--msk <hex>` instead of `--member <i
 Partial approvals are recorded in `ms/proposals/<id>.json` as they are generated,
 so a threshold can be gathered across restarts, days, and separate member
 sessions.
+
+### Spending tiers
+
+A tier lets small transfers clear with fewer approvals. It is declared at
+creation and never afterwards, because the table is folded into `config_hash`,
+which is a PDA seed:
+
+```bash
+msig new-multisig --members 5 --threshold 3 \
+     --tier 300:2 --tier 10000:3 --out ms/
+```
+
+Below 300, two approvals; above 10,000, the default three. A tier may only ever
+*lower* the bar: caps must strictly increase, thresholds must not fall, and none
+may be zero or above the default. There is therefore no legal table that makes a
+larger transfer easier than a smaller one, and `msig` refuses an illegal one
+before any proving happens — using the guest's own `validate_tiers`, not a copy
+of its rules.
+
+Handing `execute` a more generous table than the one anchored does not work
+twice over: the table it presents must hash to the `config_hash` it also
+presents, and that `config_hash` is the address it reads the multisig from. A
+forged table therefore resolves to an account nobody created. Both halves are
+tested in `crates/multisig-verifier-tests/tests/tiers_and_rotation.rs`.
+
+### Rotating the member set
+
+A rotation does not mutate the multisig. It anchors a **second** configuration at
+its own address, with its own treasury, and records that address in the first as
+`superseded_by`:
+
+```bash
+msig new-multisig --members 5 --threshold 4 --id <same id> --out next/
+msig propose-rotation --dir ms/ --proposal-id 02..02 --to next/
+msig approve-args --dir ms/ --proposal-id 02..02 --member 0 --out ms/r0.args
+# … gather the default threshold …
+msig rotate-args --dir ms/ --proposal-id 02..02 --to next/ --out ms/rot.args
+```
+
+Three consequences worth stating, because they fall out of the construction
+rather than being checked for:
+
+- **Every guarantee the address gives the old configuration, the new one has by
+  the same construction.** There is no mutable member set to defend.
+- **No stale-proposal check exists, and none is needed.** `proposal_ref` is
+  derived through `config_hash`, so proposals raised under the old configuration
+  live at addresses the new one never reads.
+- **A rotation costs the default threshold, never a tier.** Tiers price
+  transfers; rewriting who may act is not a transfer, and letting a tier lower
+  that bar would make the cheapest action available the one that hands the
+  multisig to someone else.
+
+Once superseded, the old configuration cannot approve, execute or rotate again
+(`5025`) — without that, a rotation would *add* a member set rather than replace
+one, and every past member set would keep its keys to the treasury forever.
 
 ### The same lifecycle from the Basecamp app
 
@@ -247,7 +303,7 @@ all the chain records and all the other members can see.
 | `crates/multisig-core` | Shared primitives, the in-circuit approval logic, and the account-layout codec. `no_std`. 34 tests |
 | `crates/membership-circuit/methods/guest-lez` | The membership proof as a native LEZ program, so the privacy circuit composes it with `env::verify` |
 | `crates/multisig-verifier-spel/methods/guest` | The on-chain verifier: `create_multisig`, `fund_treasury`, `create_proposal`, `approve`, `execute` |
-| `crates/multisig-verifier-tests` | 59 tests against the built binary, through the sequencer's own executor: 30 rejections and controls, 22 on the state it writes and the value it moves, 5 on the IDL and the docs, 2 pinning the membership binary |
+| `crates/multisig-verifier-tests` | 82 tests against the built binary, through the sequencer's own executor: 30 rejections and controls, 22 on the state it writes and the value it moves, 5 on the IDL and the docs, 2 pinning the membership binary |
 | `crates/multisig-sdk` | The reusable client library for Logos modules. Transport-agnostic |
 | `crates/multisig-cli` | `msig`, the command line client |
 | `app/` | The Basecamp GUI |

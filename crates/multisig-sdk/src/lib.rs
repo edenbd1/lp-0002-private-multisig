@@ -61,6 +61,15 @@ pub enum SdkError {
     DuplicateApproval,
     /// A proposal that moves nothing would give the threshold nothing to gate.
     ZeroAmount,
+    /// The tier table is one the program would refuse to anchor.
+    ///
+    /// The SDK applies `multisig_core::validate_tiers` — the same function the
+    /// guest applies — rather than a copy of its rules, so the two cannot drift.
+    BadTiers(TierError),
+    /// A rotation to the configuration already in force changes nothing.
+    NoopRotation,
+    /// A proposal handed to the instruction for the other action shape.
+    WrongActionKind,
 }
 
 impl core::fmt::Display for SdkError {
@@ -78,6 +87,30 @@ impl core::fmt::Display for SdkError {
             }
             Self::DuplicateApproval => write!(f, "the same approval was supplied twice"),
             Self::ZeroAmount => write!(f, "a proposal must move a non-zero amount"),
+            Self::BadTiers(e) => match e {
+                TierError::CapsNotStrictlyIncreasing => {
+                    write!(f, "tier caps must strictly increase")
+                }
+                TierError::ThresholdDecreases => write!(
+                    f,
+                    "a larger transfer must never need fewer approvals than a smaller one"
+                ),
+                TierError::ThresholdZero => write!(f, "a tier must require at least one approval"),
+                TierError::ThresholdAboveDefault => write!(
+                    f,
+                    "a tier may only lower the bar, never raise it above the default threshold"
+                ),
+                TierError::TooManyTiers => write!(f, "at most {MAX_TIERS} tiers"),
+                TierError::MalformedTable => write!(
+                    f,
+                    "an encoded tier table must be a whole number of {TIER_ENTRY_LEN}-byte entries"
+                ),
+            },
+            Self::NoopRotation => write!(f, "that is the configuration already in force"),
+            Self::WrongActionKind => write!(
+                f,
+                "a transfer is spent by execute and a rotation by rotate_config"
+            ),
         }
     }
 }
@@ -176,11 +209,12 @@ impl MemberSet {
 /// The `config_hash` this exposes is what anchors the pair on chain — the
 /// multisig account's PDA address derives from `[id, config_hash]`, so neither
 /// the member set nor the threshold can be swapped after creation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Multisig {
     id: [u8; 32],
     member_root: [u8; 32],
     threshold: u32,
+    tiers: Vec<TierPolicy>,
     config_hash: [u8; 32],
 }
 
@@ -195,8 +229,29 @@ impl Multisig {
             id,
             member_root,
             threshold,
-            config_hash: compute_config_hash(&member_root, threshold),
+            tiers: Vec::new(),
+            config_hash: compute_config_hash(&member_root, threshold, &no_tiers_hash()),
         })
+    }
+
+    /// Anchor spending tiers: below `max_amount`, `threshold` approvals suffice.
+    ///
+    /// Validated here with the guest's own `validate_tiers`, so a table this
+    /// accepts is a table the chain accepts, and a table it refuses fails now
+    /// rather than after a proof.
+    ///
+    /// # Errors
+    /// [`SdkError::BadTiers`] for a table the program would refuse with
+    /// `E_BAD_TIERS` (5023).
+    pub fn with_tiers(mut self, tiers: &[TierPolicy]) -> Result<Self, SdkError> {
+        validate_tiers(tiers, self.threshold).map_err(SdkError::BadTiers)?;
+        self.tiers = tiers.to_vec();
+        self.config_hash = compute_config_hash(
+            &self.member_root,
+            self.threshold,
+            &compute_tiers_hash(&self.tiers),
+        );
+        Ok(self)
     }
 
     /// Define a multisig against a concrete member set, checking the threshold
@@ -230,10 +285,50 @@ impl Multisig {
     pub fn threshold(&self) -> u32 {
         self.threshold
     }
-    /// The commitment anchoring `(member_root, threshold)` in the PDA address.
+    #[must_use]
+    pub fn tiers(&self) -> &[TierPolicy] {
+        &self.tiers
+    }
+
+    /// How many approvals a transfer of `amount` actually needs here.
+    ///
+    /// The number a client should gather before calling `execute`, which is the
+    /// default threshold unless a tier covers the amount.
+    #[must_use]
+    pub fn required_for(&self, amount: u128) -> u32 {
+        required_threshold(amount, self.threshold, &self.tiers)
+    }
+
+    /// The commitment anchoring `(member_root, threshold, tiers)` in the PDA
+    /// address.
     #[must_use]
     pub fn config_hash(&self) -> [u8; 32] {
         self.config_hash
+    }
+
+    /// The configuration this one would rotate into, and the arguments for the
+    /// proposal that authorises it.
+    ///
+    /// A rotation does not mutate this multisig. It defines a second one, at its
+    /// own address with its own treasury, and marks this one superseded — so the
+    /// value returned here is a `Multisig` like any other, and everything that
+    /// works on one works on it.
+    ///
+    /// # Errors
+    /// [`SdkError::NoopRotation`] if the target is the configuration already in
+    /// force, which the program refuses with `E_NOOP_ROTATION` (5026); plus
+    /// whatever [`Multisig::new`] and [`Multisig::with_tiers`] would refuse.
+    pub fn rotation(
+        &self,
+        new_member_root: [u8; 32],
+        new_threshold: u32,
+        new_tiers: &[TierPolicy],
+    ) -> Result<Multisig, SdkError> {
+        let next = Multisig::new(self.id, new_member_root, new_threshold)?.with_tiers(new_tiers)?;
+        if next.config_hash == self.config_hash {
+            return Err(SdkError::NoopRotation);
+        }
+        Ok(next)
     }
 
     /// The PDA seeds of this multisig's treasury, in order.
@@ -271,8 +366,20 @@ impl Multisig {
             config_hash: self.config_hash,
             member_root: self.member_root,
             threshold: self.threshold,
+            tiers: encode_tiers(&self.tiers),
         }
     }
+}
+
+/// The tier table as the wire carries it.
+///
+/// The typed [`TierPolicy`] is what a caller reasons about; these bytes are what
+/// the instruction takes — and they are also the preimage `config_hash` commits
+/// to, so an integrator cannot encode the table one way for the call and another
+/// way for the commitment.
+#[must_use]
+pub fn encode_tiers(tiers: &[TierPolicy]) -> Vec<u8> {
+    encode_tier_table(tiers)
 }
 
 // ---------------------------------------------------------------------------
@@ -284,7 +391,7 @@ impl Multisig {
 /// The `proposal_ref` is the single value every approval is scoped to. It
 /// commits to the action, so approvals gathered for one action are worthless for
 /// another published under the same id.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Proposal {
     multisig_id: [u8; 32],
     config_hash: [u8; 32],
@@ -292,10 +399,18 @@ pub struct Proposal {
     action_hash: [u8; 32],
     proposal_ref: [u8; 32],
     threshold: u32,
+    /// The tier table the multisig anchors. Carried because the number of
+    /// approvals this proposal needs depends on its amount, and a client that
+    /// gathered the default threshold when a tier asked for two would do twice
+    /// the proving work for nothing — while one that gathered two under a
+    /// proposal no tier covers would be refused on chain.
+    tiers: Vec<TierPolicy>,
     member_root: [u8; 32],
     recipient: [u8; 32],
     amount: u128,
     memo_hash: [u8; 32],
+    /// Zero for a transfer; the configuration being installed for a rotation.
+    rotate_to: [u8; 32],
 }
 
 impl Proposal {
@@ -328,10 +443,69 @@ impl Proposal {
                 &action_hash,
             ),
             threshold: multisig.threshold,
+            tiers: multisig.tiers.clone(),
             member_root: multisig.member_root,
             recipient,
             amount,
             memo_hash,
+            rotate_to: [0u8; 32],
+        }
+    }
+
+    /// A proposal to rotate `multisig` into `next`.
+    ///
+    /// It names no recipient and moves nothing: the action it commits to is the
+    /// configuration being installed, and `rotate_config` is the only
+    /// instruction that can spend it.
+    ///
+    /// # Errors
+    /// [`SdkError::NoopRotation`] if `next` is the configuration already in
+    /// force. Rotating between different multisig ids is not a rotation at all,
+    /// and is refused for the same reason.
+    pub fn rotation(
+        multisig: &Multisig,
+        proposal_id: [u8; 32],
+        next: &Multisig,
+    ) -> Result<Self, SdkError> {
+        if next.config_hash == multisig.config_hash || next.id != multisig.id {
+            return Err(SdkError::NoopRotation);
+        }
+        let action_hash = compute_rotate_action_hash(&multisig.id, &next.config_hash);
+        Ok(Self {
+            multisig_id: multisig.id,
+            config_hash: multisig.config_hash,
+            proposal_id,
+            action_hash,
+            proposal_ref: compute_proposal_ref(
+                &multisig.id,
+                &multisig.config_hash,
+                &proposal_id,
+                &action_hash,
+            ),
+            threshold: multisig.threshold,
+            tiers: multisig.tiers.clone(),
+            member_root: multisig.member_root,
+            recipient: [0u8; 32],
+            amount: 0,
+            memo_hash: [0u8; 32],
+            rotate_to: next.config_hash,
+        })
+    }
+
+    /// True if this proposal installs a configuration rather than paying.
+    #[must_use]
+    pub fn is_rotation(&self) -> bool {
+        self.rotate_to != [0u8; 32]
+    }
+
+    /// How many approvals this proposal needs — the default threshold, unless a
+    /// tier covers its amount. A rotation is never tiered.
+    #[must_use]
+    pub fn required(&self) -> u32 {
+        if self.is_rotation() {
+            self.threshold
+        } else {
+            required_threshold(self.amount, self.threshold, &self.tiers)
         }
     }
 
@@ -371,7 +545,10 @@ impl Proposal {
     /// Returns [`SdkError::ZeroAmount`] for a proposal that moves nothing; the
     /// on-chain program refuses it with `E_BAD_AMOUNT` (5017), minutes later.
     pub fn create_args(&self) -> Result<CreateProposalArgs, SdkError> {
-        if self.amount == 0 {
+        // A transfer of nothing gives the threshold nothing to gate. A rotation
+        // moves nothing *by construction*, so the rule does not apply to it —
+        // and the program agrees: it requires the amount to be zero there.
+        if !self.is_rotation() && self.amount == 0 {
             return Err(SdkError::ZeroAmount);
         }
         Ok(CreateProposalArgs {
@@ -383,6 +560,7 @@ impl Proposal {
             recipient: self.recipient,
             amount: self.amount,
             memo_hash: self.memo_hash,
+            rotate_to: self.rotate_to,
         })
     }
 
@@ -426,6 +604,7 @@ impl Proposal {
                 config_hash: self.config_hash,
                 member_root: self.member_root,
                 threshold: self.threshold,
+                tiers: encode_tiers(&self.tiers),
                 proposal_ref: self.proposal_ref,
                 nullifier,
                 approval_marker_seed: compute_approval_marker(&self.proposal_ref, &nullifier),
@@ -439,6 +618,66 @@ impl Proposal {
     /// on-chain program would reject them too, with `E_THRESHOLD_NOT_MET`
     /// (5010) and `E_DUPLICATE_APPROVAL` (5011).
     pub fn execute_args(&self, approvals: &[Approval]) -> Result<ExecuteArgs, SdkError> {
+        if self.is_rotation() {
+            return Err(SdkError::WrongActionKind);
+        }
+        let need = self.required();
+        if approvals.len() < need as usize {
+            return Err(SdkError::ThresholdNotMet {
+                have: approvals.len(),
+                need,
+            });
+        }
+        for i in 0..approvals.len() {
+            for j in (i + 1)..approvals.len() {
+                if approvals[i].nullifier == approvals[j].nullifier {
+                    return Err(SdkError::DuplicateApproval);
+                }
+            }
+        }
+        // Present exactly the threshold. More would pass, but every extra marker
+        // account costs compute for no additional guarantee.
+        let chosen = &approvals[..need as usize];
+        Ok(ExecuteArgs {
+            multisig_id: self.multisig_id,
+            config_hash: self.config_hash,
+            member_root: self.member_root,
+            threshold: self.threshold,
+            tiers: encode_tiers(&self.tiers),
+            proposal_ref: self.proposal_ref,
+            approval_nullifiers: chosen.iter().map(|a| a.nullifier).collect(),
+            approval_marker_seeds: chosen.iter().map(|a| a.marker_seed).collect(),
+            execution_marker_seed: self.execution_marker_seed(),
+        })
+    }
+
+    /// Arguments for `rotate_config`.
+    ///
+    /// `next` must be the configuration this proposal committed to when it was
+    /// raised — the proposal's `action_hash` is over that configuration, so a
+    /// different one produces approvals that do not carry.
+    ///
+    /// The threshold required is the multisig's *default*, never a tier. Tiers
+    /// price transfers; rewriting who may act is not a transfer, and letting a
+    /// tier lower that bar would make the cheapest action available the one that
+    /// hands the multisig to someone else.
+    ///
+    /// # Errors
+    /// [`SdkError::WrongActionKind`] for a transfer proposal,
+    /// [`SdkError::NoopRotation`] if `next` is not what this proposal names, and
+    /// [`SdkError::ThresholdNotMet`] or [`SdkError::DuplicateApproval`] as for
+    /// [`Proposal::execute_args`].
+    pub fn rotate_args(
+        &self,
+        next: &Multisig,
+        approvals: &[Approval],
+    ) -> Result<RotateConfigArgs, SdkError> {
+        if !self.is_rotation() {
+            return Err(SdkError::WrongActionKind);
+        }
+        if next.config_hash != self.rotate_to {
+            return Err(SdkError::NoopRotation);
+        }
         if approvals.len() < self.threshold as usize {
             return Err(SdkError::ThresholdNotMet {
                 have: approvals.len(),
@@ -452,14 +691,17 @@ impl Proposal {
                 }
             }
         }
-        // Present exactly the threshold. More would pass, but every extra marker
-        // account costs compute for no additional guarantee.
         let chosen = &approvals[..self.threshold as usize];
-        Ok(ExecuteArgs {
+        Ok(RotateConfigArgs {
             multisig_id: self.multisig_id,
             config_hash: self.config_hash,
             member_root: self.member_root,
             threshold: self.threshold,
+            tiers: encode_tiers(&self.tiers),
+            new_config_hash: next.config_hash,
+            new_member_root: next.member_root,
+            new_threshold: next.threshold,
+            new_tiers: encode_tiers(&next.tiers),
             proposal_ref: self.proposal_ref,
             approval_nullifiers: chosen.iter().map(|a| a.nullifier).collect(),
             approval_marker_seeds: chosen.iter().map(|a| a.marker_seed).collect(),
@@ -486,16 +728,20 @@ pub struct Approval {
 // ---------------------------------------------------------------------------
 
 /// Arguments for `create_multisig`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateMultisigArgs {
     pub multisig_id: [u8; 32],
     pub config_hash: [u8; 32],
     pub member_root: [u8; 32],
     pub threshold: u32,
+    /// The encoded tier table, empty for a multisig with no tiers. Present in
+    /// every instruction that reads the configuration, because `config_hash`
+    /// commits to these exact bytes and the program recomputes the commitment.
+    pub tiers: Vec<u8>,
 }
 
 /// Arguments for `create_proposal`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateProposalArgs {
     pub multisig_id: [u8; 32],
     pub config_hash: [u8; 32],
@@ -505,6 +751,8 @@ pub struct CreateProposalArgs {
     pub recipient: [u8; 32],
     pub amount: u128,
     pub memo_hash: [u8; 32],
+    /// Zero for a transfer; the configuration installed for a rotation.
+    pub rotate_to: [u8; 32],
 }
 
 /// Arguments for `fund_treasury`.
@@ -517,12 +765,13 @@ pub struct FundTreasuryArgs {
 
 /// Arguments for `approve`, minus the witness words, which the caller encodes
 /// from [`Approval::instruction`] with `risc0_zkvm::serde::to_vec`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApproveArgs {
     pub multisig_id: [u8; 32],
     pub config_hash: [u8; 32],
     pub member_root: [u8; 32],
     pub threshold: u32,
+    pub tiers: Vec<u8>,
     pub proposal_ref: [u8; 32],
     pub nullifier: [u8; 32],
     pub approval_marker_seed: [u8; 32],
@@ -535,10 +784,35 @@ pub struct ExecuteArgs {
     pub config_hash: [u8; 32],
     pub member_root: [u8; 32],
     pub threshold: u32,
+    pub tiers: Vec<u8>,
     pub proposal_ref: [u8; 32],
     pub approval_nullifiers: Vec<[u8; 32]>,
     /// The marker PDA seeds, in the same order as the nullifiers. The executor
     /// passes the corresponding accounts as the trailing `approvals` list.
+    pub approval_marker_seeds: Vec<[u8; 32]>,
+    pub execution_marker_seed: [u8; 32],
+}
+
+/// Arguments for `rotate_config`.
+///
+/// Both configurations appear, because the instruction reads one and writes the
+/// other: `config_hash` is the address it is leaving, `new_config_hash` the
+/// address it is claiming. Neither can be invented — each is recomputed by the
+/// program from the fields beside it, and each is a PDA seed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RotateConfigArgs {
+    pub multisig_id: [u8; 32],
+    pub config_hash: [u8; 32],
+    pub member_root: [u8; 32],
+    pub threshold: u32,
+    pub tiers: Vec<u8>,
+    pub new_config_hash: [u8; 32],
+    pub new_member_root: [u8; 32],
+    pub new_threshold: u32,
+    pub new_tiers: Vec<u8>,
+    pub proposal_ref: [u8; 32],
+    pub approval_nullifiers: Vec<[u8; 32]>,
+    /// The marker PDA seeds, in the same order as the nullifiers.
     pub approval_marker_seeds: Vec<[u8; 32]>,
     pub execution_marker_seed: [u8; 32],
 }

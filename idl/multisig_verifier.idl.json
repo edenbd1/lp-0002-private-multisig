@@ -83,6 +83,12 @@
         {
           "name": "threshold",
           "type": "u32"
+        },
+        {
+          "name": "tiers",
+          "type": {
+            "vec": "u8"
+          }
         }
       ]
     },
@@ -278,6 +284,15 @@
               32
             ]
           }
+        },
+        {
+          "name": "rotate_to",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         }
       ]
     },
@@ -382,6 +397,12 @@
         {
           "name": "threshold",
           "type": "u32"
+        },
+        {
+          "name": "tiers",
+          "type": {
+            "vec": "u8"
+          }
         },
         {
           "name": "proposal_ref",
@@ -544,6 +565,220 @@
           "type": "u32"
         },
         {
+          "name": "tiers",
+          "type": {
+            "vec": "u8"
+          }
+        },
+        {
+          "name": "proposal_ref",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "approval_nullifiers",
+          "type": {
+            "vec": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        },
+        {
+          "name": "execution_marker_seed",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "rotate_config",
+      "accounts": [
+        {
+          "name": "execution_marker",
+          "writable": true,
+          "signer": false,
+          "init": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "execution_marker_seed"
+              }
+            ]
+          }
+        },
+        {
+          "name": "multisig",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "multisig_id"
+              },
+              {
+                "kind": "arg",
+                "path": "config_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "new_multisig",
+          "writable": true,
+          "signer": false,
+          "init": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "multisig_id"
+              },
+              {
+                "kind": "arg",
+                "path": "new_config_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "new_treasury",
+          "writable": true,
+          "signer": false,
+          "init": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "multisig_id"
+              },
+              {
+                "kind": "arg",
+                "path": "new_config_hash"
+              },
+              {
+                "kind": "const",
+                "value": "treasury"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "multisig_id"
+              },
+              {
+                "kind": "arg",
+                "path": "config_hash"
+              },
+              {
+                "kind": "arg",
+                "path": "proposal_ref"
+              }
+            ]
+          }
+        },
+        {
+          "name": "executor",
+          "writable": false,
+          "signer": true,
+          "init": false
+        },
+        {
+          "name": "approvals",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "rest": true
+        }
+      ],
+      "args": [
+        {
+          "name": "multisig_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "config_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "member_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "threshold",
+          "type": "u32"
+        },
+        {
+          "name": "tiers",
+          "type": {
+            "vec": "u8"
+          }
+        },
+        {
+          "name": "new_config_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "new_member_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "new_threshold",
+          "type": "u32"
+        },
+        {
+          "name": "new_tiers",
+          "type": {
+            "vec": "u8"
+          }
+        },
+        {
           "name": "proposal_ref",
           "type": {
             "array": [
@@ -606,6 +841,24 @@
           {
             "name": "threshold",
             "type": "u32"
+          },
+          {
+            "name": "tiers_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "superseded_by",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           },
           {
             "name": "treasury",
@@ -718,6 +971,15 @@
           },
           {
             "name": "memo_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "rotate_to",
             "type": {
               "array": [
                 "u8",
@@ -922,6 +1184,31 @@
       "code": 5022,
       "name": "E_STATE_DECODE",
       "msg": "An account this program owns does not hold the record it should."
+    },
+    {
+      "code": 5023,
+      "name": "E_BAD_TIERS",
+      "msg": "A tier table that is not a legal configuration: caps that do not strictly increase, a threshold of zero, a threshold above the default, or a threshold that falls as the cap rises. Each of those would let a table make a larger transfer easier than a smaller one, which is the whole thing tiers must not do."
+    },
+    {
+      "code": 5024,
+      "name": "E_TIERS_MISMATCH",
+      "msg": "The tier table supplied does not hash to the one this configuration anchors."
+    },
+    {
+      "code": 5025,
+      "name": "E_SUPERSEDED",
+      "msg": "This configuration has been superseded by a rotation. Its approvals and its treasury still exist and are readable; what it cannot do is act."
+    },
+    {
+      "code": 5026,
+      "name": "E_NOOP_ROTATION",
+      "msg": "A rotation to the configuration already in force. Refused because it would spend a threshold of approvals to change nothing, and because \"the new configuration\" would then name an account that is already initialised."
+    },
+    {
+      "code": 5027,
+      "name": "E_WRONG_ACTION_KIND",
+      "msg": "A proposal handed to the instruction for the other action shape. `execute` pays a recipient; `rotate_config` installs a configuration. A proposal is one or the other and `rotate_to` says which. Before this, `execute` never read that field: a rotation proposal reached the transfer path and was stopped only by the recipient check \u2014 a rotation's stored recipient is the zero account id, and no usable account has it. That is a true statement about which account ids exist, not a rule this program enforces, and it reported the refusal as a recipient mismatch. Now it is a rule."
     }
   ]
 }

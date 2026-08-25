@@ -302,7 +302,7 @@ fn lowering_the_threshold_at_execution_is_rejected() {
     let f = Fixture::new(&pid);
 
     let forged_threshold = 1u32;
-    let forged_config = compute_config_hash(&f.member_root, forged_threshold);
+    let forged_config = compute_config_hash(&f.member_root, forged_threshold, &no_tiers_hash());
     let ix = VerifierInstruction::Execute {
         multisig_id: f.multisig_id,
         config_hash: forged_config,
@@ -311,6 +311,7 @@ fn lowering_the_threshold_at_execution_is_rejected() {
         proposal_ref: f.proposal_ref,
         approval_nullifiers: vec![f.nullifier(0)],
         execution_marker_seed: compute_execution_marker(&f.proposal_ref),
+        tiers: encode_tier_table(&[]),
     };
     // The forged config resolves to a PDA nobody ever initialised.
     let accounts = vec![
@@ -413,6 +414,34 @@ fn report_the_cycle_costs() {
             .expect("execute executes"),
         );
     }
+
+    // The two instructions the tier and rotation work added. `execute` under a
+    // tier is measured separately from `execute` without one, because decoding
+    // the table and resolving the amount against it is work the untiered path
+    // does not do — and a reader comparing the two learns what a tier costs.
+    let tiered = Fixture::new(&pid).with_tiers(&[(300, 2)]);
+    report(
+        "execute (tiered, M=2)",
+        session(
+            &elf,
+            &pid,
+            tiered.execute_accounts(&[0, 2]),
+            &tiered.execute_ix(&[0, 2]),
+        )
+        .expect("a tiered execute executes"),
+    );
+
+    let rot = f.rotation(4, &[]);
+    report(
+        "rotate_config (M=3)",
+        session(
+            &elf,
+            &pid,
+            f.rotate_accounts(&rot, &[0, 2, 4]),
+            &f.rotate_ix(&rot, &[0, 2, 4]),
+        )
+        .expect("rotate_config executes"),
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -435,6 +464,7 @@ fn an_honest_create_multisig_is_accepted() {
         config_hash: f.config_hash,
         member_root: f.member_root,
         threshold: f.threshold,
+        tiers: encode_tier_table(&[]),
     };
     run(&elf, &pid, f.create_multisig_accounts(f.config_hash), &ix)
         .expect("a well-formed multisig must be creatable");
@@ -447,12 +477,13 @@ fn creating_a_zero_threshold_multisig_is_rejected() {
     let elf = elf();
     let pid = program_id(&elf);
     let f = Fixture::new(&pid);
-    let config = compute_config_hash(&f.member_root, 0);
+    let config = compute_config_hash(&f.member_root, 0, &no_tiers_hash());
     let ix = VerifierInstruction::CreateMultisig {
         multisig_id: f.multisig_id,
         config_hash: config,
         member_root: f.member_root,
         threshold: 0,
+        tiers: encode_tier_table(&[]),
     };
     let err = run(&elf, &pid, f.create_multisig_accounts(config), &ix)
         .expect_err("a zero threshold must be rejected");
@@ -473,6 +504,7 @@ fn creating_a_multisig_with_an_inconsistent_config_hash_is_rejected() {
         config_hash: forged,
         member_root: f.member_root,
         threshold: f.threshold,
+        tiers: encode_tier_table(&[]),
     };
     let err = run(&elf, &pid, f.create_multisig_accounts(forged), &ix)
         .expect_err("an inconsistent config hash must be rejected");
@@ -663,7 +695,7 @@ fn approving_with_a_witness_for_a_different_member_set_is_rejected() {
         },
     };
     let marker_seed = compute_approval_marker(&f.proposal_ref, &nullifier);
-    let forged_config = compute_config_hash(&fake_root, f.threshold);
+    let forged_config = compute_config_hash(&fake_root, f.threshold, &no_tiers_hash());
     let ix = VerifierInstruction::Approve {
         witness_words: risc0_zkvm::serde::to_vec(&instruction).expect("encode"),
         multisig_id: f.multisig_id,
@@ -673,6 +705,7 @@ fn approving_with_a_witness_for_a_different_member_set_is_rejected() {
         proposal_ref: f.proposal_ref,
         nullifier,
         approval_marker_seed: marker_seed,
+        tiers: encode_tier_table(&[]),
     };
     // The invented root resolves to a multisig PDA nobody ever created.
     let accounts = vec![
@@ -704,7 +737,7 @@ fn executing_a_proposal_under_a_foreign_multisig_is_rejected() {
     // Creating this is legitimate — anyone may create a multisig.
     let attacker_msig = [0xEE; 32];
     let attacker_threshold = 1u32;
-    let attacker_config = compute_config_hash(&f.member_root, attacker_threshold);
+    let attacker_config = compute_config_hash(&f.member_root, attacker_threshold, &no_tiers_hash());
 
     let ix = VerifierInstruction::Execute {
         multisig_id: attacker_msig,
@@ -715,6 +748,7 @@ fn executing_a_proposal_under_a_foreign_multisig_is_rejected() {
         proposal_ref: f.proposal_ref,
         approval_nullifiers: vec![f.nullifier(0)],
         execution_marker_seed: compute_execution_marker(&f.proposal_ref),
+        tiers: encode_tier_table(&[]),
     };
     let accounts = vec![
         uninitialised(public_pda(
@@ -771,7 +805,7 @@ fn approving_a_proposal_under_a_foreign_multisig_is_rejected() {
     let aid = derive_account_id(&derive_npk(&attacker_msk), attacker_id);
     let (root, paths) = build_member_tree(&[compute_member_leaf(&aid, &attacker_salt)]);
     let attacker_msig = [0xF3; 32];
-    let attacker_config = compute_config_hash(&root, 1);
+    let attacker_config = compute_config_hash(&root, 1, &no_tiers_hash());
 
     // ...used to approve the honest multisig's proposal.
     let nullifier = compute_approval_nullifier(&f.proposal_ref, &attacker_msk);
@@ -799,6 +833,7 @@ fn approving_a_proposal_under_a_foreign_multisig_is_rejected() {
         proposal_ref: f.proposal_ref,
         nullifier,
         approval_marker_seed: marker_seed,
+        tiers: encode_tier_table(&[]),
     };
     let accounts = vec![
         uninitialised(public_pda(&pid, &[marker_seed])),
@@ -849,7 +884,7 @@ fn approving_under_a_second_config_of_the_same_multisig_id_is_rejected() {
     let (a_root, (a_msk, a_id, a_salt, a_leaf_index, a_siblings)) = attacker_set();
 
     let a_threshold = 1u32;
-    let a_config = compute_config_hash(&a_root, a_threshold);
+    let a_config = compute_config_hash(&a_root, a_threshold, &no_tiers_hash());
     // The victim's proposal, untouched.
     let nullifier = compute_approval_nullifier(&f.proposal_ref, &a_msk);
     let marker_seed = compute_approval_marker(&f.proposal_ref, &nullifier);
@@ -877,6 +912,7 @@ fn approving_under_a_second_config_of_the_same_multisig_id_is_rejected() {
         proposal_ref: f.proposal_ref, // the VICTIM's proposal
         nullifier,
         approval_marker_seed: marker_seed,
+        tiers: encode_tier_table(&[]),
     };
     let accounts = vec![
         uninitialised(public_pda(&pid, &[marker_seed])),
@@ -906,7 +942,7 @@ fn executing_under_a_second_config_of_the_same_multisig_id_is_rejected() {
     let (a_root, (a_msk, ..)) = attacker_set();
 
     let a_threshold = 1u32;
-    let a_config = compute_config_hash(&a_root, a_threshold);
+    let a_config = compute_config_hash(&a_root, a_threshold, &no_tiers_hash());
     let nullifier = compute_approval_nullifier(&f.proposal_ref, &a_msk);
     let marker_seed = compute_approval_marker(&f.proposal_ref, &nullifier);
 
@@ -918,6 +954,7 @@ fn executing_under_a_second_config_of_the_same_multisig_id_is_rejected() {
         proposal_ref: f.proposal_ref, // the VICTIM's 3-of-5 proposal
         approval_nullifiers: vec![nullifier],
         execution_marker_seed: compute_execution_marker(&f.proposal_ref),
+        tiers: encode_tier_table(&[]),
     };
     let accounts = vec![
         uninitialised(public_pda(

@@ -31,6 +31,11 @@ where the `11NNN` form is SPEL's envelope around the program's own `5NNN`.
 | `5020` | The recipient cannot spend what it receives, or is the treasury | `create_proposal`, `execute` | Burning the treasury into an account nobody controls |
 | `5021` | The proposal is already marked executed | `execute` | Paying twice, if the marker's `init` guard were ever bypassed |
 | `5022` | An account this program owns holds no readable record | `create_proposal`, `fund_treasury`, `execute` | Computing a payment from bytes that did not parse |
+| `5023` | The tier table is not monotone | `create_multisig`, `create_proposal`, `approve`, `execute`, `rotate_config` | A table where a larger transfer needs fewer approvals than a smaller one |
+| `5024` | The tier table supplied is not the one this configuration anchors | `execute` | Substituting a cheaper table at the moment the approvals are counted |
+| `5025` | This configuration has been superseded by a rotation | `create_proposal`, `approve`, `execute`, `rotate_config` | A retired member set still proposing, approving or paying |
+| `5026` | A rotation that changes nothing | `create_proposal`, `rotate_config` | Spending a threshold of approvals on a no-op, and colliding with an account that already exists |
+| `5027` | A proposal spent by the instruction for the other action shape | `execute`, `rotate_config` | Executing a rotation proposal as a transfer, or the reverse. `rotate_to` says which shape a proposal is, and until this existed `execute` never read it: a rotation proposal reached the transfer path and was stopped only by the recipient check, because a rotation's stored recipient is the zero account id and no usable account has it. That is a fact about which account ids exist, not a rule this program enforces — and it reported the refusal as a recipient mismatch, naming the wrong cause |
 
 ## The second layer
 
@@ -56,18 +61,21 @@ executor:
 cargo test -p multisig-verifier-tests
 ```
 
-**59 tests there**, in four files:
+**82 tests there**, in five files:
 
 | File | Tests | What it establishes |
 |---|---:|---|
 | `verifier_rejects.rs` | 30 | The gate cannot be forced: 25 forgeries, 5 honest controls |
 | `state_and_transfer.rs` | 22 | Passing the gate moves real balances, and every account it claims comes out readable |
 | `idl_contract.rs` | 5 | The IDL, this document and `scripts/pda.py` still agree with the guest source |
+| `tiers_and_rotation.rs` | 23 | Spending tiers may only ever lower the bar, and a rotation replaces a configuration rather than adding one |
 | `program_id_pin.rs` | 2 | The verifier chains only to the exact membership binary committed here |
 
-Every one of the twenty-two codes is named by at least one test. The
-`state_and_transfer.rs` file covers `5014`–`5022`; `verifier_rejects.rs` covers
-`5001`–`5013`. A further 6 rejections in `verifier_rejects.rs` are caught one
+Every one of the twenty-seven codes is named by at least one test, and the three
+files divide cleanly: `verifier_rejects.rs` covers `5001`–`5013`,
+`state_and_transfer.rs` covers `5014`–`5022`, and `tiers_and_rotation.rs` covers
+`5023`–`5027` while revisiting `5002`, `5003`, `5006`, `5008` and `5010` under a
+tier table or a rotation. A further 6 rejections in `verifier_rejects.rs` are caught one
 layer earlier than the program body — by SPEL's address validation or LEZ's init
 guard — so they assert that rejection rather than a code:
 `the_framework_rejects_a_multisig_at_the_wrong_address`,
@@ -83,7 +91,8 @@ matters because this document once claimed full coverage at a moment when three
 codes had none.
 
 The circuit-side bindings are covered separately by 25 tests in
-`cargo test -p multisig-core`, plus 9 for the account layouts, and the client
-surface by 2 in `multisig-sdk` (one of them a doctest) and 2 in `multisig-cli`.
+`cargo test -p multisig-core`, plus 16 for the account layouts and the tier wire
+format, and the client surface by 2 in `multisig-sdk` (one of them a doctest) and
+2 in `multisig-cli`.
 
-**97 in total.** `cargo test --workspace` runs all of them.
+**127 in total.** `cargo test --workspace` runs all of them.

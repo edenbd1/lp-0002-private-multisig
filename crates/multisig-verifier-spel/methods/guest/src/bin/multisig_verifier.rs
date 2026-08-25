@@ -144,6 +144,34 @@ const E_ALREADY_EXECUTED: u32 = 5021;
 /// An account this program owns does not hold the record it should.
 const E_STATE_DECODE: u32 = 5022;
 
+/// A tier table that is not a legal configuration: caps that do not strictly
+/// increase, a threshold of zero, a threshold above the default, or a threshold
+/// that falls as the cap rises. Each of those would let a table make a larger
+/// transfer easier than a smaller one, which is the whole thing tiers must not
+/// do.
+const E_BAD_TIERS: u32 = 5023;
+/// The tier table supplied does not hash to the one this configuration anchors.
+const E_TIERS_MISMATCH: u32 = 5024;
+/// This configuration has been superseded by a rotation. Its approvals and its
+/// treasury still exist and are readable; what it cannot do is act.
+const E_SUPERSEDED: u32 = 5025;
+/// A rotation to the configuration already in force. Refused because it would
+/// spend a threshold of approvals to change nothing, and because "the new
+/// configuration" would then name an account that is already initialised.
+const E_NOOP_ROTATION: u32 = 5026;
+
+/// A proposal handed to the instruction for the other action shape.
+///
+/// `execute` pays a recipient; `rotate_config` installs a configuration. A
+/// proposal is one or the other and `rotate_to` says which. Before this,
+/// `execute` never read that field: a rotation proposal reached the transfer
+/// path and was stopped only by the recipient check — a rotation's stored
+/// recipient is the zero account id, and no usable account has it. That is a
+/// true statement about which account ids exist, not a rule this program
+/// enforces, and it reported the refusal as a recipient mismatch. Now it is a
+/// rule.
+const E_WRONG_ACTION_KIND: u32 = 5027;
+
 /// ProgramId of the LEZ-native membership program (`membership_lez.bin`).
 /// The deployment is content-addressed, so this pins exactly the audited binary.
 ///
@@ -222,6 +250,13 @@ pub struct MultisigRecord {
     pub multisig_id: [u8; 32],
     pub member_root: [u8; 32],
     pub threshold: u32,
+    /// Commitment to the spending-tier table, folded into `config_hash` and so
+    /// anchored by this account's own address.
+    pub tiers_hash: [u8; 32],
+    /// The configuration that replaced this one, or zero while this one is in
+    /// force. A rotation does not edit a member set: it anchors a second
+    /// configuration at its own address and writes that address here.
+    pub superseded_by: [u8; 32],
     /// The treasury PDA's own address, recorded at creation so no later
     /// instruction can name a different source of funds.
     pub treasury: [u8; 32],
@@ -256,6 +291,12 @@ pub struct ProposalRecord {
     pub amount: u128,
     /// Commitment to the human-readable memo the members approved.
     pub memo_hash: [u8; 32],
+    /// For a governance proposal, the configuration this rotation moves to;
+    /// zero for a treasury transfer. A dedicated field rather than a spare
+    /// value read out of `recipient` or `memo_hash`: a reader of the account
+    /// should be able to say what the proposal does without knowing a
+    /// convention, and a convention is what drifts.
+    pub rotate_to: [u8; 32],
     /// `STATUS_OPEN` or `STATUS_EXECUTED`. One-way: nothing lowers it.
     pub status: u8,
 }
@@ -310,18 +351,71 @@ mod multisig_verifier {
     /// Recomputing the chain from the bytes on disk closes it back on itself, so
     /// a record that does not describe the action the members approved cannot be
     /// paid out — whatever wrote it.
+    /// Turns the caller's flat tier table into the validated form, or refuses.
+    ///
+    /// Flat `(cap, threshold)` pairs rather than a struct because the shared
+    /// crate carries no Borsh dependency, and adding one there would move the
+    /// membership guest's ELF for a vocabulary it does not use.
+    /// Decode a tier table from the wire and require it to be a legal one.
+    ///
+    /// Bytes rather than `(u128, u32)` pairs, because these are the bytes
+    /// `compute_tiers_hash` hashes — one encoding, so the table the program
+    /// applies and the table `config_hash` anchors cannot be different
+    /// objects. It is also the only shape the SPEL CLI can carry: a vector of
+    /// tuples has no IDL type and no case in the CLI's serialiser, so a
+    /// tuple-shaped table would compile, pass every test that speaks Rust, and
+    /// be unreachable from the command line that drives the deployment.
+    fn tiers_from(
+        raw: &[u8],
+        default_threshold: u32,
+    ) -> Result<Vec<multisig_core::TierPolicy>, SpelError> {
+        let tiers = multisig_core::decode_tier_table(raw).map_err(|_| {
+            SpelError::custom(
+                E_BAD_TIERS,
+                "the tier table is not a whole number of entries, or holds more than the maximum",
+            )
+        })?;
+        multisig_core::validate_tiers(&tiers, default_threshold).map_err(|_| {
+            SpelError::custom(
+                E_BAD_TIERS,
+                "tier table is not monotone: caps must strictly increase, thresholds must not fall, \
+                 and none may be zero or above the default",
+            )
+        })?;
+        Ok(tiers)
+    }
+
+    /// Refuses an instruction against a configuration a rotation has replaced.
+    fn check_live(record: &MultisigRecord) -> Result<(), SpelError> {
+        if record.superseded_by != [0u8; 32] {
+            return Err(SpelError::custom(
+                E_SUPERSEDED,
+                "this configuration has been superseded by a rotation",
+            ));
+        }
+        Ok(())
+    }
+
     fn check_action_binds(
         record: &ProposalRecord,
         multisig_id: &[u8; 32],
         config_hash: &[u8; 32],
         proposal_ref: &[u8; 32],
     ) -> Result<(), SpelError> {
-        let expected_action = multisig_core::compute_transfer_action_hash(
-            multisig_id,
-            &record.recipient,
-            record.amount,
-            &record.memo_hash,
-        );
+        // Two action shapes, told apart by a field rather than by a length. A
+        // rotation names the configuration it moves to; a transfer names a
+        // recipient and an amount. Neither can be read as the other, because the
+        // action hash is over a leading format byte that differs.
+        let expected_action = if record.rotate_to == [0u8; 32] {
+            multisig_core::compute_transfer_action_hash(
+                multisig_id,
+                &record.recipient,
+                record.amount,
+                &record.memo_hash,
+            )
+        } else {
+            multisig_core::compute_rotate_action_hash(multisig_id, &record.rotate_to)
+        };
         if expected_action != record.action_hash {
             return Err(SpelError::custom(
                 E_ACTION_MISMATCH,
@@ -373,6 +467,7 @@ mod multisig_verifier {
         config_hash: [u8; 32],
         member_root: [u8; 32],
         threshold: u32,
+        tiers: Vec<u8>,
     ) -> SpelResult {
         // A 0-of-N multisig would let anyone execute. Reject it at creation so
         // no such instance can exist on chain.
@@ -383,15 +478,22 @@ mod multisig_verifier {
             ));
         }
 
+        // Tiers are validated here, once, at the only instruction that can
+        // create a configuration. Everything downstream re-derives the hash
+        // rather than re-checking the rules: a table that reaches `execute`
+        // through an anchored configuration has already passed this.
+        let tier_table = tiers_from(&tiers, threshold)?;
+        let tiers_hash = multisig_core::compute_tiers_hash(&tier_table);
+
         // Re-derive the commitment the PDA address encodes. The macro already
         // constrains `multisig` to be the PDA for this `(id, config_hash)`; this
         // check is what gives `config_hash` its meaning, tying the address to a
         // specific member root and threshold rather than to opaque bytes.
-        let expected = multisig_core::compute_config_hash(&member_root, threshold);
+        let expected = multisig_core::compute_config_hash(&member_root, threshold, &tiers_hash);
         if expected != config_hash {
             return Err(SpelError::custom(
                 E_CONFIG_MISMATCH,
-                "config_hash does not commit to this (member_root, threshold)",
+                "config_hash does not commit to this (member_root, threshold, tiers)",
             ));
         }
 
@@ -402,6 +504,8 @@ mod multisig_verifier {
                 multisig_id,
                 member_root,
                 threshold,
+                tiers_hash,
+                superseded_by: [0u8; 32],
                 treasury: *treasury.account_id.value(),
                 authority: *authority.account_id.value(),
             },
@@ -534,6 +638,7 @@ mod multisig_verifier {
         recipient: [u8; 32],
         amount: u128,
         memo_hash: [u8; 32],
+        rotate_to: [u8; 32],
     ) -> SpelResult {
         if multisig.account.program_owner == nssa_core::program::DEFAULT_PROGRAM_ID {
             return Err(SpelError::custom(
@@ -551,13 +656,31 @@ mod multisig_verifier {
             ));
         }
 
-        // A proposal that moves nothing would give the threshold nothing to
-        // gate, which is the gap this program used to have.
-        if amount == 0 {
-            return Err(SpelError::custom(
-                E_BAD_AMOUNT,
-                "a proposal must move a non-zero amount",
-            ));
+        // A proposal must do exactly one thing, and the two things are mutually
+        // exclusive by shape. A transfer that moves nothing would give the
+        // threshold nothing to gate — the gap this program used to have. A
+        // rotation moves nothing by definition, and a rotation that also carried
+        // a recipient and an amount would be two proposals wearing one approval.
+        if rotate_to == [0u8; 32] {
+            if amount == 0 {
+                return Err(SpelError::custom(
+                    E_BAD_AMOUNT,
+                    "a transfer proposal must move a non-zero amount",
+                ));
+            }
+        } else {
+            if amount != 0 || recipient != [0u8; 32] {
+                return Err(SpelError::custom(
+                    E_BAD_AMOUNT,
+                    "a rotation proposal carries no recipient and no amount",
+                ));
+            }
+            if rotate_to == config_hash {
+                return Err(SpelError::custom(
+                    E_NOOP_ROTATION,
+                    "a rotation to the configuration already in force changes nothing",
+                ));
+            }
         }
 
         let record = ProposalRecord {
@@ -569,6 +692,7 @@ mod multisig_verifier {
             recipient,
             amount,
             memo_hash,
+            rotate_to,
             status: STATUS_OPEN,
         };
         // The action fields must be the ones `action_hash` — and therefore
@@ -580,6 +704,7 @@ mod multisig_verifier {
         // proposal nor the recipient. Refused here, where the message can.
         let multisig_record = MultisigRecord::try_from_slice(&multisig.account.data)
             .map_err(|_| SpelError::custom(E_STATE_DECODE, "multisig record failed to decode"))?;
+        check_live(&multisig_record)?;
         if multisig_record.treasury == recipient {
             return Err(SpelError::custom(
                 E_RECIPIENT_UNUSABLE,
@@ -630,6 +755,7 @@ mod multisig_verifier {
         config_hash: [u8; 32],
         member_root: [u8; 32],
         threshold: u32,
+        tiers: Vec<u8>,
         proposal_ref: [u8; 32],
         nullifier: [u8; 32],
         approval_marker_seed: [u8; 32],
@@ -640,11 +766,16 @@ mod multisig_verifier {
 
         // 2. Tie `config_hash` to the member root the proof will be checked
         //    against, and to the threshold the execution will be checked against.
-        let expected_config = multisig_core::compute_config_hash(&member_root, threshold);
+        let tier_table = tiers_from(&tiers, threshold)?;
+        let expected_config = multisig_core::compute_config_hash(
+            &member_root,
+            threshold,
+            &multisig_core::compute_tiers_hash(&tier_table),
+        );
         if expected_config != config_hash {
             return Err(SpelError::custom(
                 E_CONFIG_MISMATCH,
-                "config_hash does not commit to this (member_root, threshold)",
+                "config_hash does not commit to this (member_root, threshold, tiers)",
             ));
         }
 
@@ -660,6 +791,16 @@ mod multisig_verifier {
                 "no multisig is committed for this (id, config): the member set is not anchored",
             ));
         }
+
+        // A configuration a rotation has replaced cannot gather approvals.
+        // After the anchoring check, not before it: an account that was never
+        // created holds no record, and decoding first would answer "the record
+        // does not decode" to a member whose real problem is that the member set
+        // they named was never committed. The test that says so is the reason
+        // this sits here.
+        let live = MultisigRecord::try_from_slice(&multisig.account.data)
+            .map_err(|_| SpelError::custom(E_STATE_DECODE, "multisig record failed to decode"))?;
+        check_live(&live)?;
 
         // 4. Anchor the action. Approving requires naming the true
         //    `proposal_ref`, which commits to the exact action bytes.
@@ -779,6 +920,7 @@ mod multisig_verifier {
         config_hash: [u8; 32],
         member_root: [u8; 32],
         threshold: u32,
+        tiers: Vec<u8>,
         proposal_ref: [u8; 32],
         approval_nullifiers: Vec<[u8; 32]>,
         execution_marker_seed: [u8; 32],
@@ -787,11 +929,13 @@ mod multisig_verifier {
         //    executor from supplying `threshold = 1` against a 3-of-5 set: a
         //    different threshold yields a different config hash, hence a
         //    different multisig PDA, which check 2 then finds uninitialised.
-        let expected_config = multisig_core::compute_config_hash(&member_root, threshold);
+        let tier_table = tiers_from(&tiers, threshold)?;
+        let tiers_hash = multisig_core::compute_tiers_hash(&tier_table);
+        let expected_config = multisig_core::compute_config_hash(&member_root, threshold, &tiers_hash);
         if expected_config != config_hash {
             return Err(SpelError::custom(
                 E_CONFIG_MISMATCH,
-                "config_hash does not commit to this (member_root, threshold)",
+                "config_hash does not commit to this (member_root, threshold, tiers)",
             ));
         }
 
@@ -801,6 +945,19 @@ mod multisig_verifier {
             return Err(SpelError::custom(
                 E_MULTISIG_NOT_ANCHORED,
                 "no multisig is committed for this (id, config): threshold is not anchored",
+            ));
+        }
+
+        // 2b. Read the record here rather than at the payment, because the
+        //     number of approvals this action needs depends on the tier table
+        //     it anchors, and that has to be known before they are counted.
+        let anchored = MultisigRecord::try_from_slice(&multisig.account.data)
+            .map_err(|_| SpelError::custom(E_STATE_DECODE, "multisig record does not decode"))?;
+        check_live(&anchored)?;
+        if anchored.tiers_hash != tiers_hash {
+            return Err(SpelError::custom(
+                E_TIERS_MISMATCH,
+                "the tier table supplied is not the one this configuration anchors",
             ));
         }
 
@@ -828,10 +985,24 @@ mod multisig_verifier {
                 "each approval account must be paired with its nullifier",
             ));
         }
-        if approvals.len() < threshold as usize {
+        // The proposal record is read here, ahead of the payment, because the
+        // amount decides how many approvals are required. A tier lowers the bar
+        // for small transfers and can never raise it: `validate_tiers` refuses
+        // any table where a larger amount needs fewer approvals, and the table
+        // is anchored by the address, so there is no table to substitute.
+        let proposed = ProposalRecord::try_from_slice(&proposal.account.data)
+            .map_err(|_| SpelError::custom(E_STATE_DECODE, "proposal record does not decode"))?;
+        if proposed.rotate_to != [0u8; 32] {
+            return Err(SpelError::custom(
+                E_WRONG_ACTION_KIND,
+                "this proposal is a rotation and is executed by rotate_config",
+            ));
+        }
+        let required = multisig_core::required_threshold(proposed.amount, threshold, &tier_table);
+        if approvals.len() < required as usize {
             return Err(SpelError::custom(
                 E_THRESHOLD_NOT_MET,
-                "fewer approvals than the anchored threshold",
+                "fewer approvals than the threshold this amount requires",
             ));
         }
 
@@ -976,4 +1147,239 @@ mod multisig_verifier {
         accounts.extend(approvals);
         Ok(SpelOutput::execute(accounts, vec![]))
     }
+
+    /// Replace this multisig's configuration with one a threshold approved.
+    ///
+    /// **A rotation is not a mutation.** The configuration lives in the
+    /// multisig's address — the PDA is seeded by `[multisig_id, config_hash]` —
+    /// so nothing here edits a member set. It anchors a second configuration at
+    /// its own address, with its own treasury, and writes that address into the
+    /// first as `superseded_by`. Every guarantee the address gives the old
+    /// configuration, the new one has by the same construction: a member set or
+    /// a threshold nobody approved still lands on a PDA nobody created.
+    ///
+    /// It follows that a proposal cannot outlive the configuration it was made
+    /// under, and that no check is needed to say so. `proposal_ref` already
+    /// carries `config_hash`, so the old configuration's proposals live at
+    /// addresses the new one never reads. There is no stale proposal to detect
+    /// because there is no shared mutable state to go stale.
+    ///
+    /// What this does *not* do is move the treasury. The old treasury keeps its
+    /// balance and stays readable; moving it is a transfer, which is a proposal
+    /// the new configuration can make. Bundling the two would mean one approval
+    /// authorising both a governance change and a payment.
+    ///
+    /// Accounts:
+    /// - `execution_marker` (init): spends the proposal exactly once.
+    /// - `multisig` (mut, PDA): the configuration being replaced.
+    /// - `new_multisig` (init, PDA): the configuration replacing it.
+    /// - `new_treasury` (init, PDA): its treasury, empty.
+    /// - `proposal` (mut, PDA): the approved rotation.
+    /// - `executor` (signer): anyone; being named here confers nothing.
+    /// - `approvals`: the markers, one per distinct member.
+    #[instruction]
+    #[allow(clippy::too_many_arguments)]
+    pub fn rotate_config(
+        ctx: ProgramContext,
+        #[account(init, pda = arg("execution_marker_seed"))]
+        mut execution_marker: AccountWithMetadata,
+        #[account(mut, pda = [arg("multisig_id"), arg("config_hash")])]
+        mut multisig: AccountWithMetadata,
+        #[account(init, pda = [arg("multisig_id"), arg("new_config_hash")])]
+        mut new_multisig: AccountWithMetadata,
+        #[account(init, pda = [arg("multisig_id"), arg("new_config_hash"), literal("treasury")])]
+        mut new_treasury: AccountWithMetadata,
+        #[account(mut, pda = [arg("multisig_id"), arg("config_hash"), arg("proposal_ref")])]
+        mut proposal: AccountWithMetadata,
+        #[account(signer)] executor: AccountWithMetadata,
+        approvals: Vec<AccountWithMetadata>,
+        multisig_id: [u8; 32],
+        config_hash: [u8; 32],
+        member_root: [u8; 32],
+        threshold: u32,
+        tiers: Vec<u8>,
+        new_config_hash: [u8; 32],
+        new_member_root: [u8; 32],
+        new_threshold: u32,
+        new_tiers: Vec<u8>,
+        proposal_ref: [u8; 32],
+        approval_nullifiers: Vec<[u8; 32]>,
+        execution_marker_seed: [u8; 32],
+    ) -> SpelResult {
+        // 1. The configuration being left, tied to the address it is read from.
+        let tier_table = tiers_from(&tiers, threshold)?;
+        let tiers_hash = multisig_core::compute_tiers_hash(&tier_table);
+        if multisig_core::compute_config_hash(&member_root, threshold, &tiers_hash) != config_hash {
+            return Err(SpelError::custom(
+                E_CONFIG_MISMATCH,
+                "config_hash does not commit to this (member_root, threshold, tiers)",
+            ));
+        }
+        if multisig.account.program_owner == nssa_core::program::DEFAULT_PROGRAM_ID {
+            return Err(SpelError::custom(
+                E_MULTISIG_NOT_ANCHORED,
+                "no multisig is committed for this (id, config)",
+            ));
+        }
+        let mut current = MultisigRecord::try_from_slice(&multisig.account.data)
+            .map_err(|_| SpelError::custom(E_STATE_DECODE, "multisig record does not decode"))?;
+        check_live(&current)?;
+
+        // 2. The configuration being moved to, tied to the address it will be
+        //    written at. The `init` on `new_multisig` is what makes a rotation
+        //    to an existing configuration impossible: the address is already
+        //    claimed and the claim refuses.
+        if new_threshold == 0 {
+            return Err(SpelError::custom(
+                E_BAD_THRESHOLD,
+                "threshold must be at least 1",
+            ));
+        }
+        let new_tier_table = tiers_from(&new_tiers, new_threshold)?;
+        let new_tiers_hash = multisig_core::compute_tiers_hash(&new_tier_table);
+        if multisig_core::compute_config_hash(&new_member_root, new_threshold, &new_tiers_hash)
+            != new_config_hash
+        {
+            return Err(SpelError::custom(
+                E_CONFIG_MISMATCH,
+                "new_config_hash does not commit to this (member_root, threshold, tiers)",
+            ));
+        }
+        if new_config_hash == config_hash {
+            return Err(SpelError::custom(
+                E_NOOP_ROTATION,
+                "a rotation to the configuration already in force changes nothing",
+            ));
+        }
+
+        // 3. The proposal, and that it is the rotation these approvals are for.
+        if proposal.account.program_owner == nssa_core::program::DEFAULT_PROGRAM_ID {
+            return Err(SpelError::custom(
+                E_PROPOSAL_NOT_ANCHORED,
+                "no proposal is committed at this proposal_ref",
+            ));
+        }
+        if multisig_core::compute_execution_marker(&proposal_ref) != execution_marker_seed {
+            return Err(SpelError::custom(
+                E_MARKER_SEED_MISMATCH,
+                "execution_marker_seed does not commit to this proposal",
+            ));
+        }
+        let mut record = ProposalRecord::try_from_slice(&proposal.account.data)
+            .map_err(|_| SpelError::custom(E_STATE_DECODE, "proposal record does not decode"))?;
+        if record.status != STATUS_OPEN {
+            return Err(SpelError::custom(
+                E_ALREADY_EXECUTED,
+                "this proposal has already been executed",
+            ));
+        }
+        check_action_binds(&record, &multisig_id, &config_hash, &proposal_ref)?;
+        if record.rotate_to == [0u8; 32] {
+            return Err(SpelError::custom(
+                E_WRONG_ACTION_KIND,
+                "this proposal is a transfer and is executed by execute",
+            ));
+        }
+        if record.rotate_to != new_config_hash {
+            return Err(SpelError::custom(
+                E_ACTION_MISMATCH,
+                "this proposal approves a rotation to a different configuration",
+            ));
+        }
+
+        // 4. A threshold of distinct members, at the *default* threshold rather
+        //    than a tier. Tiers price transfers; governance is not a transfer,
+        //    and letting a tier lower the bar for changing the member set would
+        //    make the cheapest possible action the one that rewrites who may act.
+        if approvals.len() != approval_nullifiers.len() {
+            return Err(SpelError::custom(
+                E_APPROVAL_COUNT_MISMATCH,
+                "each approval account must be paired with its nullifier",
+            ));
+        }
+        if approvals.len() < threshold as usize {
+            return Err(SpelError::custom(
+                E_THRESHOLD_NOT_MET,
+                "fewer approvals than the anchored threshold",
+            ));
+        }
+        for i in 0..approval_nullifiers.len() {
+            for j in (i + 1)..approval_nullifiers.len() {
+                if approval_nullifiers[i] == approval_nullifiers[j] {
+                    return Err(SpelError::custom(
+                        E_DUPLICATE_APPROVAL,
+                        "the same approval was presented more than once",
+                    ));
+                }
+            }
+        }
+        for (account, nullifier) in approvals.iter().zip(approval_nullifiers.iter()) {
+            let seed = multisig_core::compute_approval_marker(&proposal_ref, nullifier);
+            if account.account_id != compute_pda(&ctx.self_program_id, &[&seed]) {
+                return Err(SpelError::custom(
+                    E_APPROVAL_NOT_FOR_PROPOSAL,
+                    "an approval account is not the marker PDA for its nullifier on this proposal",
+                ));
+            }
+            if account.account.program_owner != ctx.self_program_id {
+                return Err(SpelError::custom(
+                    E_APPROVAL_NOT_ANCHORED,
+                    "an approval marker was never claimed by this program",
+                ));
+            }
+        }
+
+        // 5. Anchor the new configuration, retire the old, spend the proposal.
+        write(
+            &mut new_multisig.account,
+            &MultisigRecord {
+                format: STATE_FORMAT_V1,
+                multisig_id,
+                member_root: new_member_root,
+                threshold: new_threshold,
+                tiers_hash: new_tiers_hash,
+                superseded_by: [0u8; 32],
+                treasury: *new_treasury.account_id.value(),
+                authority: *executor.account_id.value(),
+            },
+        )?;
+        write(
+            &mut new_treasury.account,
+            &TreasuryRecord {
+                format: STATE_FORMAT_V1,
+                multisig_id,
+                config_hash: new_config_hash,
+            },
+        )?;
+        current.superseded_by = new_config_hash;
+        write(&mut multisig.account, &current)?;
+        record.status = STATUS_EXECUTED;
+        write(&mut proposal.account, &record)?;
+        write(
+            &mut execution_marker.account,
+            &ExecutionMarkerRecord {
+                format: STATE_FORMAT_V1,
+                proposal_ref,
+                // A rotation pays nobody. The zero recipient and zero amount are
+                // the record saying so, in the same fields a transfer fills, so
+                // one reader answers "what did this execution do" for both.
+                recipient: [0u8; 32],
+                amount: 0,
+                status: STATUS_EXECUTED,
+                nullifiers: approval_nullifiers.clone(),
+            },
+        )?;
+
+        let mut accounts = vec![
+            execution_marker,
+            multisig,
+            new_multisig,
+            new_treasury,
+            proposal,
+            executor,
+        ];
+        accounts.extend(approvals);
+        Ok(SpelOutput::execute(accounts, vec![]))
+    }
+
 }

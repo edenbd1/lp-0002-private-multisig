@@ -48,6 +48,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 RUNNING = re.compile(r"^\s*Running (?:unittests )?(\S+)", re.M)
 RESULT = re.compile(r"^test result: ok\. (\d+) passed", re.M)
+DOCTESTS = re.compile(r"^\s*Doc-tests \S+\s*$", re.M)
 
 # (what the README says, which package, which suite — None for the whole package)
 #
@@ -75,8 +76,19 @@ def suites(pkg):
         if r.returncode != 0:
             _ran[pkg] = (None, "build", out)
         else:
-            names = [os.path.splitext(os.path.basename(m))[0].split(" ")[0]
-                     for m in RUNNING.findall(out)]
+            # Banners and results are paired by ORDER, not by position: cargo
+            # writes the banners to stderr and the results to stdout, so in the
+            # concatenation every banner precedes every result. Pairing on
+            # position reads every suite as zero — which looks exactly like a
+            # README stating the wrong number, and is not.
+            #
+            # `Doc-tests` is a banner too, and was not counted before, so a row
+            # claiming a suite *plus* its doctest could not be checked at all.
+            names = ["doctest" if m.group(1) is None
+                     else os.path.splitext(os.path.basename(m.group(1)))[0].split(" ")[0]
+                     for m in re.finditer(
+                         r"^\s*Running (?:unittests )?(\S+)|^\s*Doc-tests \S+\s*$",
+                         out, re.M)]
             counts = [int(n) for n in RESULT.findall(out)]
             # A parse that finds results but no suite banners has not measured a
             # suite of zero — it has failed to read the output, which is exactly
@@ -88,6 +100,103 @@ def suites(pkg):
                 _ran[pkg] = (dict(zip(names, counts)), None, out)
     return _ran[pkg]
 
+
+# The README's test inventory is a table, and this reads the table rather than a
+# hand-written list of the rows someone remembered. Four rows used to be checked
+# out of nine, under a banner reading "every stated count is what its suite
+# passes" — so the `multisig-cli` row sat at 2 while its suite passed 3, the
+# stated total sat at 130 while the workspace ran 131, and the gate said ok.
+# A gate that covers less than it claims is worse than no gate, because it is
+# quoted as if it covered everything.
+#
+# A row this cannot map is a FAILURE, not a skip. That is the whole point: the
+# only way to lose coverage here is to say so out loud.
+ROW = re.compile(r"\|\s*`([a-z0-9-]+)`\s*[—-]\s*(.+?)\s*\|\s*(\d+)\s*\|")
+
+
+def inventory(text, failures):
+    """Check every row of the README's inventory table, its stated total, and
+    the sum it prints. Returns how many claims were checked."""
+    m = re.search(r"### Test inventory(.+?)One further test", text)
+    if not m:
+        failures.append("README.md no longer has a `### Test inventory` section ending "
+                        "at 'One further test'. This gate reads that table; losing it "
+                        "silently is coverage going away, not a tree getting cleaner.")
+        return 0
+    block = m.group(1)
+    rows = ROW.findall(block)
+    if not rows:
+        failures.append("the `### Test inventory` table parsed to zero rows. That is a "
+                        "failure to READ it, not a table that is empty.")
+        return 0
+
+    checked = 0
+    for pkg, label, claimed in rows:
+        claimed = int(claimed)
+        if label == "unit tests":
+            keys = ["lib"]
+        else:
+            keys = re.findall(r"`([a-z0-9_]+)`", label)
+            if "doctest" in label:
+                keys = keys + ["doctest"]
+            if not keys:
+                failures.append("the inventory row %r in package %s names no suite this "
+                                "gate can resolve. Teach it the shape or drop the row; "
+                                "skipping it quietly is how four of nine rows went "
+                                "unchecked." % (label, pkg))
+                continue
+        per, why, _out = suites(pkg)
+        if why:
+            failures.append("`cargo test -p %s --release` could not be read (%s), so the "
+                            "row %r cannot be checked." % (pkg, why, label))
+            continue
+        missing = [k for k in keys if k not in per]
+        if missing:
+            failures.append("row %r in %s names suite(s) %s that `cargo test -p %s` did "
+                            "not run — renamed or removed, so its claim of %d cannot be "
+                            "checked at all." % (label, pkg, ", ".join(missing), pkg, claimed))
+            continue
+        actual = sum(per[k] for k in keys)
+        checked += 1
+        mark = "ok  " if actual == claimed else "FAIL"
+        print("  %s inventory: `%s` — %s says %d; it passes %d"
+              % (mark, pkg, label, claimed, actual))
+        if actual != claimed:
+            failures.append("the inventory row `%s` — %s says %d where the suite passes "
+                            "%d." % (pkg, label, claimed, actual))
+
+    # The stated total, the printed sum, and the table must all agree.
+    row_total = sum(int(c) for _, _, c in rows)
+    tm = re.search(r"`cargo test --workspace` runs \*\*(\d+)\*\* tests", text)
+    if not tm:
+        failures.append("README.md no longer states what `cargo test --workspace` runs. "
+                        "That sentence invites the reader to check it, which is why it "
+                        "is gated.")
+    else:
+        stated = int(tm.group(1))
+        checked += 1
+        mark = "ok  " if stated == row_total else "FAIL"
+        print("  %s inventory: stated total %d, table sums to %d" % (mark, stated, row_total))
+        if stated != row_total:
+            failures.append("README.md says `cargo test --workspace` runs %d tests while "
+                            "its own table sums to %d." % (stated, row_total))
+
+    sm = re.search(r"((?:\d+ \+ )+\d+) = (\d+), and every row", text)
+    if not sm:
+        failures.append("README.md no longer prints the addition under its table. It is "
+                        "there so a reader can check the sum by eye; losing it is losing "
+                        "the invitation this gate defends.")
+    else:
+        addends = [int(x) for x in sm.group(1).split(" + ")]
+        checked += 1
+        ok = addends == [int(c) for _, _, c in rows] and sum(addends) == int(sm.group(2))
+        print("  %s inventory: the printed addition matches the rows and its own total"
+              % ("ok  " if ok else "FAIL"))
+        if not ok:
+            failures.append("the addition printed under the table (%s = %s) is not the "
+                            "table's own rows (%s)." % (sm.group(1), sm.group(2),
+                                                        " + ".join(c for _, _, c in rows)))
+    return checked
 
 def main():
     with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as fh:
@@ -138,6 +247,8 @@ def main():
                             "reader takes for how much is checked, and it is quoted "
                             "outward, so it is the one that moves." % (claimed, what, actual))
 
+    checked += inventory(text, failures)
+
     # The README says how many steps preflight.sh runs. Counted from the script,
     # not from the sentence: `step "` is how each one is declared.
     with open(os.path.join(ROOT, "scripts", "preflight.sh"), encoding="utf-8") as fh:
@@ -158,8 +269,8 @@ def main():
             failures.append("README.md says preflight.sh runs %d steps; it declares %d."
                             % (said, steps))
 
-    print("checked %d claim(s): %d test count(s) and the preflight step count"
-          % (checked, len(CLAIMS)))
+    print("checked %d claim(s): the prose counts, every row of the inventory\ntable with its total and its printed sum, and the preflight step count"
+          % checked)
     # The README also says the demo runs "a full 3-of-5 lifecycle" and reports a
     # compute cost. Neither is a count, and neither is checked here; they are
     # gated by the demo script's own exits.

@@ -138,7 +138,12 @@ fn every_image_id_the_docs_quote_is_one_this_checkout_builds() {
     // and the one the documents quote — is each word's little-endian bytes in
     // order, so that is what this rebuilds rather than formatting the words.
     let as_hex = |words: lee_core::program::ProgramId| -> String {
-        hex::encode(words.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<u8>>())
+        hex::encode(
+            words
+                .iter()
+                .flat_map(|w| w.to_le_bytes())
+                .collect::<Vec<u8>>(),
+        )
     };
     let verifier = as_hex(program_id(&elf()));
     let membership_bytes =
@@ -159,11 +164,12 @@ fn every_image_id_the_docs_quote_is_one_this_checkout_builds() {
              a reader following a stale link learns which of them they landed on",
         ),
         (
-        "5bb4008273ddc31d1c2b5bad8835daaf4c567e029dbb059c20c7e83ba5966f82",
-        "docs/DEPLOYMENT.md explains that the accounts of an earlier deployment \
+            "5bb4008273ddc31d1c2b5bad8835daaf4c567e029dbb059c20c7e83ba5966f82",
+            "docs/DEPLOYMENT.md explains that the accounts of an earlier deployment \
          belong to this verifier, which the repository no longer contains — the \
          point of the passage is that the identity changed",
-    )];
+        ),
+    ];
 
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut checked = 0usize;
@@ -175,11 +181,21 @@ fn every_image_id_the_docs_quote_is_one_this_checkout_builds() {
         l.contains("imageid") || l.contains("image id")
     };
     let cells = |l: &str| -> Vec<String> {
-        l.trim().trim_matches('|').split('|').map(|c| c.trim().to_string()).collect()
+        l.trim()
+            .trim_matches('|')
+            .split('|')
+            .map(|c| c.trim().to_string())
+            .collect()
     };
 
-    for doc in ["README.md", "docs/DEPLOYMENT.md", "docs/cu-costs.md",
-                "docs/security.md", "docs/account-layout.md", "docs/error-codes.md"] {
+    for doc in [
+        "README.md",
+        "docs/DEPLOYMENT.md",
+        "docs/cu-costs.md",
+        "docs/security.md",
+        "docs/account-layout.md",
+        "docs/error-codes.md",
+    ] {
         let Ok(text) = std::fs::read_to_string(root.join(doc)) else {
             continue;
         };
@@ -199,7 +215,7 @@ fn every_image_id_the_docs_quote_is_one_this_checkout_builds() {
                     .filter(|(_, c)| names_image_id(c))
                     .map(|(i, _)| i)
                     .collect();
-                continue;             // the header itself carries no value
+                continue; // the header itself carries no value
             }
 
             let mut candidates: Vec<String> = Vec::new();
@@ -211,7 +227,9 @@ fn every_image_id_the_docs_quote_is_one_this_checkout_builds() {
                     }
                 }
             } else if names_image_id(line)
-                || (n > 0 && names_image_id(lines[n - 1]) && !lines[n - 1].trim_start().starts_with('|'))
+                || (n > 0
+                    && names_image_id(lines[n - 1])
+                    && !lines[n - 1].trim_start().starts_with('|'))
             {
                 candidates.push((*line).to_string());
             }

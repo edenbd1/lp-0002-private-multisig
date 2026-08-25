@@ -36,8 +36,13 @@ fn without_a_tier_two_approvals_are_one_short() {
     let pid = program_id(&elf);
     let f = Fixture::new(&pid);
 
-    let err = run(&elf, &pid, f.execute_accounts(&[0, 2]), &f.execute_ix(&[0, 2]))
-        .expect_err("two approvals cannot satisfy a 3-of-5 with no tiers");
+    let err = run(
+        &elf,
+        &pid,
+        f.execute_accounts(&[0, 2]),
+        &f.execute_ix(&[0, 2]),
+    )
+    .expect_err("two approvals cannot satisfy a 3-of-5 with no tiers");
     assert_rejected(err, 5010, "threshold");
 }
 
@@ -51,8 +56,13 @@ fn a_tier_lets_a_small_transfer_execute_below_the_default_threshold() {
         "this test is only meaningful if the proposal is under the cap"
     );
 
-    let out = output(&elf, &pid, f.execute_accounts(&[0, 2]), &f.execute_ix(&[0, 2]))
-        .expect("two approvals must satisfy a tier that asks for two");
+    let out = output(
+        &elf,
+        &pid,
+        f.execute_accounts(&[0, 2]),
+        &f.execute_ix(&[0, 2]),
+    )
+    .expect("two approvals must satisfy a tier that asks for two");
 
     let (pre_r, post_r) = state_of(&out, &f.recipient_addr());
     assert_eq!(pre_r.balance, 0);
@@ -70,14 +80,21 @@ fn the_same_two_approvals_do_not_carry_a_transfer_above_the_cap() {
     let elf = elf();
     let pid = program_id(&elf);
     let over = SMALL_SPEND_TIER[0].0 + 1;
-    let f = Fixture::new(&pid).with_tiers(&SMALL_SPEND_TIER).with_amount(over);
+    let f = Fixture::new(&pid)
+        .with_tiers(&SMALL_SPEND_TIER)
+        .with_amount(over);
     assert!(
         over <= f.treasury_balance,
         "the refusal must be about the threshold, not about an empty treasury"
     );
 
-    let err = run(&elf, &pid, f.execute_accounts(&[0, 2]), &f.execute_ix(&[0, 2]))
-        .expect_err("above the cap, the default threshold applies again");
+    let err = run(
+        &elf,
+        &pid,
+        f.execute_accounts(&[0, 2]),
+        &f.execute_ix(&[0, 2]),
+    )
+    .expect_err("above the cap, the default threshold applies again");
     assert_rejected(err, 5010, "threshold");
 
     // And the control on the control: three approvals do carry it, so the
@@ -290,7 +307,10 @@ fn a_rotation_anchors_the_new_configuration_and_retires_the_old() {
     // successor. A rotation does not delete history.
     let (_, post_old) = state_of(&out, &f.multisig_id_addr());
     let retired = decode_multisig(&post_old.data).expect("the old record still decodes");
-    assert_eq!(retired.threshold, f.threshold, "the old record is not rewritten");
+    assert_eq!(
+        retired.threshold, f.threshold,
+        "the old record is not rewritten"
+    );
     assert_eq!(
         retired.superseded_by, r.new_config_hash,
         "the old record must name the configuration that replaced it"
@@ -464,8 +484,8 @@ fn approvals_for_one_rotation_do_not_carry_another() {
         accounts[6 + i] = f.rotate_marker_account(&approved, m, true);
     }
 
-    let err = run(&elf, &pid, accounts, &ix)
-        .expect_err("these approvals are for a different rotation");
+    let err =
+        run(&elf, &pid, accounts, &ix).expect_err("these approvals are for a different rotation");
     assert_rejected(err, 5006, "different");
 }
 

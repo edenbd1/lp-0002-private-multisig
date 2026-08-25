@@ -134,8 +134,14 @@ fn tier_and_rotation_derivations_match_core_exactly() {
     let members = MemberSet::from_entries(&entries);
 
     let table = [
-        TierPolicy { max_amount: 300, threshold: 2 },
-        TierPolicy { max_amount: 10_000, threshold: 3 },
+        TierPolicy {
+            max_amount: 300,
+            threshold: 2,
+        },
+        TierPolicy {
+            max_amount: 10_000,
+            threshold: 3,
+        },
     ];
     let ms = Multisig::for_members([0xA0; 32], &members, 3)
         .unwrap()
@@ -168,13 +174,20 @@ fn tier_and_rotation_derivations_match_core_exactly() {
     assert_eq!(ms.required_for(1), 2);
     assert_eq!(ms.required_for(300), 2, "the cap is inclusive");
     assert_eq!(ms.required_for(301), 3);
-    assert_eq!(ms.required_for(u128::MAX), 3, "past every tier, the default");
+    assert_eq!(
+        ms.required_for(u128::MAX),
+        3,
+        "past every tier, the default"
+    );
 
     // A table the chain would refuse is refused here, before any proving.
     assert!(
         Multisig::for_members([0xA0; 32], &members, 3)
             .unwrap()
-            .with_tiers(&[TierPolicy { max_amount: 300, threshold: 4 }])
+            .with_tiers(&[TierPolicy {
+                max_amount: 300,
+                threshold: 4
+            }])
             .is_err(),
         "a tier above the default threshold must not be constructible"
     );
@@ -182,8 +195,14 @@ fn tier_and_rotation_derivations_match_core_exactly() {
         Multisig::for_members([0xA0; 32], &members, 3)
             .unwrap()
             .with_tiers(&[
-                TierPolicy { max_amount: 300, threshold: 2 },
-                TierPolicy { max_amount: 200, threshold: 3 },
+                TierPolicy {
+                    max_amount: 300,
+                    threshold: 2
+                },
+                TierPolicy {
+                    max_amount: 200,
+                    threshold: 3
+                },
             ])
             .is_err(),
         "caps must strictly increase"
@@ -193,9 +212,14 @@ fn tier_and_rotation_derivations_match_core_exactly() {
     let p = Proposal::new(&ms, [0x11; 32], [0x5E; 32], 250, b"small");
     assert_eq!(p.required(), 2, "a 250 transfer is covered by the 300 tier");
     let approvals: Vec<Approval> = (0..2)
-        .map(|i| p.approval(&members, i, [(i as u8) + 1; 32], i as u128 + 1).unwrap())
+        .map(|i| {
+            p.approval(&members, i, [(i as u8) + 1; 32], i as u128 + 1)
+                .unwrap()
+        })
         .collect();
-    let args = p.execute_args(&approvals).expect("two approvals satisfy the tier");
+    let args = p
+        .execute_args(&approvals)
+        .expect("two approvals satisfy the tier");
     assert_eq!(args.approval_nullifiers.len(), 2);
     assert_eq!(args.tiers, encode_tier_table(&table));
 
@@ -223,7 +247,12 @@ fn tier_and_rotation_derivations_match_core_exactly() {
     );
     assert_eq!(
         r.proposal_ref(),
-        compute_proposal_ref(&[0xA0; 32], &ms.config_hash(), &[0x22; 32], &r.action_hash()),
+        compute_proposal_ref(
+            &[0xA0; 32],
+            &ms.config_hash(),
+            &[0x22; 32],
+            &r.action_hash()
+        ),
         "a rotation proposal is scoped to the configuration that raised it"
     );
     assert_eq!(
@@ -234,7 +263,10 @@ fn tier_and_rotation_derivations_match_core_exactly() {
 
     // The two shapes cannot be spent by each other's instruction.
     let rot_approvals: Vec<Approval> = (0..3)
-        .map(|i| r.approval(&members, i, [(i as u8) + 1; 32], i as u128 + 1).unwrap())
+        .map(|i| {
+            r.approval(&members, i, [(i as u8) + 1; 32], i as u128 + 1)
+                .unwrap()
+        })
         .collect();
     assert!(
         r.execute_args(&rot_approvals).is_err(),

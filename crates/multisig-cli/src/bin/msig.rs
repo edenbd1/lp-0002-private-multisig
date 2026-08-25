@@ -372,8 +372,7 @@ fn new_multisig(
 
     let leaves: Vec<[u8; 32]> = secrets.iter().map(|s| s.4).collect();
     let (member_root, paths) = build_member_tree(&leaves);
-    let config_hash =
-        compute_config_hash(&member_root, threshold, &compute_tiers_hash(&tiers));
+    let config_hash = compute_config_hash(&member_root, threshold, &compute_tiers_hash(&tiers));
 
     let member_files: Vec<MemberFile> = secrets
         .iter()
@@ -414,7 +413,10 @@ fn new_multisig(
         hex::encode(config_hash)
     );
     for t in &tiers {
-        println!("tier          <= {} needs {} approvals", t.max_amount, t.threshold);
+        println!(
+            "tier          <= {} needs {} approvals",
+            t.max_amount, t.threshold
+        );
     }
     println!(
         "wrote         {}/multisig.json, {}/members.json",
@@ -566,8 +568,14 @@ fn rotate_args(dir: &Path, proposal_id: &str, to: &Path, out: &Path) -> Result<(
         format!("--member-root {}", quoted(&hex32(&ms.member_root_hex)?)),
         format!("--threshold {}", ms.threshold),
         tiers_flag(&tier_table(&ms)),
-        format!("--new-config-hash {}", quoted(&hex32(&next.config_hash_hex)?)),
-        format!("--new-member-root {}", quoted(&hex32(&next.member_root_hex)?)),
+        format!(
+            "--new-config-hash {}",
+            quoted(&hex32(&next.config_hash_hex)?)
+        ),
+        format!(
+            "--new-member-root {}",
+            quoted(&hex32(&next.member_root_hex)?)
+        ),
         format!("--new-threshold {}", next.threshold),
         format!("--new-tiers {}", &new_tiers["--tiers ".len()..]),
         format!("--proposal-ref {}", quoted(&proposal_ref)),

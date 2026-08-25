@@ -353,6 +353,14 @@ pub fn validate_tiers(tiers: &[TierPolicy], default_threshold: u32) -> Result<()
     Ok(())
 }
 
+// These eight lines hold a line count, and that is worth stating plainly rather
+// than leaving as a puzzle. RISC0 derives a guest's ImageID from its memory
+// image, and this crate is linked into the verifier guest, so *where* code sits
+// in this file changes the program's on-chain identity. The deployed verifier
+// was built with an orphaned doc block here — eight lines that had drifted onto
+// the wrong item, carrying a formula the encoding had outgrown. Deleting the
+// text was right; deleting the lines would have stopped a clean rebuild from
+// reproducing the deployed ImageID. Remove these at the next redeploy, not now.
 /// One encoded tier: `max_amount` little-endian, then `threshold`.
 #[cfg(feature = "records")]
 pub const TIER_ENTRY_LEN: usize = 16 + 4;
@@ -564,10 +572,10 @@ pub fn encode_rotate_action(new_config_hash: &[u8; 32]) -> [u8; ROTATE_ACTION_EN
 /// The action hash of a rotation, from the configuration it moves to.
 #[cfg(feature = "records")]
 #[must_use]
-pub fn compute_rotate_action_hash(
-    multisig_id: &[u8; 32],
-    new_config_hash: &[u8; 32],
-) -> [u8; 32] {
+pub fn compute_rotate_action_hash(multisig_id: &[u8; 32], new_config_hash: &[u8; 32]) -> [u8; 32] {
+    // Exactly three lines, and they are load-bearing. rustfmt folds the
+    // signature above onto one line — three shorter than when the deployed
+    // verifier was built. See the note above `TIER_ENTRY_LEN` for why that matters.
     compute_action_hash(multisig_id, &encode_rotate_action(new_config_hash))
 }
 
@@ -901,10 +909,18 @@ mod tier_wire_tests {
     fn a_tier_applies_at_its_cap_and_not_past_it() {
         let table = tiers(&[(300, 2), (1000, 3)]);
         assert_eq!(required_threshold(1, 4, &table), 2);
-        assert_eq!(required_threshold(300, 4, &table), 2, "the cap is inclusive");
+        assert_eq!(
+            required_threshold(300, 4, &table),
+            2,
+            "the cap is inclusive"
+        );
         assert_eq!(required_threshold(301, 4, &table), 3);
         assert_eq!(required_threshold(1000, 4, &table), 3);
         assert_eq!(required_threshold(1001, 4, &table), 4, "past every tier");
-        assert_eq!(required_threshold(u128::MAX, 4, &[]), 4, "no tiers, no change");
+        assert_eq!(
+            required_threshold(u128::MAX, 4, &[]),
+            4,
+            "no tiers, no change"
+        );
     }
 }

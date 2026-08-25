@@ -1000,7 +1000,11 @@ impl Fixture {
     #[must_use]
     pub fn rotate_accounts(&self, r: &Rotation, members: &[usize]) -> Vec<AccountWithMetadata> {
         let mut v = self.rotate_fixed(r);
-        v.extend(members.iter().map(|&m| self.rotate_marker_account(r, m, true)));
+        v.extend(
+            members
+                .iter()
+                .map(|&m| self.rotate_marker_account(r, m, true)),
+        );
         v
     }
 

@@ -7,15 +7,15 @@ This is LP-0002, at the commit on screen, live on
 the public LEZ testnet.
 
 3
-00:00:07,080 --> 00:00:10,145
-Eight transactions, and both approvals carry the
+00:00:07,080 --> 00:00:10,255
+Thirteen transactions, and five approvals carry the
 
 4
-00:00:10,145 --> 00:00:13,018
+00:00:10,255 --> 00:00:13,057
 privacy-preserving variant — the part a block
 
 5
-00:00:13,018 --> 00:00:14,614
+00:00:13,057 --> 00:00:14,614
 explorer cannot show you.
 
 6
@@ -40,7 +40,7 @@ And passing the gate moves value. The recipient
 
 11
 00:00:29,902 --> 00:00:32,906
-holds one, in an account owned by the native
+holds two, in an account owned by the native
 
 12
 00:00:32,906 --> 00:00:36,387

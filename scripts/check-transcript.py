@@ -56,8 +56,13 @@ ANCHORS = {
     "lp-0002-threshold-moves-value.srt": [
         ("privacy-preserving variant", r"variant\s*1|PrivacyPreserving"),
         ("approval marker",         r"approval\s*[01]|approval markers"),
-        ("Eight transactions",      r"variant\s*[0-9]|create_multisig"),
-        ("recipient",               r"recipient|balance\s*1"),
+        # The rotation is the half of the lifecycle a transfer-only film never
+        # shows, so the anchor demands `rotate_config` on screen rather than any
+        # variant column: the latter is satisfied by the first eight rows alone.
+        ("Thirteen transactions",   r"rotate_config"),
+        # `balance 2` and not `recipient`: the word is in the screen's own
+        # caption, so matching on it would pass whatever the number said.
+        ("recipient",               r"balance\s*2"),
     ],
 }
 
@@ -157,7 +162,20 @@ def main(argv):
             _, a, b, text = hit
             mid = (a + b) / 2
             ok = False
-            for off in (0, -WINDOW / 2, WINDOW / 2, -WINDOW, WINDOW):
+            # Sweep the window at a fixed step rather than probing five points
+            # in it. Five points miss evidence that is genuinely there: the
+            # thirteen-row table prints six seconds after the line that names
+            # it, inside the same shot, and landed between two probes — the
+            # check then reported a true caption as unmatched. A miss that says
+            # "not on screen" when it is on screen is the failure mode that
+            # matters here, because it is the one that gets argued away.
+            offs = [0.0]
+            step = 2.0
+            k = step
+            while k <= WINDOW:
+                offs += [-k, k]
+                k += step
+            for off in offs:
                 t = min(max(mid + off, 0), dur - 1)
                 if re.search(pattern, frame_text(film, t, tmp), re.I):
                     ok = True

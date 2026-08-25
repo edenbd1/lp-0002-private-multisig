@@ -8,21 +8,21 @@ it as
 [`recordings/lp-0002-threshold-moves-value.srt`](../recordings/lp-0002-threshold-moves-value.srt),
 so the film can be read and grepped instead of watched.
 
-## Measured 2026-08-24
+## Measured 2026-08-26
 
 ```
-lp-0002-threshold-moves-value.srt: 15 cue(s), film: 46.5 s
-  ok    structure, and the last cue lands 1.2 s before the end
-  ok    privacy-preserving variant spoken at 12s, and on screen there
-  ok    approval marker            spoken at 21s, and on screen there
-  ok    Eight transactions         spoken at  9s, and on screen there
-  ok    recipient                  spoken at 28s, and on screen there
+  lp-0002-threshold-moves-value.srt: 15 cue(s), lp-0002-threshold-moves-value-sub.mp4: 46.5 s
+    ok    structure, and the last cue lands 1.2 s before the end
+    ok    privacy-preserving variant spoken at 12s, and on screen there
+    ok    approval marker            spoken at 21s, and on screen there
+    ok    Thirteen transactions      spoken at 9s, and on screen there
+    ok    recipient                  spoken at 28s, and on screen there
   transcript matches the film: structure, fit, and 4 anchor(s) tied to the picture.
 ```
 
 The anchors are the part that matters. The narration is spoken, so its words are
 never on screen — but what it *talks about* is, and each anchor requires the
-picture to show it while the line is being said. Where the narration says "both
+picture to show it while the line is being said. Where the narration says "five
 approvals carry the privacy-preserving variant", the frame at that second must
 show the variant column. A transcript written from memory passes every
 structural check and fails these.
@@ -37,20 +37,23 @@ the film".
 ## Which commit the film shows
 
 The film was shot at
-[`ad2267e`](https://github.com/edenbd1/lp-0002-private-multisig/commit/ad2267e1352fbc40ec83434f8495b5e772d0418e)
+[`dda7d2a`](https://github.com/edenbd1/lp-0002-private-multisig/commit/dda7d2a)
 and shows that hash on screen in its opening seconds, over a clean tree. The
 reviewed commit is later, because the transcript of a film can only be committed
 after the film exists. Everything between the two is documentation: this file,
-the transcript, the checker, and one correction to the explorer section of
-`docs/DEPLOYMENT.md`, which had illustrated a `curl` check with a hash from the
-superseded deployment and a size that holds only for transactions carrying a
-proof. No program, no script the demo runs, no artefact the chain sees.
-`git diff ad2267e..HEAD --stat` says so.
+the transcript, the checker, and the README's test tally, which had not followed
+the suite from 130 to 131. No program, no script the demo runs, no artefact the
+chain sees — `git diff dda7d2a..HEAD --stat` says so.
 
 ## What this does not establish
 
-- **Not every frame.** Up to five frames are read per anchor. Nothing here
-  claims the rest.
+- **Not every frame.** Up to 25 frames are read per anchor: the window is now
+  swept at a fixed two-second step rather than probed at five points, because
+  five points missed the thirteen-row table that prints six seconds after the
+  line naming it, and reported a true caption as unmatched. Widening a check is
+  the wrong instinct when the claim is false, so the negative control was rerun
+  afterwards: this transcript against a different film still fails, on five
+  counts. Nothing here claims the frames between the samples.
 - **Not the wording.** Nothing checks the transcript's sentences against the
   audio. Structure, fit and four anchors are what is proved.
 - **An OCR behaviour routed around, not diagnosed.** Tesseract renders `0` as

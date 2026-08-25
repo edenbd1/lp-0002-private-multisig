@@ -40,10 +40,15 @@ The film was shot at
 [`dda7d2a`](https://github.com/edenbd1/lp-0002-private-multisig/commit/dda7d2a)
 and shows that hash on screen in its opening seconds, over a clean tree. The
 reviewed commit is later, because the transcript of a film can only be committed
-after the film exists. Everything between the two is documentation: this file,
-the transcript, the checker, and the README's test tally, which had not followed
-the suite from 130 to 131. No program, no script the demo runs, no artefact the
-chain sees — `git diff dda7d2a..HEAD --stat` says so.
+after the film exists, and the checks that followed found things worth fixing.
+Everything between the two is documentation and repository gates: this file, the
+transcript and its checker, the README's test tally — which had not followed the
+suite from 130 to 131 — and the gate that now reads that table rather than four
+remembered rows of it. **No program, no script the demo runs, no artefact the
+chain sees.** Rather than trust that list to stay complete,
+`git diff dda7d2a..HEAD --stat` prints what actually moved; the two program
+binaries under `artifacts/programs/` are not in it, and `scripts/preflight.sh`
+fails if either ever hashes differently from what is deployed.
 
 ## What this does not establish
 

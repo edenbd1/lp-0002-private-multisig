@@ -51,6 +51,12 @@ enum Cmd {
         members: usize,
         #[arg(long)]
         threshold: u32,
+        /// A spending tier, `MAX_AMOUNT:THRESHOLD`, repeatable. Transfers at or
+        /// below `MAX_AMOUNT` need `THRESHOLD` approvals instead of the default.
+        /// A tier may only lower the bar: caps must strictly increase,
+        /// thresholds must not fall, and none may be zero or above the default.
+        #[arg(long = "tier", value_name = "MAX:THRESHOLD")]
+        tiers: Vec<String>,
         /// 32-byte hex multisig id. Random if omitted.
         #[arg(long)]
         id: Option<String>,
@@ -128,6 +134,32 @@ enum Cmd {
         #[arg(long)]
         proposal_id: String,
     },
+    /// Register a proposal to rotate into a new member set or threshold.
+    ///
+    /// A rotation does not mutate this multisig. It defines a second one, at its
+    /// own address with its own treasury, and marks this one superseded — so the
+    /// directory given to `--to` describes the configuration being moved *to*.
+    ProposeRotation {
+        #[arg(long)]
+        dir: PathBuf,
+        #[arg(long)]
+        proposal_id: String,
+        /// Directory holding the configuration to move to, as written by
+        /// `new-multisig`. Its multisig id must match this one's.
+        #[arg(long)]
+        to: PathBuf,
+    },
+    /// Emit `spel` args for `rotate_config`.
+    RotateArgs {
+        #[arg(long)]
+        dir: PathBuf,
+        #[arg(long)]
+        proposal_id: String,
+        #[arg(long)]
+        to: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Emit `spel` args for `execute`, once the threshold is reached.
     ExecuteArgs {
         #[arg(long)]
@@ -150,6 +182,11 @@ struct MultisigFile {
     member_count: usize,
     member_root_hex: String,
     config_hash_hex: String,
+    /// Spending tiers, as `(max_amount, threshold)` pairs. Defaulted so a
+    /// directory written before tiers existed still loads: absent means none,
+    /// which is what those multisigs anchored.
+    #[serde(default)]
+    tiers: Vec<(u128, u32)>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -177,6 +214,11 @@ struct ProposalFile {
     proposal_ref_hex: String,
     /// Approvals generated so far. This is the resumable partial state.
     approvals: Vec<ApprovalRecord>,
+    /// Set when this proposal installs a configuration rather than paying: the
+    /// `config_hash` it moves to. Defaulted, so proposals written before
+    /// rotations existed still load as the transfers they are.
+    #[serde(default)]
+    rotate_to_hex: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -228,7 +270,60 @@ fn quoted(b: &[u8; 32]) -> String {
 // Commands
 // ---------------------------------------------------------------------------
 
-fn new_multisig(members: usize, threshold: u32, id: Option<String>, out: &Path) -> Result<()> {
+/// Parse `MAX:THRESHOLD` pairs and require the table the chain would require.
+///
+/// Validated with `multisig_core::validate_tiers` — the guest's own function,
+/// not a copy of its rules — so a table this accepts is one the chain accepts,
+/// and a table it refuses fails here rather than after a proof.
+fn parse_tiers(specs: &[String]) -> Result<Vec<TierPolicy>> {
+    let mut out = Vec::with_capacity(specs.len());
+    for spec in specs {
+        let (cap, threshold) = spec
+            .split_once(':')
+            .with_context(|| format!("tier '{spec}' is not MAX_AMOUNT:THRESHOLD"))?;
+        out.push(TierPolicy {
+            max_amount: cap
+                .trim()
+                .parse()
+                .with_context(|| format!("tier '{spec}': '{cap}' is not an amount"))?,
+            threshold: threshold
+                .trim()
+                .parse()
+                .with_context(|| format!("tier '{spec}': '{threshold}' is not a threshold"))?,
+        });
+    }
+    Ok(out)
+}
+
+/// The tier table as `spel` takes it on the command line.
+///
+/// SPEL reads a `Vec<u8>` as comma-separated decimals, so that is what this
+/// emits — and the leading count byte is why "no tiers" is `0` here rather than
+/// an empty string, which SPEL's serialiser rejects outright.
+fn tiers_flag(tiers: &[TierPolicy]) -> String {
+    let bytes = encode_tier_table(tiers);
+    let list: Vec<String> = bytes.iter().map(u8::to_string).collect();
+    format!("--tiers {}", list.join(","))
+}
+
+/// `MultisigFile::tiers` as the typed table.
+fn tier_table(f: &MultisigFile) -> Vec<TierPolicy> {
+    f.tiers
+        .iter()
+        .map(|&(max_amount, threshold)| TierPolicy {
+            max_amount,
+            threshold,
+        })
+        .collect()
+}
+
+fn new_multisig(
+    members: usize,
+    threshold: u32,
+    tier_specs: &[String],
+    id: Option<String>,
+    out: &Path,
+) -> Result<()> {
     if members == 0 {
         bail!("a multisig needs at least one member");
     }
@@ -265,9 +360,20 @@ fn new_multisig(members: usize, threshold: u32, id: Option<String>, out: &Path) 
         secrets.push((msk, salt, identifier, account_id, leaf));
     }
 
+    let tiers = parse_tiers(tier_specs)?;
+    validate_tiers(&tiers, threshold).map_err(|e| {
+        anyhow::anyhow!(
+            "{e:?}: a tier may only lower the bar for small amounts — caps must \
+             strictly increase, thresholds must not fall, and none may be zero or \
+             above the default threshold of {threshold}. The verifier would refuse \
+             this with E_BAD_TIERS (5023)."
+        )
+    })?;
+
     let leaves: Vec<[u8; 32]> = secrets.iter().map(|s| s.4).collect();
     let (member_root, paths) = build_member_tree(&leaves);
-    let config_hash = compute_config_hash(&member_root, threshold);
+    let config_hash =
+        compute_config_hash(&member_root, threshold, &compute_tiers_hash(&tiers));
 
     let member_files: Vec<MemberFile> = secrets
         .iter()
@@ -295,6 +401,7 @@ fn new_multisig(members: usize, threshold: u32, id: Option<String>, out: &Path) 
             member_count: members,
             member_root_hex: hex::encode(member_root),
             config_hash_hex: hex::encode(config_hash),
+            tiers: tiers.iter().map(|t| (t.max_amount, t.threshold)).collect(),
         },
     )?;
     write_json(&out.join("members.json"), &member_files)?;
@@ -303,9 +410,12 @@ fn new_multisig(members: usize, threshold: u32, id: Option<String>, out: &Path) 
     println!("id            {}", hex::encode(multisig_id));
     println!("member root   {}", hex::encode(member_root));
     println!(
-        "config hash   {}   (anchors root AND threshold)",
+        "config hash   {}   (anchors root, threshold AND tiers)",
         hex::encode(config_hash)
     );
+    for t in &tiers {
+        println!("tier          <= {} needs {} approvals", t.max_amount, t.threshold);
+    }
     println!(
         "wrote         {}/multisig.json, {}/members.json",
         out.display(),
@@ -321,9 +431,166 @@ fn create_multisig_args(dir: &Path, out: &Path) -> Result<()> {
         format!("--config-hash {}", quoted(&hex32(&ms.config_hash_hex)?)),
         format!("--member-root {}", quoted(&hex32(&ms.member_root_hex)?)),
         format!("--threshold {}", ms.threshold),
+        tiers_flag(&tier_table(&ms)),
     ];
     std::fs::write(out, lines.join("\n") + "\n")?;
     println!("wrote {}", out.display());
+    Ok(())
+}
+
+/// Read the configuration a rotation moves to, and check it is one.
+///
+/// Both halves are refused here rather than on chain: a different multisig id is
+/// not a rotation at all, and rotating to the configuration already in force
+/// spends a threshold of approvals to change nothing (`E_NOOP_ROTATION`, 5026).
+fn read_rotation_target(from: &MultisigFile, to: &Path) -> Result<MultisigFile> {
+    let next: MultisigFile = read_json(&to.join("multisig.json"))?;
+    if next.id_hex != from.id_hex {
+        bail!(
+            "that directory holds a different multisig ({} rather than {}). A rotation \
+             moves one multisig between configurations; it cannot move it to another \
+             multisig.",
+            next.id_hex,
+            from.id_hex
+        );
+    }
+    if next.config_hash_hex == from.config_hash_hex {
+        bail!(
+            "that is the configuration already in force. The verifier refuses it with \
+             E_NOOP_ROTATION (5026)."
+        );
+    }
+    Ok(next)
+}
+
+fn propose_rotation(dir: &Path, proposal_id: &str, to: &Path) -> Result<()> {
+    let ms: MultisigFile = read_json(&dir.join("multisig.json"))?;
+    let next = read_rotation_target(&ms, to)?;
+    let multisig_id = hex32(&ms.id_hex)?;
+    let config_hash = hex32(&ms.config_hash_hex)?;
+    let new_config_hash = hex32(&next.config_hash_hex)?;
+    let pid = hex32(proposal_id)?;
+
+    // A rotation names no recipient and moves nothing: the action it commits to
+    // is the configuration being installed, and nothing else.
+    let action_hash = compute_rotate_action_hash(&multisig_id, &new_config_hash);
+    let proposal_ref = compute_proposal_ref(&multisig_id, &config_hash, &pid, &action_hash);
+
+    let path = proposal_path(dir, proposal_id);
+    if path.exists() {
+        let existing: ProposalFile = read_json(&path)?;
+        if existing.action_hash_hex != hex::encode(action_hash) {
+            bail!(
+                "proposal {proposal_id} is already registered with a different action.\n\
+                 Changing what it does changes proposal_ref, so the {} approval(s)\n\
+                 already gathered do not carry over. Use a fresh proposal id.",
+                existing.approvals.len()
+            );
+        }
+        println!("rotation proposal already registered, unchanged");
+    } else {
+        write_json(
+            &path,
+            &ProposalFile {
+                proposal_id_hex: proposal_id.to_string(),
+                memo: format!("rotate to {}-of-{}", next.threshold, next.member_count),
+                memo_hash_hex: hex::encode([0u8; 32]),
+                recipient_hex: hex::encode([0u8; 32]),
+                amount: 0,
+                action_hash_hex: hex::encode(action_hash),
+                proposal_ref_hex: hex::encode(proposal_ref),
+                approvals: Vec::new(),
+                rotate_to_hex: Some(next.config_hash_hex.clone()),
+            },
+        )?;
+    }
+
+    println!("proposal id   {proposal_id}");
+    println!(
+        "rotates to    {}-of-{}, config {}",
+        next.threshold, next.member_count, next.config_hash_hex
+    );
+    println!("action hash   {}", hex::encode(action_hash));
+    println!(
+        "proposal ref  {}   (scoped to the configuration that raised it)",
+        hex::encode(proposal_ref)
+    );
+    println!(
+        "costs         {} approvals — the default threshold, never a tier",
+        ms.threshold
+    );
+    println!("wrote         {}", path.display());
+    Ok(())
+}
+
+fn rotate_args(dir: &Path, proposal_id: &str, to: &Path, out: &Path) -> Result<()> {
+    let ms: MultisigFile = read_json(&dir.join("multisig.json"))?;
+    let next = read_rotation_target(&ms, to)?;
+    let p: ProposalFile = read_json(&proposal_path(dir, proposal_id))?;
+
+    let Some(rotate_to) = p.rotate_to_hex.as_deref() else {
+        bail!(
+            "proposal {proposal_id} is a transfer: spend it with `execute-args`. The \
+             verifier refuses the other way round with E_WRONG_ACTION_KIND (5027)."
+        );
+    };
+    if rotate_to != next.config_hash_hex {
+        bail!(
+            "this proposal approves a rotation to {rotate_to}, not to {}. Approvals are \
+             bound to the action, so they do not carry to a different one.",
+            next.config_hash_hex
+        );
+    }
+
+    // Governance is priced at the default threshold, never at a tier: letting a
+    // tier lower the bar for changing the member set would make the cheapest
+    // action available the one that rewrites who may act.
+    if p.approvals.len() < ms.threshold as usize {
+        bail!(
+            "only {} of {} approvals gathered: a rotation costs the default threshold \
+             whatever the tiers say, and the verifier would reject this with \
+             E_THRESHOLD_NOT_MET (5010)",
+            p.approvals.len(),
+            ms.threshold
+        );
+    }
+    let chosen = &p.approvals[..ms.threshold as usize];
+    let proposal_ref = hex32(&p.proposal_ref_hex)?;
+    let exec_seed = compute_execution_marker(&proposal_ref);
+    let nullifiers: Vec<String> = chosen.iter().map(|a| a.nullifier_hex.clone()).collect();
+    let new_tiers = tiers_flag(&tier_table(&next));
+
+    let lines = [
+        format!("--multisig-id {}", quoted(&hex32(&ms.id_hex)?)),
+        format!("--config-hash {}", quoted(&hex32(&ms.config_hash_hex)?)),
+        format!("--member-root {}", quoted(&hex32(&ms.member_root_hex)?)),
+        format!("--threshold {}", ms.threshold),
+        tiers_flag(&tier_table(&ms)),
+        format!("--new-config-hash {}", quoted(&hex32(&next.config_hash_hex)?)),
+        format!("--new-member-root {}", quoted(&hex32(&next.member_root_hex)?)),
+        format!("--new-threshold {}", next.threshold),
+        format!("--new-tiers {}", &new_tiers["--tiers ".len()..]),
+        format!("--proposal-ref {}", quoted(&proposal_ref)),
+        format!("--approval-nullifiers '{}'", nullifiers.join(",")),
+        format!("--execution-marker-seed {}", quoted(&exec_seed)),
+    ];
+    std::fs::write(out, lines.join("\n") + "\n")?;
+
+    let markers: Vec<String> = chosen.iter().map(|a| a.marker_seed_hex.clone()).collect();
+    std::fs::write(out.with_extension("markers"), markers.join("\n") + "\n")?;
+
+    println!("rotates to    {}", next.config_hash_hex);
+    println!(
+        "approvals     {} (default threshold {})",
+        chosen.len(),
+        ms.threshold
+    );
+    println!("exec marker   {}", hex::encode(exec_seed));
+    println!("wrote         {}", out.display());
+    println!(
+        "wrote         {}   (marker seeds, in nullifier order)",
+        out.with_extension("markers").display()
+    );
     Ok(())
 }
 
@@ -370,6 +637,7 @@ fn propose(dir: &Path, proposal_id: &str, recipient: &str, amount: u128, memo: &
                 action_hash_hex: hex::encode(action_hash),
                 proposal_ref_hex: hex::encode(proposal_ref),
                 approvals: Vec::new(),
+                rotate_to_hex: None,
             },
         )?;
     }
@@ -408,12 +676,34 @@ fn fund_treasury_args(dir: &Path, amount: u128, out: &Path) -> Result<()> {
 /// the address they compute belongs to the program they are actually talking to.
 fn treasury_seeds(dir: &Path) -> Result<()> {
     let ms: MultisigFile = read_json(&dir.join("multisig.json"))?;
-    let seeds = multisig_sdk::Multisig::new(
+    let built = multisig_sdk::Multisig::new(
         hex32(&ms.id_hex)?,
         hex32(&ms.member_root_hex)?,
         ms.threshold,
     )?
-    .treasury_seeds();
+    .with_tiers(&tier_table(&ms))?;
+
+    // The seeds are an address, and an address computed from the wrong
+    // configuration is not a near miss — it is a different account. This
+    // rebuilt the commitment from the file's members and threshold and forgot
+    // its tiers, so a tiered multisig reported the treasury of the untiered one:
+    // a real address, owned by nobody, that reads as an empty account. Nothing
+    // failed; the balances were simply read from somewhere else. So the rebuilt
+    // commitment is now checked against the one the file records, and a
+    // disagreement stops here rather than becoming a number in a document.
+    if hex::encode(built.config_hash()) != ms.config_hash_hex {
+        bail!(
+            "the configuration in {} does not hash to the config_hash it records.\n\
+             recorded:   {}\n\
+             recomputed: {}\n\
+             Every address this multisig uses derives from that value, so nothing \
+             downstream would be pointing at the right account.",
+            dir.join("multisig.json").display(),
+            ms.config_hash_hex,
+            hex::encode(built.config_hash())
+        );
+    }
+    let seeds = built.treasury_seeds();
     println!(
         "{} {} {}",
         hex::encode(seeds[0]),
@@ -435,6 +725,13 @@ fn create_proposal_args(dir: &Path, proposal_id: &str, out: &Path) -> Result<()>
         format!("--recipient {}", quoted(&hex32(&p.recipient_hex)?)),
         format!("--amount {}", p.amount),
         format!("--memo-hash {}", quoted(&hex32(&p.memo_hash_hex)?)),
+        format!(
+            "--rotate-to {}",
+            quoted(&match &p.rotate_to_hex {
+                Some(h) => hex32(h)?,
+                None => [0u8; 32],
+            })
+        ),
     ];
     std::fs::write(out, lines.join("\n") + "\n")?;
     println!("wrote {}", out.display());
@@ -539,6 +836,7 @@ fn approve_args(
         format!("--config-hash {}", quoted(&hex32(&ms.config_hash_hex)?)),
         format!("--member-root {}", quoted(&member_root)),
         format!("--threshold {}", ms.threshold),
+        tiers_flag(&tier_table(&ms)),
         format!("--proposal-ref {}", quoted(&proposal_ref)),
         format!("--nullifier {}", quoted(&nullifier)),
         format!("--approval-marker-seed {}", quoted(&marker_seed)),
@@ -595,18 +893,31 @@ fn execute_args(dir: &Path, proposal_id: &str, out: &Path) -> Result<()> {
     let p: ProposalFile = read_json(&proposal_path(dir, proposal_id))?;
     let proposal_ref = hex32(&p.proposal_ref_hex)?;
 
-    if p.approvals.len() < ms.threshold as usize {
+    if p.rotate_to_hex.is_some() {
         bail!(
-            "only {} of {} approvals gathered: the verifier would reject this with \
-             E_THRESHOLD_NOT_MET (5010)",
+            "this proposal is a rotation: spend it with `rotate-args`, not \
+             `execute-args`. The verifier refuses the other way round with \
+             E_WRONG_ACTION_KIND (5027)."
+        );
+    }
+    // A tier can lower what this transfer costs. Gathering the default when a
+    // tier asks for two is minutes of proving spent for nothing; presenting two
+    // when no tier covers the amount is a rejection on chain.
+    let tiers = tier_table(&ms);
+    let need = required_threshold(p.amount, ms.threshold, &tiers);
+    if p.approvals.len() < need as usize {
+        bail!(
+            "only {} of {} approvals gathered for an amount of {}: the verifier \
+             would reject this with E_THRESHOLD_NOT_MET (5010)",
             p.approvals.len(),
-            ms.threshold
+            need,
+            p.amount
         );
     }
 
     // Present exactly `threshold` approvals. Presenting more would also pass,
     // but every extra marker account costs compute for no additional guarantee.
-    let chosen = &p.approvals[..ms.threshold as usize];
+    let chosen = &p.approvals[..need as usize];
     let nullifiers: Vec<String> = chosen
         .iter()
         .map(|a| a.nullifier_hex.clone())
@@ -618,6 +929,7 @@ fn execute_args(dir: &Path, proposal_id: &str, out: &Path) -> Result<()> {
         format!("--config-hash {}", quoted(&hex32(&ms.config_hash_hex)?)),
         format!("--member-root {}", quoted(&hex32(&ms.member_root_hex)?)),
         format!("--threshold {}", ms.threshold),
+        tiers_flag(&tiers),
         format!("--proposal-ref {}", quoted(&proposal_ref)),
         format!("--approval-nullifiers '{}'", nullifiers.join(",")),
         format!("--execution-marker-seed {}", quoted(&exec_seed)),
@@ -631,8 +943,9 @@ fn execute_args(dir: &Path, proposal_id: &str, out: &Path) -> Result<()> {
 
     println!("proposal ref   {}", hex::encode(proposal_ref));
     println!(
-        "approvals      {} (threshold {})",
+        "approvals      {} (needs {}, default {})",
         chosen.len(),
+        need,
         ms.threshold
     );
     println!("exec marker    {}", hex::encode(exec_seed));
@@ -649,9 +962,10 @@ fn main() -> Result<()> {
         Cmd::NewMultisig {
             members,
             threshold,
+            tiers,
             id,
             out,
-        } => new_multisig(members, threshold, id, &out),
+        } => new_multisig(members, threshold, &tiers, id, &out),
         Cmd::CreateMultisigArgs { dir, out } => create_multisig_args(&dir, &out),
         Cmd::FundTreasuryArgs { dir, amount, out } => fund_treasury_args(&dir, amount, &out),
         Cmd::TreasurySeeds { dir } => treasury_seeds(&dir),
@@ -675,6 +989,17 @@ fn main() -> Result<()> {
             out,
         } => approve_args(&dir, &proposal_id, member, msk, &out),
         Cmd::Status { dir, proposal_id } => status(&dir, &proposal_id),
+        Cmd::ProposeRotation {
+            dir,
+            proposal_id,
+            to,
+        } => propose_rotation(&dir, &proposal_id, &to),
+        Cmd::RotateArgs {
+            dir,
+            proposal_id,
+            to,
+            out,
+        } => rotate_args(&dir, &proposal_id, &to, &out),
         Cmd::ExecuteArgs {
             dir,
             proposal_id,

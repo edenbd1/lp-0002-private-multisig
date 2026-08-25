@@ -60,7 +60,7 @@ impl Fixture {
 
     fn proposal_ref(&self, proposal_id: &[u8; 32], action: &[u8]) -> [u8; 32] {
         let action_hash = compute_action_hash(&self.multisig_id, action);
-        let config_hash = compute_config_hash(&self.root, self.threshold);
+        let config_hash = compute_config_hash(&self.root, self.threshold, &no_tiers_hash());
         compute_proposal_ref(&self.multisig_id, &config_hash, proposal_id, &action_hash)
     }
 
@@ -209,8 +209,8 @@ fn invented_single_member_root_does_not_match_the_committed_one() {
     // crates/multisig-verifier-tests.
     assert_ne!(fake_root, f.root, "an invented set has a different root");
     assert_ne!(
-        compute_config_hash(&fake_root, f.threshold),
-        compute_config_hash(&f.root, f.threshold),
+        compute_config_hash(&fake_root, f.threshold, &no_tiers_hash()),
+        compute_config_hash(&f.root, f.threshold, &no_tiers_hash()),
         "a different root gives a different config hash, hence a different PDA"
     );
 }
@@ -426,14 +426,14 @@ fn an_approval_is_scoped_to_its_multisig() {
 #[test]
 fn lowering_the_threshold_changes_the_anchored_config() {
     let f = Fixture::new();
-    let honest = compute_config_hash(&f.root, f.threshold);
+    let honest = compute_config_hash(&f.root, f.threshold, &no_tiers_hash());
     for forged in [1u32, 2, 4, 5, 0, u32::MAX] {
         if forged == f.threshold {
             continue;
         }
         assert_ne!(
             honest,
-            compute_config_hash(&f.root, forged),
+            compute_config_hash(&f.root, forged, &no_tiers_hash()),
             "threshold {forged} must not resolve to the honest multisig PDA"
         );
     }
@@ -444,8 +444,8 @@ fn swapping_the_member_set_changes_the_anchored_config() {
     let f = Fixture::new();
     let attacker_only = build_member_tree(&[Member::new(203).leaf()]).0;
     assert_ne!(
-        compute_config_hash(&f.root, f.threshold),
-        compute_config_hash(&attacker_only, f.threshold)
+        compute_config_hash(&f.root, f.threshold, &no_tiers_hash()),
+        compute_config_hash(&attacker_only, f.threshold, &no_tiers_hash())
     );
 }
 
@@ -489,7 +489,7 @@ fn marker_kinds_never_collide_for_the_same_proposal() {
     // And neither collides with the config commitment.
     assert_ne!(
         compute_execution_marker(&pref),
-        compute_config_hash(&f.root, f.threshold)
+        compute_config_hash(&f.root, f.threshold, &no_tiers_hash())
     );
 }
 
@@ -562,7 +562,7 @@ fn a_member_listed_twice_still_gets_one_vote() {
 
     let multisig_id = [0xC3; 32];
     let action_hash = compute_action_hash(&multisig_id, b"drain the treasury");
-    let config_hash = compute_config_hash(&root, 2);
+    let config_hash = compute_config_hash(&root, 2, &no_tiers_hash());
     let pref = compute_proposal_ref(&multisig_id, &config_hash, &[1u8; 32], &action_hash);
 
     // Both entries prove membership successfully...

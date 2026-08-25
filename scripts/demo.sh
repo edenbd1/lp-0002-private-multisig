@@ -52,6 +52,7 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 
 MSIG_ID=00000000000000000000000000000000000000000000000000000000000000a1
 PROP_ID=0000000000000000000000000000000000000000000000000000000000000001
+ROT_ID=0000000000000000000000000000000000000000000000000000000000000002
 MEMO="transfer 250 LEZ to the grants treasury"
 # A payee, and an amount. A proposal that moves nothing would give the threshold
 # nothing to gate, which is why the program refuses one.
@@ -87,7 +88,7 @@ else
   echo "   program_id_pin recomputes them from these same committed binaries."
 fi
 
-rule "1. the seven bindings, in the circuit — and the account layouts"
+rule "1. the nine bindings, in the circuit — and the account layouts"
 echo "25 adversarial tests over the approval logic: non-members, borrowed paths,"
 echo "invented roots, forged nullifiers, bait-and-switch actions, padding leaves,"
 echo "and a member listed twice still getting exactly one vote."
@@ -159,9 +160,57 @@ $M status --dir "$WORK" --proposal-id "$PROP_ID"
 echo
 $M execute-args --dir "$WORK" --proposal-id "$PROP_ID" --out "$WORK/exec.args"
 
-rule "9. what an observer sees"
+rule "9. a spending tier: the same members, a cheaper small transfer"
+echo "Below the cap two approvals suffice where the default asks three. A tier may"
+echo "only ever LOWER the bar: caps must strictly increase, thresholds must not"
+echo "fall, and none may be zero or above the default — so no legal table makes a"
+echo "larger transfer easier than a smaller one."
+$M new-multisig --members 5 --threshold 3 --tier 300:2 --id "$MSIG_ID" --out "$WORK/tiered" \
+  | sed 's/^/   /'
+$M propose --dir "$WORK/tiered" --proposal-id "$PROP_ID" \
+  --recipient "$RECIPIENT" --amount "$AMOUNT" --memo "$MEMO" >/dev/null
+for i in 0 3; do
+  $M approve-args --dir "$WORK/tiered" --proposal-id "$PROP_ID" --member "$i" \
+    --out "$WORK/tiered/a$i.args" >/dev/null
+done
+echo
+echo "Two approvals, and the arguments are emitted — the tier priced it:"
+$M execute-args --dir "$WORK/tiered" --proposal-id "$PROP_ID" --out "$WORK/tiered/exec.args" \
+  | sed 's/^/   /'
+echo
+echo "A table that would RAISE the bar is refused before any proving happens:"
+if $M new-multisig --members 5 --threshold 3 --tier 300:4 --out "$WORK/badtier" 2>&1 \
+   | sed 's/^/   /'; then
+  echo "   UNEXPECTED: a tier above the default threshold was accepted" >&2; exit 1
+fi
+
+rule "10. rotating the member set, without rewriting it"
+echo "A rotation anchors a SECOND configuration at its own address, with its own"
+echo "treasury, and marks the first superseded. Every guarantee the address gives"
+echo "the old configuration, the new one has by the same construction — and"
+echo "proposals raised under the old one live at addresses the new one never reads."
+$M new-multisig --members 5 --threshold 4 --id "$MSIG_ID" --out "$WORK/next" | sed 's/^/   /'
+echo
+$M propose-rotation --dir "$WORK" --proposal-id "$ROT_ID" --to "$WORK/next" | sed 's/^/   /'
+for i in 0 3 4; do
+  $M approve-args --dir "$WORK" --proposal-id "$ROT_ID" --member "$i" \
+    --out "$WORK/r$i.args" >/dev/null
+done
+echo
+echo "Three approvals — the DEFAULT threshold, never a tier. Pricing governance by"
+echo "tier would make the cheapest action available the one that rewrites who may act."
+$M rotate-args --dir "$WORK" --proposal-id "$ROT_ID" --to "$WORK/next" --out "$WORK/rot.args" \
+  | sed 's/^/   /'
+echo
+echo "And the two action shapes cannot be spent by each other's instruction:"
+if $M execute-args --dir "$WORK" --proposal-id "$ROT_ID" --out "$WORK/wrong.args" 2>&1 \
+   | sed 's/^/   /'; then
+  echo "   UNEXPECTED: a rotation was spendable by execute" >&2; exit 1
+fi
+
+rule "11. what an observer sees"
 if ! have python3; then
-  skip "9. what an observer sees" "python3"
+  skip "11. what an observer sees" "python3"
 else
 python3 - "$WORK/proposals/$PROP_ID.json" <<'PY'
 import json, sys
@@ -178,21 +227,21 @@ criterion, and it holds against insiders, not just outsiders.""")
 PY
 fi
 
-rule "10. compute cost"
+rule "12. compute cost"
 # Measured by executing the guest, so it needs r0vm for the same reason step 2
 # does. The recorded figures are in docs/cu-costs.md.
 if have r0vm; then
   cargo test -p multisig-verifier-tests --quiet -- --ignored --nocapture 2>&1 \
     | grep -E 'approve |execute ' | sed 's/^/   /'
 else
-  skip "10. compute cost" "the risc0 VM r0vm ('cargo risczero install')"
+  skip "12. compute cost" "the risc0 VM r0vm ('cargo risczero install')"
   echo "   Nothing is measured here without it. The figures this step prints when"
   echo "   it runs are recorded in docs/cu-costs.md and re-measured by CI."
 fi
 
-rule "11. the Basecamp package"
+rule "13. the Basecamp package"
 if ! have python3; then
-  skip "11. the Basecamp package" "python3"
+  skip "13. the Basecamp package" "python3"
 elif [ -f app/lp-0002-multisig.lgx ]; then
   echo "The committed .lgx carries two variants — darwin-arm64 and linux-amd64 —"
   echo "so it opens on the machine a reviewer actually uses. Its manifest hashes"
@@ -205,7 +254,7 @@ else
   echo "  python3 scripts/package-lgx.py"
 fi
 
-rule "12. the chain, read straight off the chain"
+rule "14. the chain, read straight off the chain"
 echo "The multisig above is local. This checks what is actually on the public"
 echo "testnet, from hashes committed in this repository — no local state needed."
 echo

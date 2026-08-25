@@ -61,7 +61,7 @@ cd lp-0002-private-multisig
 ```
 
 No network, no funded account, no sequencer required. The demo runs the 25
-circuit tests, the 59 tests against the built verifier binary through the
+circuit tests, the 84 tests against the built verifier binary through the
 sequencer's own executor — the forgeries it refuses, the balances it moves, and
 the records it writes — a full 3-of-5 lifecycle, and reports the measured
 compute cost.
@@ -125,32 +125,33 @@ To rebuild the on-chain programs (needs Docker and `cargo-risczero`):
 
 ### Test inventory
 
-`cargo test --workspace` runs **97** tests. Counted, so you can check the claim:
+`cargo test --workspace` runs **130** tests. Counted, so you can check the claim:
 
 | Suite | Count | What it establishes |
 |---|---:|---|
 | `multisig-core` — `approve_adversarial` | 25 | The circuit-side bindings: non-members, borrowed Merkle paths, invented roots, forged nullifiers, bait-and-switch actions, the padding sentinel, tree construction |
-| `multisig-core` — `state` unit tests | 9 | The published account layouts: exact lengths, refused formats, refused trailing bytes, and a round trip through the offsets `docs/account-layout.md` gives |
+| `multisig-core` — unit tests | 16 | The published account layouts and the tier wire format: exact lengths, refused formats, refused trailing bytes, and a round trip through the offsets `docs/account-layout.md` gives |
 | `multisig-verifier-tests` — `verifier_rejects` | 30 | The **built verifier binary** through the sequencer's own executor: 5 honest controls and 25 rejections — 19 asserting a documented error code, 6 caught one layer earlier by SPEL's address validation or LEZ's init guard |
 | `multisig-verifier-tests` — `state_and_transfer` | 22 | What passing the gate *does*: the treasury falls by the proposed amount and the recipient rises by it, read out of the guest's own journal; every claimed account decodes at the published offsets; and fifteen ways of redirecting, draining, replaying or corrupting the payment are refused |
-| `multisig-verifier-tests` — `idl_contract` | 5 | The IDL carries every error code and every record layout the guest declares, the instruction order has not moved, `docs/error-codes.md` documents every code, and `scripts/pda.py` derives the same treasury address the program does |
-| `multisig-verifier-tests` — `program_id_pin` | 2 | The verifier pins the committed membership binary, and the pin is not a placeholder |
-| `multisig-sdk` — `cross_check` + doctest | 2 | Every SDK derivation equals the `multisig-core` one the chain re-derives, and the client-side guards hold |
+| `multisig-verifier-tests` — `tiers_and_rotation` | 23 | Spending tiers may only ever lower the bar, a rotation replaces a configuration rather than adding one, and a retired one can no longer spend |
+| `multisig-verifier-tests` — `idl_contract` | 6 | The IDL carries every error code and every record layout the guest declares, the instruction order has not moved, `docs/error-codes.md` documents every code, and `scripts/pda.py` derives the same treasury address the program does |
+| `multisig-verifier-tests` — `program_id_pin` | 3 | The verifier pins the committed membership binary, and the pin is not a placeholder |
+| `multisig-sdk` — `cross_check` + doctest | 3 | Every SDK derivation equals the `multisig-core` one the chain re-derives, and the client-side guards hold |
 | `multisig-cli` — `resumable` | 2 | Through the **built binary**, one process per step: a partial set of approvals survives client restarts, and a non-member is refused in milliseconds instead of after minutes of proving |
 
-25 + 9 + 30 + 22 + 5 + 2 + 2 + 2 = 97, and every row's own breakdown adds up to
-its count.
+25 + 16 + 30 + 22 + 23 + 6 + 3 + 3 + 2 = 130, and every row's own breakdown adds
+up to its count.
 
 One further test is `#[ignore]`d: it reports the measured compute cost rather
 than asserting a property. Run it with
 `cargo test -p multisig-verifier-tests --test verifier_rejects -- --ignored --nocapture`.
 
-[`docs/error-codes.md`](docs/error-codes.md) counts **59** rather than 97. That
+[`docs/error-codes.md`](docs/error-codes.md) counts **84** rather than 130. That
 is `multisig-verifier-tests` alone — the suites that run the built binary — which
-is the inventory behind the error-code table. 97 is what `cargo test --workspace`
-runs. Both numbers are in CI: the `workspace` job runs `multisig-core`,
-`multisig-sdk` and `multisig-cli`, the `verifier` job runs
-`multisig-verifier-tests`, and between them all 97 run on every push.
+is the inventory behind the error-code table. 130 is what
+`cargo test --workspace` runs. Both numbers are in CI: the `workspace` job runs
+`multisig-core`, `multisig-sdk` and `multisig-cli`, the `verifier` job runs
+`multisig-verifier-tests`, and between them all 130 run on every push.
 
 **The deployed program is genuinely under test.** The two guest crates are
 excluded from the host workspace because they build for
@@ -182,6 +183,61 @@ A member who holds only their own key uses `--msk <hex>` instead of `--member <i
 Partial approvals are recorded in `ms/proposals/<id>.json` as they are generated,
 so a threshold can be gathered across restarts, days, and separate member
 sessions.
+
+### Spending tiers
+
+A tier lets small transfers clear with fewer approvals. It is declared at
+creation and never afterwards, because the table is folded into `config_hash`,
+which is a PDA seed:
+
+```bash
+msig new-multisig --members 5 --threshold 3 \
+     --tier 300:2 --tier 10000:3 --out ms/
+```
+
+Below 300, two approvals; above 10,000, the default three. A tier may only ever
+*lower* the bar: caps must strictly increase, thresholds must not fall, and none
+may be zero or above the default. There is therefore no legal table that makes a
+larger transfer easier than a smaller one, and `msig` refuses an illegal one
+before any proving happens — using the guest's own `validate_tiers`, not a copy
+of its rules.
+
+Handing `execute` a more generous table than the one anchored does not work
+twice over: the table it presents must hash to the `config_hash` it also
+presents, and that `config_hash` is the address it reads the multisig from. A
+forged table therefore resolves to an account nobody created. Both halves are
+tested in `crates/multisig-verifier-tests/tests/tiers_and_rotation.rs`.
+
+### Rotating the member set
+
+A rotation does not mutate the multisig. It anchors a **second** configuration at
+its own address, with its own treasury, and records that address in the first as
+`superseded_by`:
+
+```bash
+msig new-multisig --members 5 --threshold 4 --id <same id> --out next/
+msig propose-rotation --dir ms/ --proposal-id 02..02 --to next/
+msig approve-args --dir ms/ --proposal-id 02..02 --member 0 --out ms/r0.args
+# … gather the default threshold …
+msig rotate-args --dir ms/ --proposal-id 02..02 --to next/ --out ms/rot.args
+```
+
+Three consequences worth stating, because they fall out of the construction
+rather than being checked for:
+
+- **Every guarantee the address gives the old configuration, the new one has by
+  the same construction.** There is no mutable member set to defend.
+- **No stale-proposal check exists, and none is needed.** `proposal_ref` is
+  derived through `config_hash`, so proposals raised under the old configuration
+  live at addresses the new one never reads.
+- **A rotation costs the default threshold, never a tier.** Tiers price
+  transfers; rewriting who may act is not a transfer, and letting a tier lower
+  that bar would make the cheapest action available the one that hands the
+  multisig to someone else.
+
+Once superseded, the old configuration cannot approve, execute or rotate again
+(`5025`) — without that, a rotation would *add* a member set rather than replace
+one, and every past member set would keep its keys to the treasury forever.
 
 ### The same lifecycle from the Basecamp app
 
@@ -244,10 +300,10 @@ all the chain records and all the other members can see.
 
 | Path | What |
 |---|---|
-| `crates/multisig-core` | Shared primitives, the in-circuit approval logic, and the account-layout codec. `no_std`. 34 tests |
+| `crates/multisig-core` | Shared primitives, the in-circuit approval logic, and the account-layout codec. `no_std`. 41 tests |
 | `crates/membership-circuit/methods/guest-lez` | The membership proof as a native LEZ program, so the privacy circuit composes it with `env::verify` |
 | `crates/multisig-verifier-spel/methods/guest` | The on-chain verifier: `create_multisig`, `fund_treasury`, `create_proposal`, `approve`, `execute` |
-| `crates/multisig-verifier-tests` | 59 tests against the built binary, through the sequencer's own executor: 30 rejections and controls, 22 on the state it writes and the value it moves, 5 on the IDL and the docs, 2 pinning the membership binary |
+| `crates/multisig-verifier-tests` | 84 tests against the built binary, through the sequencer's own executor: 30 rejections and controls, 22 on the state it writes and the value it moves, 5 on the IDL and the docs, 2 pinning the membership binary |
 | `crates/multisig-sdk` | The reusable client library for Logos modules. Transport-agnostic |
 | `crates/multisig-cli` | `msig`, the command line client |
 | `app/` | The Basecamp GUI |
@@ -288,7 +344,7 @@ not supported"*.
 
 ## On the public LEZ testnet
 
-**Deployed 2026-08-24**, blocks 20856-20880: both programs, a 2-of-3 multisig, a
+**Deployed 2026-08-24**, blocks 23028-23066: both programs, a 2-of-3 multisig, a
 funded treasury, a proposal, two approvals on the privacy-preserving path, and an
 execution that moved the money.
 
@@ -305,13 +361,13 @@ control; if it ever resolves the run is abandoned rather than reported green.
 | Step | Transaction | Block |
 |---|---|---|
 | deploy `membership_lez` | `fb8eb10f7f394286c109cb6502a1c95294180523f30d06f707fc087a589bea98` | 4459 |
-| deploy `multisig_verifier` | `2d6f720e3c6dd8d876c8617eada5ddcd3c13a978b2edcb1921a3de73231e82e2` | 20856 |
-| `create_multisig` | `a8d8422ae2c46566b15c31954647974d3e95eadbe0b560eac4ab609c9a25ab55` | 20857 |
-| `fund_treasury` | `2844eef12695ab0d3c6d55832e94ae316638dd7400735d2f393875a30bb6a5c2` | 20858 |
-| `create_proposal` | `b194da9ba24e1a17a7bec0d64da0d252a96c6edc96208a778a7e77e71fed9826` | 20859 |
-| `approve` (member A, **privacy tx**) | `d13813094f36c1b60c02350adbc272ce5aa88dd7d87ab409a3e36436e70a91c0` | 20869 |
-| `approve` (member B, **privacy tx**) | `9f7c541c187c6ed284f67b0f5c6f0942de0ed98ff7e589dc81955ceed7219719` | 20879 |
-| `execute` | `00ea68384758097dba8b648605b4ecf65d9535ba6b497af335d4fcf2be7f75ae` | 20880 |
+| deploy `multisig_verifier` | `268834b601f78b59090e90f8f10fd8ce3b526528e1224983edba95224be31aa3` | 23028 |
+| `create_multisig` | `dce8fd4dc4b53216d7271466ba66290b3bbfb2cf125701cd7c97a68cb69d1db0` | 23029 |
+| `fund_treasury` | `993d1f7c2b27fcab1abf759513f7bf7c64449a547b608e692deae67ec94f640b` | 23030 |
+| `create_proposal` | `54a300eb8c0bec27adb40b3ab36ff653b6234dc4deab2a47ac89a0a665c4fdd3` | 23031 |
+| `approve` (member A, **privacy tx**) | `1a5e529d8b9c87ec781b6e8cc2d4bc71c149e7f45f9ce66711108a22dbf6fcd5` | 23039 |
+| `approve` (member B, **privacy tx**) | `28a07e8df970322b643d7d5d6c74640f49e6d0260964255909181fdc815e8397` | 23065 |
+| `execute` | `d0bab2943f09d3a27a10610c49c2a6cce1a2c94b93ded6f341ce29005ba8ca7c` | 23066 |
 
 Only the verifier was redeployed. `membership_lez` rebuilds to the same ImageID
 byte for byte, and a LEZ deployment hash is `SHA256(borsh(bytecode))`, so its
@@ -321,12 +377,12 @@ Six accounts came out of it, all owned by the verifier program:
 
 | Account | Address | Balance |
 |---|---|---|
-| multisig | `Hx7Ni2riURJfgng4QAXb3RBq9ZMjrvwj7JREjut9PuBC` | 0 |
-| treasury | `xtngupTp3tcQU9faCbND73KhCpYqfBqKhmoepQAXoVx` | **2 → 1** |
-| proposal | `9EjLSnKjXB4r8SgBEHcgqf36nkqfyUVXuqSsDzCTRvg7` | 0 |
-| approval marker A | `Awd6RNVpMdPkvALi6ubdZyffKb3Bw3HimbUKtUP7YV6F` | 0 |
-| approval marker B | `6dmnyiGZu6KtVy6jxyEMvb4HG8N59AuKey7wB9RjbCTV` | 0 |
-| execution marker | `BP6buTDdFThPYWU3NFGSsD8k3ymewStQo4hj86tAwq1a` | 0 |
+| multisig | `C9CgRDNfrCUJMzYG1YbskwViRTpDypty74YC2KThcxL3` | 0 |
+| treasury | `FyTtsh2h5fC85vrei19ThtM4yRThHEH4MGtXH1azrdhM` | **2 → 1** |
+| proposal | `5kM4uZdHgwjanoX82PtmeRUptkekm4EfjCzvmz6r7MHz` | 0 |
+| approval marker A | `5YajQiNzWfsy5VnDQxEKh7UPN6mXcqFsY3XTWp9GhWZg` | 0 |
+| approval marker B | `3fWFBfi8VWy9NadC6vE5KXtmjj9MzYkC9p2XWHX6ANit` | 0 |
+| execution marker | `J1N6WWpHVPh6pBpXmKAe522JBEWaaRT3jymaWcczg5AG` | 0 |
 
 The recipient — `8kexXda8j5hPegPeHXzUM9PhvjYNFLpN8wN8PvG5iDhn`, owned by the
 native transfer program and not by the verifier — went **0 → 1**. The treasury
@@ -352,7 +408,7 @@ Full detail, including how to re-verify each one yourself, in
 | Program | ImageID |
 |---|---|
 | `membership_lez` | `56f784d6b37f5cbac85d2eca3e28f56346e8739e6c22cb15a1b7165616758e31` |
-| `multisig_verifier` | `1346b65293ac9b11d4b1029a0d02559462238582124062925a3ad24298ff4e1e` |
+| `multisig_verifier` | `a8a87f8b456299144236f42f194f1b85c11265763a976c055a7f471b61500750` |
 
 The verifier pins the membership program id as a constant, so a chained call can
 only ever reach the audited binary. `./scripts/build-programs.sh --check` fails if

@@ -147,11 +147,14 @@ jobs:
       - name: The IDL carries the guest's error codes
         run: python3 scripts/idl-errors.py --check
 
-      # The verifier hard-codes MEMBERSHIP_LEZ_PROGRAM_ID so a chained call can
-      # only reach the audited membership binary. Drift is a security bug, so it
-      # fails CI. Computed from the committed files, so it needs no spel, no
-      # Docker and no network.
-      - name: Membership program id pin
+      # Two pins, both computed from committed files — no spel, no Docker, no
+      # network. The verifier hard-codes MEMBERSHIP_LEZ_PROGRAM_ID so a chained
+      # call can only reach the audited membership binary, and drift there is a
+      # security bug. And every ImageID the documentation quotes must be one this
+      # checkout builds — `check-quoted-hashes.py` cannot catch that, because it
+      # compares a SHA256 of a file and an ImageID is a different function of the
+      # same bytes.
+      - name: Program id and documented ImageID pins
         run: cargo test -p multisig-verifier-tests --test program_id_pin
 
   # A green run is the evidence for the criteria nobody re-runs: the end-to-end

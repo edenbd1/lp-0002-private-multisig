@@ -69,6 +69,15 @@ THRESHOLD="${THRESHOLD:-3}"
 : "${RECIPIENT:?set RECIPIENT to a Public account id held by the native transfer program}"
 FUND="${FUND:-500}"
 AMOUNT="${AMOUNT:-250}"
+# Spending tiers, as `MAX:THRESHOLD` separated by spaces — e.g. TIERS="300:2".
+# Empty means none, which is what every deployment before tiers existed
+# anchored. A tier may only lower the bar, and the CLI refuses an illegal
+# table before anything reaches the chain.
+TIERS="${TIERS:-}"
+# Set to 1 to append a rotation: a second configuration anchored at its own
+# address, the first marked superseded. Off by default because it costs one
+# real proof per approval and one private approver account each.
+ROTATE="${ROTATE:-0}"
 if [ "$RECIPIENT" = "$SIGNER" ]; then
   echo "RECIPIENT must differ from SIGNER: LEZ refuses a transaction naming one account twice" >&2
   exit 1
@@ -241,7 +250,10 @@ deploy "$VERIFIER"   "deploy:multisig_verifier" || exit 1
 
 echo "[2/8] build a ${THRESHOLD}-of-${MEMBERS} member set"
 MSIG_ID=$(python3 -c "import os;print(os.urandom(32).hex())")
-"$CLI" new-multisig --members "$MEMBERS" --threshold "$THRESHOLD" --id "$MSIG_ID" --out "$WORK"
+TIER_FLAGS=()
+for t in $TIERS; do TIER_FLAGS+=(--tier "$t"); done
+"$CLI" new-multisig --members "$MEMBERS" --threshold "$THRESHOLD" \
+  ${TIER_FLAGS[@]+"${TIER_FLAGS[@]}"} --id "$MSIG_ID" --out "$WORK"
 "$CLI" create-multisig-args --dir "$WORK" --out "$WORK/create.args" >/dev/null
 
 echo "[3/8] commit the multisig and open its treasury"
@@ -289,9 +301,16 @@ read_args "$WORK/prop.args"
   2>&1 | tee "$WORK/prop.out" | tail -3
 require_tx "$WORK/prop.out" "create_proposal"
 
-echo "[6/8] gather $THRESHOLD approvals on the privacy-preserving path"
+echo "[6/8] gather approvals on the privacy-preserving path"
 echo "      each is a real proof composed on chain. Cost is per machine and"
 echo "      depends on what else is proving: timed below, not predicted."
+# Gather until the proposal has what it needs, not a fixed count. With no tiers
+# that is the threshold and this loop runs exactly THRESHOLD times. With a tier
+# covering this amount it stops earlier — and stopping earlier is the tier doing
+# something, measured in proofs not asserted in prose. `execute-args` is the
+# oracle because it applies `required_threshold`, the same function the chain
+# applies.
+GATHERED=0
 for i in $(seq 0 $((THRESHOLD-1))); do
   echo "-- member $i"
   # Timed, because "proof generation time" is a required benchmark and a number
@@ -313,6 +332,16 @@ for i in $(seq 0 $((THRESHOLD-1))); do
   printf '   approval %d: %ds wall clock (witness + proof + submit + confirm)\n' \
     "$i" "$((T_APPROVE_END - T_WITNESS_START))"
   printf 'timing:approve:member_%s\t%ss\n' "$i" "$((T_APPROVE_END - T_WITNESS_START))" >> "$LOG"
+  GATHERED=$((GATHERED + 1))
+  if "$CLI" execute-args --dir "$WORK" --proposal-id "$PROP_ID" \
+       --out "$WORK/exec.args" >/dev/null 2>&1; then
+    if [ "$GATHERED" -lt "$THRESHOLD" ]; then
+      echo "      $GATHERED approvals carry $AMOUNT — a tier priced it below the"
+      echo "      default threshold of $THRESHOLD, so the remaining proofs are not needed"
+      printf 'tiered:approvals_used\t%s of %s\n' "$GATHERED" "$THRESHOLD" >> "$LOG"
+    fi
+    break
+  fi
 done
 
 echo "[7/8] execute — the step that moves the money"
@@ -355,6 +384,71 @@ if [ "$((T_BEFORE - AMOUNT))" != "$T_AFTER" ] || [ "$((R_BEFORE + AMOUNT))" != "
   exit 1
 fi
 echo "      moved $AMOUNT, both sides, in the execute transaction"
+
+if [ "$ROTATE" = "1" ]; then
+  echo
+  echo "[9/11] define the configuration to rotate into"
+  # Same multisig id, a different member set and threshold. A rotation does not
+  # rewrite this multisig: it anchors a SECOND one at its own address, with its
+  # own treasury, and marks this one superseded.
+  NEXT_THRESHOLD="${NEXT_THRESHOLD:-$MEMBERS}"
+  "$CLI" new-multisig --members "$MEMBERS" --threshold "$NEXT_THRESHOLD" \
+    --id "$MSIG_ID" --out "$WORK/next"
+  ROT_ID=$(python3 -c "import os;print(os.urandom(32).hex())")
+  "$CLI" propose-rotation --dir "$WORK" --proposal-id "$ROT_ID" --to "$WORK/next"
+  read_args "$WORK/prop_rot.args" 2>/dev/null || true
+  "$CLI" create-proposal-args --dir "$WORK" --proposal-id "$ROT_ID" \
+    --out "$WORK/prop_rot.args" >/dev/null
+  read_args "$WORK/prop_rot.args"
+  "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" \
+    -- create_proposal --authority "Public/$SIGNER" "${ARGS[@]}" \
+    2>&1 | tee "$WORK/prop_rot.out" | tail -3
+  require_tx "$WORK/prop_rot.out" "create_proposal:rotation"
+
+  echo "[10/11] gather $THRESHOLD approvals for the rotation"
+  echo "        the DEFAULT threshold, never a tier: pricing governance by tier"
+  echo "        would make the cheapest action the one that rewrites who may act"
+  for i in $(seq 0 $((THRESHOLD-1))); do
+    echo "-- member $i"
+    T0=$(date +%s)
+    "$CLI" approve-args --dir "$WORK" --proposal-id "$ROT_ID" --member "$i" \
+      --out "$WORK/rot_approve_$i.args" | sed 's/^/   /'
+    wallet_run account sync-private </dev/null >/dev/null 2>&1 || true
+    # One approver account per approval, and the rotation needs its own: a
+    # privacy transaction consumes the approver's commitment, so the accounts
+    # that carried the transfer cannot carry this too.
+    APPROVER="${APPROVER_LIST[$((i + GATHERED))]:-${APPROVER_LIST[$i]}}"
+    read_args "$WORK/rot_approve_$i.args"
+    "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" --bin-membership "$MEMBERSHIP" \
+      -- approve --approver "Private/$APPROVER" "${ARGS[@]}" \
+      2>&1 | tee "$WORK/rot_approve_$i.out" | tail -3
+    require_tx "$WORK/rot_approve_$i.out" "approve:rotation:member_$i"
+    printf 'timing:approve:rotation:member_%s\t%ss\n' "$i" "$(( $(date +%s) - T0 ))" >> "$LOG"
+  done
+
+  echo "[11/11] rotate — the old configuration is retired, not rewritten"
+  "$CLI" rotate-args --dir "$WORK" --proposal-id "$ROT_ID" --to "$WORK/next" \
+    --out "$WORK/rot.args"
+  ROT_MARKERS=""
+  while read -r seed; do
+    [ -z "$seed" ] && continue
+    ROT_MARKERS="${ROT_MARKERS:+$ROT_MARKERS,}$(python3 scripts/pda.py "$VERIFIER" "$seed")"
+  done < "$WORK/rot.markers"
+  read -r N_ID N_CFG N_LIT <<EOF
+$("$CLI" treasury-seeds --dir "$WORK/next")
+EOF
+  NEW_MULTISIG=$(python3 scripts/pda.py "$VERIFIER" "$N_ID" "$N_CFG")
+  NEW_TREASURY=$(python3 scripts/pda.py "$VERIFIER" "$N_ID" "$N_CFG" "$N_LIT")
+  read_args "$WORK/rot.args"
+  "$SPEL_BIN" --idl "$IDL" --program "$VERIFIER" \
+    -- rotate_config --executor "Public/$SIGNER" --approvals "$ROT_MARKERS" "${ARGS[@]}" \
+    2>&1 | tee "$WORK/rot.out" | tail -3
+  require_tx "$WORK/rot.out" "rotate_config"
+  printf 'account:new_multisig\t%s\n' "$NEW_MULTISIG" >> "$LOG"
+  printf 'account:new_treasury\t%s\n' "$NEW_TREASURY" >> "$LOG"
+  echo "        new configuration  $NEW_MULTISIG"
+  echo "        its treasury       $NEW_TREASURY  (empty: a rotation moves no value)"
+fi
 
 echo
 echo "lifecycle recorded in $LOG"

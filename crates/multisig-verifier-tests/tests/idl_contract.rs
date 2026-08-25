@@ -160,6 +160,11 @@ fn the_instruction_order_is_the_abi_and_has_not_moved() {
             "create_proposal",
             "approve",
             "execute",
+            // Appended, never inserted. The index is the wire ABI: putting a new
+            // instruction anywhere but the end renumbers every one after it, and
+            // this assertion is what caught exactly that during the change that
+            // added it.
+            "rotate_config",
         ],
         "the instruction order is the wire ABI; changing it changes every caller"
     );
@@ -205,4 +210,79 @@ fn scripts_pda_py_derives_the_same_treasury_address_as_the_program() {
         f.treasury_addr().to_string(),
         "scripts/pda.py and the program disagree about the treasury address"
     );
+}
+
+/// `scripts/decode-account.py` must decode the same records `docs/account-layout.md`
+/// publishes.
+///
+/// That script is the one a reviewer actually runs: it reads an account off the
+/// chain and prints it field by field, with no dependency on this repository's
+/// Rust. `every_record_the_program_writes_decodes_at_the_published_offsets` ties
+/// the *guest* to `multisig_core::state`, and nothing tied the standalone
+/// decoder to either — so it could drift silently and the first person to notice
+/// would be someone reading garbage off a live account.
+///
+/// Compared field for field rather than by total length, because two layouts can
+/// sum to the same number while naming different things at every offset.
+#[test]
+fn the_standalone_decoder_reads_the_layout_the_document_publishes() {
+    let script = read("../../scripts/decode-account.py");
+    let doc = read("../../docs/account-layout.md");
+
+    // (record kind in the script, heading in the document)
+    for (kind, heading) in [
+        ("multisig", "## `MultisigRecord`"),
+        ("proposal", "## `ProposalRecord`"),
+        ("treasury", "## `TreasuryRecord`"),
+    ] {
+        // The script's layout: ("name", width, renderer) tuples inside `"kind": [ … ]`.
+        let start = script
+            .find(&format!("\"{kind}\": ["))
+            .unwrap_or_else(|| panic!("scripts/decode-account.py declares no {kind} layout"));
+        let block = &script[start..start + script[start..].find("],").expect("closed layout")];
+        let from_script: Vec<(String, usize)> = block
+            .lines()
+            .filter_map(|l| {
+                let l = l.trim();
+                let inner = l.strip_prefix("(\"")?;
+                let (name, rest) = inner.split_once("\", ")?;
+                let width: usize = rest.split(',').next()?.trim().parse().ok()?;
+                Some((name.to_string(), width))
+            })
+            .collect();
+
+        // The document's table: `| offset | width | \`field\` | … |`.
+        let dstart = doc
+            .find(heading)
+            .unwrap_or_else(|| panic!("docs/account-layout.md has no {heading} section"));
+        let dblock = &doc[dstart..];
+        let dblock = &dblock[..dblock[2..].find("\n## ").map_or(dblock.len(), |i| i + 2)];
+        let from_doc: Vec<(String, usize)> = dblock
+            .lines()
+            .filter_map(|l| {
+                let cells: Vec<&str> = l.split('|').map(str::trim).collect();
+                if cells.len() < 5 {
+                    return None;
+                }
+                let width: usize = cells[2].parse().ok()?;
+                let name = cells[3].trim_matches('`');
+                Some((name.to_string(), width))
+            })
+            .collect();
+
+        assert!(
+            !from_doc.is_empty() && !from_script.is_empty(),
+            "{kind}: parsed {} field(s) from the document and {} from the script — \
+             one of the two shapes this test keys on has changed, so it is asserting \
+             nothing rather than passing",
+            from_doc.len(),
+            from_script.len()
+        );
+        assert_eq!(
+            from_script, from_doc,
+            "{kind}: scripts/decode-account.py and docs/account-layout.md disagree.\n\
+             script: {from_script:?}\n\
+             doc:    {from_doc:?}"
+        );
+    }
 }

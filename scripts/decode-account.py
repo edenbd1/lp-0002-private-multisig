@@ -37,6 +37,14 @@ LAYOUTS = {
         ("multisig_id", 32, "hex"),
         ("member_root", 32, "hex"),
         ("threshold", 4, "u32"),
+        # Both folded into `config_hash`, which is the PDA seed — so an account
+        # at a known address cannot disagree with them, and reading them here is
+        # readability rather than trust.
+        ("tiers_hash", 32, "hex"),
+        # Zero while this configuration is live; otherwise the `config_hash` of
+        # the configuration that replaced it. A rotation writes here rather than
+        # rewriting the member set.
+        ("superseded_by", 32, "superseded"),
         ("treasury", 32, "hex"),
         ("authority", 32, "hex"),
     ],
@@ -54,6 +62,10 @@ LAYOUTS = {
         ("recipient", 32, "hex"),
         ("amount", 16, "u128"),
         ("memo_hash", 32, "hex"),
+        # Zero for a transfer; the configuration installed for a rotation. It is
+        # what tells the two action shapes apart, and `execute` and
+        # `rotate_config` each refuse the other's shape (5027).
+        ("rotate_to", 32, "rotate_to"),
         ("status", 1, "status"),
     ],
     "approval": [
@@ -82,6 +94,13 @@ def render(kind: str, raw: bytes, value: bytes, at: int) -> str:
         return str(int.from_bytes(value, "little"))
     if kind == "status":
         return STATUS.get(value[0], f"UNKNOWN({value[0]})")
+    if kind == "superseded":
+        # Rendered rather than printed raw, because "all zeros" and "a hash" mean
+        # opposite things here and a reader should not have to count zeros.
+        return "no (live)" if value == bytes(32) else f"yes, by {value.hex()}"
+    if kind == "rotate_to":
+        return "no (a transfer)" if value == bytes(32) else f"yes, to {value.hex()}"
+
     if kind == "list32":
         rest = raw[at:]
         if len(rest) % 32:

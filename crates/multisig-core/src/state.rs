@@ -31,11 +31,11 @@ pub const STATUS_OPEN: u8 = 0;
 pub const STATUS_EXECUTED: u8 = 1;
 
 /// Exact length of a serialised [`MultisigState`].
-pub const MULTISIG_LEN: usize = 133;
+pub const MULTISIG_LEN: usize = 197;
 /// Exact length of a serialised [`TreasuryState`].
 pub const TREASURY_LEN: usize = 65;
 /// Exact length of a serialised [`ProposalState`].
-pub const PROPOSAL_LEN: usize = 210;
+pub const PROPOSAL_LEN: usize = 242;
 /// Exact length of a serialised [`ApprovalMarkerState`].
 pub const APPROVAL_MARKER_LEN: usize = 65;
 /// Length of a serialised [`ExecutionMarkerState`] before its nullifier list.
@@ -171,11 +171,19 @@ pub struct MultisigState {
     pub member_root: [u8; 32],
     /// Offset 65, 4 bytes, little-endian.
     pub threshold: u32,
-    /// The treasury PDA this multisig pays from. Offset 69, 32 bytes.
+    /// Commitment to the spending-tier table, folded into `config_hash` and so
+    /// anchored by this account's own address. Offset 69, 32 bytes.
+    pub tiers_hash: [u8; 32],
+    /// The configuration that replaced this one, or zero while it is in force.
+    /// A rotation writes here rather than editing a member set: the new
+    /// configuration is a different account at a different address.
+    /// Offset 101, 32 bytes.
+    pub superseded_by: [u8; 32],
+    /// The treasury PDA this multisig pays from. Offset 133, 32 bytes.
     pub treasury: [u8; 32],
     /// The account that created it. Recorded, never trusted: creation is
     /// permissionless and the creator gets no privilege from being named here.
-    /// Offset 101, 32 bytes.
+    /// Offset 165, 32 bytes.
     pub authority: [u8; 32],
 }
 
@@ -190,6 +198,8 @@ pub fn decode_multisig(data: &[u8]) -> Result<MultisigState, StateError> {
         multisig_id: r.bytes32(),
         member_root: r.bytes32(),
         threshold: r.u32_le(),
+        tiers_hash: r.bytes32(),
+        superseded_by: r.bytes32(),
         treasury: r.bytes32(),
         authority: r.bytes32(),
     };
@@ -254,6 +264,9 @@ pub struct ProposalState {
     pub amount: u128,
     /// Commitment to the human-readable memo. Offset 177, 32 bytes.
     pub memo_hash: [u8; 32],
+    /// For a governance proposal, the configuration the rotation moves to; zero
+    /// for a treasury transfer. Offset 209, 32 bytes.
+    pub rotate_to: [u8; 32],
     /// [`STATUS_OPEN`] or [`STATUS_EXECUTED`]. Offset 209, 1 byte.
     pub status: u8,
 }
@@ -273,6 +286,7 @@ pub fn decode_proposal(data: &[u8]) -> Result<ProposalState, StateError> {
         recipient: r.bytes32(),
         amount: r.u128_le(),
         memo_hash: r.bytes32(),
+        rotate_to: r.bytes32(),
         status: expect_status(r.u8())?,
     };
     r.finish()?;
@@ -395,6 +409,8 @@ pub fn encode_multisig(s: &MultisigState) -> Vec<u8> {
     out.extend_from_slice(&s.multisig_id);
     out.extend_from_slice(&s.member_root);
     out.extend_from_slice(&s.threshold.to_le_bytes());
+    out.extend_from_slice(&s.tiers_hash);
+    out.extend_from_slice(&s.superseded_by);
     out.extend_from_slice(&s.treasury);
     out.extend_from_slice(&s.authority);
     out
@@ -422,6 +438,7 @@ pub fn encode_proposal(s: &ProposalState) -> Vec<u8> {
     out.extend_from_slice(&s.recipient);
     out.extend_from_slice(&s.amount.to_le_bytes());
     out.extend_from_slice(&s.memo_hash);
+    out.extend_from_slice(&s.rotate_to);
     out.push(s.status);
     out
 }
@@ -464,9 +481,9 @@ mod tests {
     /// lengths in it are the lengths a decoder needs.
     #[test]
     fn documented_lengths_are_the_lengths_the_decoders_require() {
-        assert_eq!(MULTISIG_LEN, 1 + 32 + 32 + 4 + 32 + 32);
+        assert_eq!(MULTISIG_LEN, 1 + 32 + 32 + 4 + 32 + 32 + 32 + 32);
         assert_eq!(TREASURY_LEN, 1 + 32 + 32);
-        assert_eq!(PROPOSAL_LEN, 1 + 32 + 32 + 32 + 32 + 32 + 16 + 32 + 1);
+        assert_eq!(PROPOSAL_LEN, 1 + 32 + 32 + 32 + 32 + 32 + 16 + 32 + 32 + 1);
         assert_eq!(APPROVAL_MARKER_LEN, 1 + 32 + 32);
         assert_eq!(EXECUTION_MARKER_HEADER_LEN, 1 + 32 + 32 + 16 + 1 + 4);
     }
@@ -523,7 +540,7 @@ mod tests {
     fn a_status_byte_outside_the_two_defined_values_is_refused() {
         let mut raw = [0u8; PROPOSAL_LEN];
         raw[0] = STATE_FORMAT_V1;
-        raw[209] = 4;
+        raw[241] = 4;
         assert_eq!(decode_proposal(&raw), Err(StateError::UnknownStatus(4)));
     }
 
@@ -540,7 +557,8 @@ mod tests {
         raw[129..161].copy_from_slice(&[0xA5; 32]);
         raw[161..177].copy_from_slice(&250u128.to_le_bytes());
         raw[177..209].copy_from_slice(&[0xA6; 32]);
-        raw[209] = STATUS_EXECUTED;
+        raw[209..241].copy_from_slice(&[0xA7; 32]);
+        raw[241] = STATUS_EXECUTED;
 
         let p = decode_proposal(&raw).expect("the documented layout must decode");
         assert_eq!(p.multisig_id, [0xA1; 32]);
@@ -550,6 +568,7 @@ mod tests {
         assert_eq!(p.recipient, [0xA5; 32]);
         assert_eq!(p.amount, 250);
         assert_eq!(p.memo_hash, [0xA6; 32]);
+        assert_eq!(p.rotate_to, [0xA7; 32]);
         assert_eq!(p.status, STATUS_EXECUTED);
     }
 
@@ -565,6 +584,8 @@ mod tests {
             threshold: 3,
             treasury: [4; 32],
             authority: [5; 32],
+            tiers_hash: [0u8; 32],
+            superseded_by: [0u8; 32],
         };
         let raw = encode_multisig(&m);
         assert_eq!(raw.len(), MULTISIG_LEN);
@@ -589,6 +610,7 @@ mod tests {
             amount: u128::MAX,
             memo_hash: [13; 32],
             status: STATUS_OPEN,
+            rotate_to: [0u8; 32],
         };
         let raw = encode_proposal(&p);
         assert_eq!(raw.len(), PROPOSAL_LEN);

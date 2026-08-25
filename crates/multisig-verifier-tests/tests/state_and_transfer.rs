@@ -157,6 +157,7 @@ fn creating_a_proposal_that_moves_nothing_is_rejected() {
         recipient: f.recipient,
         amount: 0,
         memo_hash: f.memo_hash,
+        rotate_to: [0u8; 32],
     };
     let err = run(
         &elf,
@@ -217,6 +218,7 @@ fn creating_a_proposal_that_pays_the_treasury_into_itself_is_rejected() {
         recipient: treasury,
         amount: f.amount,
         memo_hash: f.memo_hash,
+        rotate_to: [0u8; 32],
     };
     let err = run(
         &elf,

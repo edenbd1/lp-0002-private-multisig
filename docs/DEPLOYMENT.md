@@ -1,6 +1,6 @@
 # Deployment
 
-**Deployed to the public LEZ testnet on 2026-08-24**, in blocks 20856-20880.
+**Deployed to the public LEZ testnet on 2026-08-24**, in blocks 23028-23066.
 Every hash and every address below was read back off the chain rather than
 derived on paper: `./scripts/verify-onchain-lifecycle.sh` re-checks the
 transactions from a clean clone, and `./scripts/verify-onchain.sh` re-reads the
@@ -37,13 +37,13 @@ sequencer.
 | Step | Transaction | Block |
 |---|---|---|
 | deploy `membership_lez` | [`fb8eb10f7f394286c109cb6502a1c95294180523f30d06f707fc087a589bea98`](https://explorer.testnet.lez.logos.co/transaction/fb8eb10f7f394286c109cb6502a1c95294180523f30d06f707fc087a589bea98) | 4459 |
-| deploy `multisig_verifier` | [`2d6f720e3c6dd8d876c8617eada5ddcd3c13a978b2edcb1921a3de73231e82e2`](https://explorer.testnet.lez.logos.co/transaction/2d6f720e3c6dd8d876c8617eada5ddcd3c13a978b2edcb1921a3de73231e82e2) | 20856 |
-| `create_multisig` | [`a8d8422ae2c46566b15c31954647974d3e95eadbe0b560eac4ab609c9a25ab55`](https://explorer.testnet.lez.logos.co/transaction/a8d8422ae2c46566b15c31954647974d3e95eadbe0b560eac4ab609c9a25ab55) | 20857 |
-| `fund_treasury` | [`2844eef12695ab0d3c6d55832e94ae316638dd7400735d2f393875a30bb6a5c2`](https://explorer.testnet.lez.logos.co/transaction/2844eef12695ab0d3c6d55832e94ae316638dd7400735d2f393875a30bb6a5c2) | 20858 |
-| `create_proposal` | [`b194da9ba24e1a17a7bec0d64da0d252a96c6edc96208a778a7e77e71fed9826`](https://explorer.testnet.lez.logos.co/transaction/b194da9ba24e1a17a7bec0d64da0d252a96c6edc96208a778a7e77e71fed9826) | 20859 |
-| `approve` (member A, **privacy tx**) | [`d13813094f36c1b60c02350adbc272ce5aa88dd7d87ab409a3e36436e70a91c0`](https://explorer.testnet.lez.logos.co/transaction/d13813094f36c1b60c02350adbc272ce5aa88dd7d87ab409a3e36436e70a91c0) | 20869 |
-| `approve` (member B, **privacy tx**) | [`9f7c541c187c6ed284f67b0f5c6f0942de0ed98ff7e589dc81955ceed7219719`](https://explorer.testnet.lez.logos.co/transaction/9f7c541c187c6ed284f67b0f5c6f0942de0ed98ff7e589dc81955ceed7219719) | 20879 |
-| `execute` | [`00ea68384758097dba8b648605b4ecf65d9535ba6b497af335d4fcf2be7f75ae`](https://explorer.testnet.lez.logos.co/transaction/00ea68384758097dba8b648605b4ecf65d9535ba6b497af335d4fcf2be7f75ae) | 20880 |
+| deploy `multisig_verifier` | [`268834b601f78b59090e90f8f10fd8ce3b526528e1224983edba95224be31aa3`](https://explorer.testnet.lez.logos.co/transaction/268834b601f78b59090e90f8f10fd8ce3b526528e1224983edba95224be31aa3) | 23028 |
+| `create_multisig` | [`dce8fd4dc4b53216d7271466ba66290b3bbfb2cf125701cd7c97a68cb69d1db0`](https://explorer.testnet.lez.logos.co/transaction/dce8fd4dc4b53216d7271466ba66290b3bbfb2cf125701cd7c97a68cb69d1db0) | 23029 |
+| `fund_treasury` | [`993d1f7c2b27fcab1abf759513f7bf7c64449a547b608e692deae67ec94f640b`](https://explorer.testnet.lez.logos.co/transaction/993d1f7c2b27fcab1abf759513f7bf7c64449a547b608e692deae67ec94f640b) | 23030 |
+| `create_proposal` | [`54a300eb8c0bec27adb40b3ab36ff653b6234dc4deab2a47ac89a0a665c4fdd3`](https://explorer.testnet.lez.logos.co/transaction/54a300eb8c0bec27adb40b3ab36ff653b6234dc4deab2a47ac89a0a665c4fdd3) | 23031 |
+| `approve` (member A, **privacy tx**) | [`1a5e529d8b9c87ec781b6e8cc2d4bc71c149e7f45f9ce66711108a22dbf6fcd5`](https://explorer.testnet.lez.logos.co/transaction/1a5e529d8b9c87ec781b6e8cc2d4bc71c149e7f45f9ce66711108a22dbf6fcd5) | 23039 |
+| `approve` (member B, **privacy tx**) | [`28a07e8df970322b643d7d5d6c74640f49e6d0260964255909181fdc815e8397`](https://explorer.testnet.lez.logos.co/transaction/28a07e8df970322b643d7d5d6c74640f49e6d0260964255909181fdc815e8397) | 23065 |
+| `execute` | [`d0bab2943f09d3a27a10610c49c2a6cce1a2c94b93ded6f341ce29005ba8ca7c`](https://explorer.testnet.lez.logos.co/transaction/d0bab2943f09d3a27a10610c49c2a6cce1a2c94b93ded6f341ce29005ba8ca7c) | 23066 |
 
 `membership_lez` sits three sequencer-lifetimes back at block 4459 because it was
 never redeployed. A LEZ deployment hash is `SHA256(borsh(bytecode))`, the
@@ -60,7 +60,7 @@ and an approval that returns in seconds proved nothing.
 
 **Measured 2026-08-24, hours after the redeploy: the explorer has not indexed
 these yet.** Its own index sat at block **20769** while the lifecycle above ran
-in blocks 20856-20880, so seven of the eight hashes return the 2416-byte
+in blocks 23028-23066, so seven of the eight hashes return the 2416-byte
 `Failed to load transaction: error running server function: Transaction not
 found` page, and the account view answers
 `Program Owner: 11111111111111111111111111111111 … Data: 0 bytes` for accounts
@@ -93,10 +93,10 @@ an *indexed* transaction from an impossible one:
 
 ```bash
 # one of this lifecycle's privacy transactions: ~371 kB
-curl -s https://explorer.testnet.lez.logos.co/transaction/d13813094f36c1b60c02350adbc272ce5aa88dd7d87ab409a3e36436e70a91c0 | wc -c
+curl -s https://explorer.testnet.lez.logos.co/transaction/1a5e529d8b9c87ec781b6e8cc2d4bc71c149e7f45f9ce66711108a22dbf6fcd5 | wc -c
 
 # one of its public transactions: ~5 kB, and complete
-curl -s https://explorer.testnet.lez.logos.co/transaction/a8d8422ae2c46566b15c31954647974d3e95eadbe0b560eac4ab609c9a25ab55 | wc -c
+curl -s https://explorer.testnet.lez.logos.co/transaction/dce8fd4dc4b53216d7271466ba66290b3bbfb2cf125701cd7c97a68cb69d1db0 | wc -c
 
 # a hash that cannot exist: 2416 bytes, and the body says why
 curl -s "https://explorer.testnet.lez.logos.co/transaction/$(python3 -c 'print("ff"*32)')" | wc -c
@@ -182,12 +182,12 @@ with `scripts/pda.py` and query `getAccount`.
 
 | Account | Address | Balance |
 |---|---|---|
-| multisig | `Hx7Ni2riURJfgng4QAXb3RBq9ZMjrvwj7JREjut9PuBC` | 0 |
-| treasury | `xtngupTp3tcQU9faCbND73KhCpYqfBqKhmoepQAXoVx` | **2 → 1** |
-| proposal | `9EjLSnKjXB4r8SgBEHcgqf36nkqfyUVXuqSsDzCTRvg7` | 0 |
-| approval marker A | `Awd6RNVpMdPkvALi6ubdZyffKb3Bw3HimbUKtUP7YV6F` | 0 |
-| approval marker B | `6dmnyiGZu6KtVy6jxyEMvb4HG8N59AuKey7wB9RjbCTV` | 0 |
-| execution marker | `BP6buTDdFThPYWU3NFGSsD8k3ymewStQo4hj86tAwq1a` | 0 |
+| multisig | `C9CgRDNfrCUJMzYG1YbskwViRTpDypty74YC2KThcxL3` | 0 |
+| treasury | `FyTtsh2h5fC85vrei19ThtM4yRThHEH4MGtXH1azrdhM` | **2 → 1** |
+| proposal | `5kM4uZdHgwjanoX82PtmeRUptkekm4EfjCzvmz6r7MHz` | 0 |
+| approval marker A | `5YajQiNzWfsy5VnDQxEKh7UPN6mXcqFsY3XTWp9GhWZg` | 0 |
+| approval marker B | `3fWFBfi8VWy9NadC6vE5KXtmjj9MzYkC9p2XWHX6ANit` | 0 |
+| execution marker | `J1N6WWpHVPh6pBpXmKAe522JBEWaaRT3jymaWcczg5AG` | 0 |
 
 A seventh account is not the program's and is the point of the exercise: the
 **recipient**, `8kexXda8j5hPegPeHXzUM9PhvjYNFLpN8wN8PvG5iDhn`, went **0 → 1**. It
@@ -237,7 +237,7 @@ counted them against the threshold anchored in the multisig's address.
 | Program | ImageID | ProgramId (hex) |
 |---|---|---|
 | `membership_lez` | `56f784d6b37f5cbac85d2eca3e28f56346e8739e6c22cb15a1b7165616758e31` | `d684f756,ba5c7fb3,ca2e5dc8,63f5283e,9e73e846,15cb226c,5616b7a1,318e7516` |
-| `multisig_verifier` | `1346b65293ac9b11d4b1029a0d02559462238582124062925a3ad24298ff4e1e` | `52b64613,119bac93,9a02b1d4,9455020d,82852362,92624012,42d23a5a,1e4eff98` |
+| `multisig_verifier` | `a8a87f8b456299144236f42f194f1b85c11265763a976c055a7f471b61500750` | `52b64613,119bac93,9a02b1d4,9455020d,82852362,92624012,42d23a5a,1e4eff98` |
 
 Verify for yourself:
 
@@ -248,7 +248,7 @@ spel program-id artifacts/programs/multisig_verifier.bin
 
 **The build is reproducible.** Rebuilding the verifier guest from a clean
 `cargo risczero build` reproduces ImageID
-`1346b65293ac9b11d4b1029a0d02559462238582124062925a3ad24298ff4e1e` exactly —
+`a8a87f8b456299144236f42f194f1b85c11265763a976c055a7f471b61500750` exactly —
 checked, not assumed. The membership guest reproduces
 `56f784d6b37f5cbac85d2eca3e28f56346e8739e6c22cb15a1b7165616758e31` — the id it had before this
 revision and the one already on chain — which is the check that the `records`
@@ -375,19 +375,19 @@ the distinction matters because a reader who takes the warning below as "the
 explorer will not help" stops looking one click too early. The explorer has an
 account view:
 
-- multisig `/account/Hx7Ni2riURJfgng4QAXb3RBq9ZMjrvwj7JREjut9PuBC`
-- treasury `/account/xtngupTp3tcQU9faCbND73KhCpYqfBqKhmoepQAXoVx`
-- proposal `/account/9EjLSnKjXB4r8SgBEHcgqf36nkqfyUVXuqSsDzCTRvg7`
-- execution marker `/account/BP6buTDdFThPYWU3NFGSsD8k3ymewStQo4hj86tAwq1a`
+- multisig `/account/C9CgRDNfrCUJMzYG1YbskwViRTpDypty74YC2KThcxL3`
+- treasury `/account/FyTtsh2h5fC85vrei19ThtM4yRThHEH4MGtXH1azrdhM`
+- proposal `/account/5kM4uZdHgwjanoX82PtmeRUptkekm4EfjCzvmz6r7MHz`
+- execution marker `/account/J1N6WWpHVPh6pBpXmKAe522JBEWaaRT3jymaWcczg5AG`
 
-Each will show `Program Owner: 2JFHW18V15yv6C9Xs4AMERE92Q8FrRfRULSSMkQszA45`,
+Each will show `Program Owner: CMNWomcJfauikXikhbN18jk4bRFeDScgKdSUwzqUjdMy`,
 which base58-decodes to the verifier's ImageID
-`1346b65293ac9b11d4b1029a0d02559462238582124062925a3ad24298ff4e1e` — exactly
+`a8a87f8b456299144236f42f194f1b85c11265763a976c055a7f471b61500750` — exactly
 what `spel program-id artifacts/programs/multisig_verifier.bin` prints for the
 binary committed here.
 
 **Measured 2026-08-24, they do not show that yet**, because the explorer's index
-was still at block 20769 and these accounts were created in block 20857 onwards;
+was still at block 20769 and these accounts were created in block 23029 onwards;
 it answers `Program Owner: 11111111111111111111111111111111` and `Data: 0 bytes`
 for all four. That is the indexer, not the chain — `getAccount` on the same
 addresses returns the owner and the full record right now, and
@@ -503,8 +503,8 @@ print(hashlib.sha256(struct.pack('<I',len(b))+b).hexdigest())" \
 ```
 
 For the binary committed here that is
-`2d6f720e3c6dd8d876c8617eada5ddcd3c13a978b2edcb1921a3de73231e82e2`, and
-`getTransaction` on it now resolves in block 20856. That equality — a hash
+`268834b601f78b59090e90f8f10fd8ce3b526528e1224983edba95224be31aa3`, and
+`getTransaction` on it now resolves in block 23028. That equality — a hash
 computed from a file in this repository, answered by the public sequencer — is
 what ties the deployed program to the committed source, and
 `scripts/verify-onchain-lifecycle.sh` recomputes it rather than reading it back
@@ -572,3 +572,36 @@ config hash `92100d32ab976481e74fcaf28d1ab99f5f1be27421e190bb07ba09185a305475`,
 proposal id `68cea120676e6b36df3f4bb0f6b851f4ef15a9ee8ea96465a291b679e62c5447`,
 action `transfer 100 LEZ to the grants treasury` — an untyped action string, which
 is the schema `msig` carried before a proposal named a recipient and an amount.
+
+### Superseded on 2026-08-25 — the deployment that had no tiers
+
+The verifier redeployed on 2026-08-25 anchors a **spending tier** in its
+`config_hash`, and on LEZ a program's identity is its ImageID, so every PDA moved
+with it. The deployment replaced was verifier ImageID
+`1346b65293ac9b11d4b1029a0d02559462238582124062925a3ad24298ff4e1e`
+(`2JFHW18V15yv6C9Xs4AMERE92Q8FrRfRULSSMkQszA45` in base58).
+
+Unlike the `5bb40082…` run above, these accounts are **not empty**. They hold
+their complete records, and reading them is the clearest demonstration of what
+changed:
+
+| Account | Superseded address | State, measured 2026-08-25 |
+|---|---|---|
+| multisig | `Hx7Ni2riURJfgng4QAXb3RBq9ZMjrvwj7JREjut9PuBC` | **133 bytes** — the record before `tiers_hash` and `superseded_by` |
+| treasury | `xtngupTp3tcQU9faCbND73KhCpYqfBqKhmoepQAXoVx` | balance 1, the remainder of that run's 2 → 1 |
+| proposal | `9EjLSnKjXB4r8SgBEHcgqf36nkqfyUVXuqSsDzCTRvg7` | **210 bytes** — the record before `rotate_to` |
+| approval marker A | `Awd6RNVpMdPkvALi6ubdZyffKb3Bw3HimbUKtUP7YV6F` | 65 bytes |
+| approval marker B | `6dmnyiGZu6KtVy6jxyEMvb4HG8N59AuKey7wB9RjbCTV` | 65 bytes |
+| execution marker | `BP6buTDdFThPYWU3NFGSsD8k3ymewStQo4hj86tAwq1a` | 150 bytes |
+
+**133 against 197, and 210 against 242.** Those are the two record lengths this
+revision added fields to, side by side on the same chain — the old ones still
+decodable at the offsets the old document published, the new ones at the offsets
+this one does. A layout change is usually something a reader has to take on
+trust; here both versions are live and either can be read with
+`scripts/decode-account.py`.
+
+Its multisig id and config hash are not repeated here, because this revision no
+longer holds the working directory that produced them and a value written from
+memory is worse than no value at all. The addresses above are enough to
+recognise a stale quote, and each resolves on chain.

@@ -12,15 +12,37 @@ cargo test -p multisig-verifier-tests --test verifier_rejects -- --ignored --noc
 
 ## Results
 
-Verifier ImageID `1346b65293ac9b11d4b1029a0d02559462238582124062925a3ad24298ff4e1e`.
+Verifier ImageID `a8a87f8b456299144236f42f194f1b85c11265763a976c055a7f471b61500750`.
 
 | Instruction | Segments | User cycles | Proving cycles | Share of the public budget |
 |---|---:|---:|---:|---:|
-| `approve` | 1 | 495,788 | 1,048,576 | 3.12 % |
-| `execute` (M=1) | 1 | 571,589 | 1,048,576 | 3.12 % |
-| `execute` (M=3) | 1 | 735,024 | 1,048,576 | 3.12 % |
-| `execute` (M=5) | 1 | 896,983 | 1,048,576 | 3.12 % |
-| `execute` (M=7) | 2 | 1,058,884 | 1,310,720 | 3.91 % |
+| `approve` | 1 | 541,207 | 1,048,576 | 3.12 % |
+| `execute` (M=1) | 1 | 623,636 | 1,048,576 | 3.12 % |
+| `execute` (M=3) | 1 | 786,596 | 1,048,576 | 3.12 % |
+| `execute` (M=5) | **2** | 948,651 | 1,114,112 | 3.32 % |
+| `execute` (M=7) | 2 | 1,109,909 | 1,310,720 | 3.91 % |
+| `execute` (M=2, tiered) | 1 | 710,702 | 1,048,576 | 3.12 % |
+| `rotate_config` (M=3) | 1 | 750,617 | 1,048,576 | 3.12 % |
+
+**Spending tiers and rotation made every instruction more expensive, and one row
+changed shape.** Against the same table before that work — `approve` 495,788,
+`execute` 571,589 / 735,024 / 896,983 / 1,058,884 — each row is between 45,000
+and 52,000 user cycles dearer, and **`execute` at M=5 crossed from one segment to
+two**. That crossing is the only figure here that changes what a reader should
+plan for: an operator sizing a 5-of-N multisig now pays for a second segment.
+
+The tier itself is not what costs. `execute` (M=2, tiered) at 710,702 sits about
+6,000 cycles above where an untiered M=2 would fall on the slope below, so
+decoding a table and resolving an amount against it is nearly free. The 45–52k is
+paid on *every* instruction, tiered or not, because `config_hash` now commits to
+a tiers hash and each instruction recomputes that commitment before it trusts the
+address it was handed. That is the price of the anchoring, not of the feature —
+a multisig with no tiers pays it too, and pays it so that a multisig with tiers
+cannot be read under someone else's table.
+
+`rotate_config` at M=3 costs 750,617 against `execute` (M=3) at 786,596: slightly
+less, because it counts the same approvals and writes two records but moves no
+value, so it never touches the treasury or the recipient.
 
 `create_multisig`, `fund_treasury` and `create_proposal` do strictly less work
 than `execute` (M=1) — a few hashes, a comparison, and a PDA claim — and are
@@ -42,7 +64,9 @@ the comparison is between two runs of the same command.
 
 Persisting state and paying a treasury cost roughly **159,000 cycles on
 `approve`** and **305,000 on `execute` (M=1)**, and raised the per-approval slope
-from ~48,600 to ~81,700.
+from ~48,600 to the **81,046** the table above now measures. (That revision's
+text said ~81,700; recomputing the slope from its own rows gives 81,216, so the
+figure was carried rather than derived. It is derived here.)
 
 Where it went, in rough order of size:
 
@@ -68,19 +92,25 @@ billed whole. That is also where the previous revision sat one power of two
 lower, at 524,288 — crossing that boundary is what doubled the *billed* figure
 while the real work rose by about half.
 
-**`execute` scales linearly in M**, at roughly **81,700 user cycles per
-additional approval**. That is one SHA-256 for the marker seed, one for the PDA
+**`execute` scales linearly in M**, at **81,046 user cycles per additional
+approval** — the slope over the M=1 to M=7 rows above, recomputed from them
+rather than carried forward. That is one SHA-256 for the marker seed, one for the PDA
 derivation, the marker account's own 65 bytes in and out, plus the pairwise
 distinctness comparisons. The distinctness check is quadratic in M by choice: M
 is a multisig threshold, a small number, and a sort would cost more cycles than
 it saves at these sizes.
 
-**M=7 is the first row that spans two segments**, at 3.91 % of the budget. It is
-measured rather than extrapolated, which is why it is in the table: the previous
-revision's comment claimed the measurements covered M up to 7 while the loop
-generating them stopped at 5. Extrapolating from the slope, a 10-of-N execution
-lands near 1.3M user cycles — still two segments, and still under 4 % of the
-32M-cycle public budget.
+**M=5 is now the first row that spans two segments**, at 3.32 % of the budget,
+and that is a change: before spending tiers, M=5 fitted in one. The 45–52k cycles
+the tier commitment adds to every instruction were enough to push that row over a
+power-of-two boundary, which is the one place in this table where the feature
+changes what an operator should plan for rather than only what they pay.
+
+Both rows are measured rather than extrapolated, which is why they are in the
+table: an earlier revision's comment claimed the measurements covered M up to 7
+while the loop generating them stopped at 5. Extrapolating from the slope, a
+10-of-N execution lands near 1.35M user cycles — still two segments, and still
+under 4.5 % of the 32M-cycle public budget.
 
 **What is excluded.** These are the guest's own cycles. They do not include
 LEZ's privacy circuit recursively verifying the chained membership call — that
@@ -103,7 +133,7 @@ THRESHOLD=1`, an actual `sequencer_service` in standalone mode on localhost,
 
 | Step | Result |
 |---|---|
-| deploy `multisig_verifier` | `2d6f720e3c6dd8d876c8617eada5ddcd3c13a978b2edcb1921a3de73231e82e2` |
+| deploy `multisig_verifier` | `268834b601f78b59090e90f8f10fd8ce3b526528e1224983edba95224be31aa3` |
 | `create_multisig` | multisig and treasury created, both decoding |
 | `fund_treasury` | treasury balance **0 → 500**, via the chained call |
 | `create_proposal` | recipient, amount and memo persisted and re-derivable |
@@ -186,9 +216,14 @@ rounded in this document's favour.
 **Re-measured on 2026-08-12, after the migration to LEZ v0.2.4**: **440 s** and
 **469 s** on the same laptop against the public testnet.
 
-**And again on 2026-08-24, which is the run the current deployment came from**:
-**614 s** and **609 s** for the two approvals of the 2-of-3, against the public
-testnet on the same laptop. Both figures are in that run's
+**And again on 2026-08-25, which is the run the current deployment came from**:
+**484 s** and **550 s** for the two approvals of the 3-of-3 with a spending tier,
+against the public testnet on the same laptop. (The 2026-08-24 run that this one
+supersedes measured **614 s** and **609 s** for a 2-of-3.) The second approval
+here is the slower of the pair because it was resubmitted: the account that first
+carried it had never been initialised under the transfer program, so the privacy
+circuit refused it client-side before any proof was wasted, and the retry ran
+against a freshly provisioned approver. Both figures are in that run's
 `.testnet/lifecycle.tsv` next to the transaction hashes
 `d1381309…` and `9f7c541c…`, so the timing and the on-chain evidence come out of
 the same run rather than being paired up afterwards. Two approvals within 5 s of
@@ -236,7 +271,8 @@ honest way to read every number here is *per machine*:
 | Apple silicon laptop, local sequencer, LEZ v0.2.4, one other proof running | **935 s** |
 | Apple silicon laptop, public testnet | **179 s** (360 s under CPU contention) |
 | Apple silicon laptop, public testnet, LEZ v0.2.4 | **440-469 s** (under contention) |
-| Apple silicon laptop, public testnet, LEZ v0.2.4, the deployed run | **609-614 s** |
+| Apple silicon laptop, public testnet, LEZ v0.2.4, the 2026-08-24 run | **609-614 s** |
+| Apple silicon laptop, public testnet, LEZ v0.2.4, the deployed run | **484-550 s** |
 | GitHub `ubuntu-latest`, local sequencer, LEZ v0.2.0 | **1264 s** |
 | GitHub `ubuntu-latest`, local sequencer, LEZ v0.2.4 | **4033 s** |
 

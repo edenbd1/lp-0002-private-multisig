@@ -72,7 +72,7 @@ never be invoked there, and is not: the verifier reaches it only through a
 `ChainedCall` inside a privacy transaction.
 
 *Verified against a real transaction rather than asserted.* Decoding
-`d13813094f36c1b60c02350adbc272ce5aa88dd7d87ab409a3e36436e70a91c0` — the first
+`1a5e529d8b9c87ec781b6e8cc2d4bc71c149e7f45f9ce66711108a22dbf6fcd5` — the first
 `approve` of the deployed lifecycle — and searching its 274 kB payload for every
 secret of all three members: **no `msk`, no salt, no `account_id`, no leaf**, not
 once, for any of them.
@@ -129,7 +129,7 @@ them, so they know exactly who it was. Unlinkability is bounded by `N - 1` from
 an insider's perspective and by `N` from an observer's. The property is real but
 it scales with the member count, and for N=2 an insider learns everything.
 
-## The seven bindings
+## The nine bindings
 
 Each is enforced in `multisig-core`'s `approve`, or on chain by PDA anchoring.
 Every one has adversarial test coverage; see `crates/multisig-core/tests/` for
@@ -174,6 +174,29 @@ the circuit half and `crates/multisig-verifier-tests/` for the on-chain half.
    distinct (`5011`), that each account is the marker PDA for the nullifier it
    was paired with *on this proposal* (`5012`), and that the verifier owns it
    (`5013`) — which it can only do if a membership proof was verified on chain.
+
+8. **A spending tier cannot be invented, and cannot raise the bar.** The tier
+   table is hashed into `config_hash` alongside the member root and the
+   threshold, so a caller who presents a more generous table must also present a
+   `config_hash` committing to it — and that hash is the PDA seed, so the
+   instruction then reads an account nobody created (`5003`). A table that *is*
+   anchored must still be monotone: caps strictly increasing, thresholds never
+   falling, none zero or above the default (`5023`), which means no legal table
+   makes a larger transfer easier than a smaller one. And the record's stored
+   `tiers_hash` must equal the table supplied (`5024`), so an anchored
+   configuration cannot be read under someone else's table.
+
+9. **A superseded configuration cannot act.** `rotate_config` does not rewrite a
+   member set; it anchors a second configuration at its own PDA and writes that
+   address into the first as `superseded_by`. While that field is set, `approve`,
+   `execute` and `rotate_config` all refuse (`5025`). Without it a rotation would
+   *add* a member set rather than replace one, and every past member set would
+   keep its keys to the treasury forever. Two things follow from the construction
+   rather than from a check: proposals raised under the old configuration live at
+   addresses the new one never reads, because `proposal_ref` derives through
+   `config_hash`; and a rotation costs the *default* threshold, never a tier,
+   because pricing governance by tier would make the cheapest action available the
+   one that rewrites who may act.
 
 ## Why the proof is genuinely verified on chain
 
@@ -257,7 +280,7 @@ on a parameter that someone had to generate honestly and then forget.
 What *is* trusted is smaller and checkable: the two program ImageIDs. Those are
 content-addressed, so an evaluator who rebuilds from source either gets the same
 identity or learns immediately that the committed binary is not the source. A
-clean `cargo risczero build` reproduces the verifier's `1346b652…` and the
+clean `cargo risczero build` reproduces the verifier's `a8a87f8b…` and the
 membership program's `56f784d6…` exactly — see
 [`DEPLOYMENT.md`](DEPLOYMENT.md), which also shows the deployed bytes hashing to
 the deployment transaction id.
@@ -270,9 +293,18 @@ the deployment transaction id.
   creator never needs a secret. The protocol protects members from each other and
   from observers, not from a creator who fabricates the set. The set's honesty is
   attested by the fact that it is committed publicly before any approval.
-- **No membership rotation.** The member set is fixed at creation. Adding or
-  removing a member means a new multisig. This is out of scope by design;
-  rotation with forward-privacy is a genuinely harder problem.
+- **Rotation replaces a configuration; it does not rewrite one.**
+  `rotate_config` anchors a *second* configuration at its own PDA, with its
+  own treasury, and writes that address into the first as `superseded_by`.
+  The member set at a given address is therefore still fixed forever —
+  which is what makes the address worth anything — and changing who may act
+  means moving to a new address that the old configuration's members voted
+  to install. What this does **not** give is forward privacy: an observer
+  sees that a rotation happened, when, and which configuration replaced
+  which. It hides who voted for it, not that it occurred. Value does not
+  follow automatically either — the new treasury starts empty, and moving
+  funds across is a transfer the old configuration must approve while it is
+  still live.
 - **No proposal expiry.** Approvals do not decay. A proposal approved to
   threshold can be executed at any later time by anyone. If that is undesirable,
   bind a deadline into the action bytes and enforce it in the consuming program.

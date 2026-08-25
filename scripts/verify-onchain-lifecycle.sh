@@ -97,13 +97,13 @@ check() { # label expected-variant hash
   fi
 }
 check "deploy membership_lez"    2 fb8eb10f7f394286c109cb6502a1c95294180523f30d06f707fc087a589bea98
-check "deploy multisig_verifier" 2 2d6f720e3c6dd8d876c8617eada5ddcd3c13a978b2edcb1921a3de73231e82e2
-check "create_multisig"          0 a8d8422ae2c46566b15c31954647974d3e95eadbe0b560eac4ab609c9a25ab55
-check "fund_treasury"            0 2844eef12695ab0d3c6d55832e94ae316638dd7400735d2f393875a30bb6a5c2
-check "create_proposal"          0 b194da9ba24e1a17a7bec0d64da0d252a96c6edc96208a778a7e77e71fed9826
-check "approve (member A)"       1 d13813094f36c1b60c02350adbc272ce5aa88dd7d87ab409a3e36436e70a91c0
-check "approve (member B)"       1 9f7c541c187c6ed284f67b0f5c6f0942de0ed98ff7e589dc81955ceed7219719
-check "execute"                  0 00ea68384758097dba8b648605b4ecf65d9535ba6b497af335d4fcf2be7f75ae
+check "deploy multisig_verifier" 2 268834b601f78b59090e90f8f10fd8ce3b526528e1224983edba95224be31aa3
+check "create_multisig"          0 dce8fd4dc4b53216d7271466ba66290b3bbfb2cf125701cd7c97a68cb69d1db0
+check "fund_treasury"            0 993d1f7c2b27fcab1abf759513f7bf7c64449a547b608e692deae67ec94f640b
+check "create_proposal"          0 54a300eb8c0bec27adb40b3ab36ff653b6234dc4deab2a47ac89a0a665c4fdd3
+check "approve (member A)"       1 1a5e529d8b9c87ec781b6e8cc2d4bc71c149e7f45f9ce66711108a22dbf6fcd5
+check "approve (member B)"       1 28a07e8df970322b643d7d5d6c74640f49e6d0260964255909181fdc815e8397
+check "execute"                  0 d0bab2943f09d3a27a10610c49c2a6cce1a2c94b93ded6f341ce29005ba8ca7c
 echo
 
 if [ "$fail" -eq 0 ]; then

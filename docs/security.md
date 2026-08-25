@@ -72,7 +72,7 @@ never be invoked there, and is not: the verifier reaches it only through a
 `ChainedCall` inside a privacy transaction.
 
 *Verified against a real transaction rather than asserted.* Decoding
-`d13813094f36c1b60c02350adbc272ce5aa88dd7d87ab409a3e36436e70a91c0` — the first
+`1a5e529d8b9c87ec781b6e8cc2d4bc71c149e7f45f9ce66711108a22dbf6fcd5` — the first
 `approve` of the deployed lifecycle — and searching its 274 kB payload for every
 secret of all three members: **no `msk`, no salt, no `account_id`, no leaf**, not
 once, for any of them.
@@ -280,7 +280,7 @@ on a parameter that someone had to generate honestly and then forget.
 What *is* trusted is smaller and checkable: the two program ImageIDs. Those are
 content-addressed, so an evaluator who rebuilds from source either gets the same
 identity or learns immediately that the committed binary is not the source. A
-clean `cargo risczero build` reproduces the verifier's `1346b652…` and the
+clean `cargo risczero build` reproduces the verifier's `a8a87f8b…` and the
 membership program's `56f784d6…` exactly — see
 [`DEPLOYMENT.md`](DEPLOYMENT.md), which also shows the deployed bytes hashing to
 the deployment transaction id.

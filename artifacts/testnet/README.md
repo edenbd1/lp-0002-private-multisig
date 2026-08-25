@@ -1,21 +1,34 @@
 # The deployed lifecycle
 
 These files are the client-side record of the LP-0002 lifecycle that ran on the
-public LEZ testnet on **2026-08-24**, against verifier ImageID
-`1346b65293ac9b11d4b1029a0d02559462238582124062925a3ad24298ff4e1e` — a 2-of-3
-multisig created, its treasury funded, a proposal published, two approvals
-gathered on the privacy-preserving path, and executed. Eight transactions, blocks
-20856-20880. [`docs/DEPLOYMENT.md`](../../docs/DEPLOYMENT.md) has every hash and
-every address.
+public LEZ testnet on **2026-08-25**, against verifier ImageID
+`a8a87f8b456299144236f42f194f1b85c11265763a976c055a7f471b61500750` — a **3-of-3**
+multisig with a spending tier, its treasury funded, a proposal published, **two**
+approvals gathered on the privacy-preserving path, and executed. Eight
+transactions, blocks 23028-23066. [`docs/DEPLOYMENT.md`](../../docs/DEPLOYMENT.md)
+has every hash and every address.
+
+**Two approvals against a threshold of three**, because the tier this multisig
+anchors — at or below 1, two approvals — covers the amount proposed. That is the
+tier doing something, counted in proofs not generated rather than asserted in
+prose, and `msig status` below reports both numbers.
 
 No member secret is here. `members.json` holds the member secret keys and is
-deliberately not committed; what is here is what a stranger is allowed to hold.
+deliberately not committed. One thing that *is* here deserves naming rather than
+hiding behind "public": each approval record carries `member_index` beside its
+`nullifier_hex`, so a reader of this directory learns which member produced which
+nullifier. The chain records no such link — that is the whole point of the
+design, and `scripts/verify-onchain.sh` reads the markers back with nothing but
+`proposal_ref` and a nullifier in them. This is the *creator's* bookkeeping for a
+member set the creator generated, and it is committed because pointing `msig` or
+the Basecamp module at this directory is the only way to see the deployed state
+without secrets. A real deployment's operator would not publish it.
 
 Point `msig` at this directory and it reads:
 
 ```bash
 msig status --dir artifacts/testnet \
-    --proposal-id 5bc829bb9a9efab4adb7446201f3a94113293bc51b63ef9356a254671f2b96fc
+    --proposal-id 86bb53f6851ef77b03cdfc2e04f9ff2d930e11dbee1b33492018b95a3d65560d
 ```
 
 which prints the payment, the threshold, and the two marker seeds — the same
@@ -26,7 +39,7 @@ Read the chain rather than these files:
 
 ```bash
 ./scripts/verify-onchain-lifecycle.sh          # the eight transactions
-./scripts/verify-onchain.sh .testnet 5bc829bb9a9efab4adb7446201f3a94113293bc51b63ef9356a254671f2b96fc
+./scripts/verify-onchain.sh .testnet 86bb53f6851ef77b03cdfc2e04f9ff2d930e11dbee1b33492018b95a3d65560d
 ```
 
 **An earlier run's files used to live here** and were replaced rather than kept

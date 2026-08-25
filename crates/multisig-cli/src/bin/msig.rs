@@ -676,12 +676,34 @@ fn fund_treasury_args(dir: &Path, amount: u128, out: &Path) -> Result<()> {
 /// the address they compute belongs to the program they are actually talking to.
 fn treasury_seeds(dir: &Path) -> Result<()> {
     let ms: MultisigFile = read_json(&dir.join("multisig.json"))?;
-    let seeds = multisig_sdk::Multisig::new(
+    let built = multisig_sdk::Multisig::new(
         hex32(&ms.id_hex)?,
         hex32(&ms.member_root_hex)?,
         ms.threshold,
     )?
-    .treasury_seeds();
+    .with_tiers(&tier_table(&ms))?;
+
+    // The seeds are an address, and an address computed from the wrong
+    // configuration is not a near miss — it is a different account. This
+    // rebuilt the commitment from the file's members and threshold and forgot
+    // its tiers, so a tiered multisig reported the treasury of the untiered one:
+    // a real address, owned by nobody, that reads as an empty account. Nothing
+    // failed; the balances were simply read from somewhere else. So the rebuilt
+    // commitment is now checked against the one the file records, and a
+    // disagreement stops here rather than becoming a number in a document.
+    if hex::encode(built.config_hash()) != ms.config_hash_hex {
+        bail!(
+            "the configuration in {} does not hash to the config_hash it records.\n\
+             recorded:   {}\n\
+             recomputed: {}\n\
+             Every address this multisig uses derives from that value, so nothing \
+             downstream would be pointing at the right account.",
+            dir.join("multisig.json").display(),
+            ms.config_hash_hex,
+            hex::encode(built.config_hash())
+        );
+    }
+    let seeds = built.treasury_seeds();
     println!(
         "{} {} {}",
         hex::encode(seeds[0]),

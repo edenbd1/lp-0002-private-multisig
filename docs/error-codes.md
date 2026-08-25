@@ -61,15 +61,15 @@ executor:
 cargo test -p multisig-verifier-tests
 ```
 
-**82 tests there**, in five files:
+**84 tests there**, in five files:
 
 | File | Tests | What it establishes |
 |---|---:|---|
 | `verifier_rejects.rs` | 30 | The gate cannot be forced: 25 forgeries, 5 honest controls |
 | `state_and_transfer.rs` | 22 | Passing the gate moves real balances, and every account it claims comes out readable |
-| `idl_contract.rs` | 5 | The IDL, this document and `scripts/pda.py` still agree with the guest source |
+| `idl_contract.rs` | 6 | The IDL, this document and `scripts/pda.py` still agree with the guest source |
 | `tiers_and_rotation.rs` | 23 | Spending tiers may only ever lower the bar, and a rotation replaces a configuration rather than adding one |
-| `program_id_pin.rs` | 2 | The verifier chains only to the exact membership binary committed here |
+| `program_id_pin.rs` | 3 | The verifier chains only to the exact membership binary committed here |
 
 Every one of the twenty-seven codes is named by at least one test, and the three
 files divide cleanly: `verifier_rejects.rs` covers `5001`–`5013`,
@@ -95,4 +95,4 @@ The circuit-side bindings are covered separately by 25 tests in
 format, and the client surface by 2 in `multisig-sdk` (one of them a doctest) and
 2 in `multisig-cli`.
 
-**127 in total.** `cargo test --workspace` runs all of them.
+**130 in total.** `cargo test --workspace` runs all of them.

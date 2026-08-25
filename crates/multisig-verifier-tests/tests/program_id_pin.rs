@@ -150,7 +150,15 @@ fn every_image_id_the_docs_quote_is_one_this_checkout_builds() {
     // history, so these are allowed — with a reason, and with the same rule the
     // other checkers here use: an allowance that matches nothing is itself a
     // failure, because a stale exemption is how a real drift gets waved through.
-    const RETIRED: &[(&str, &str)] = &[(
+    const RETIRED: &[(&str, &str)] = &[
+        (
+            "1346b65293ac9b11d4b1029a0d02559462238582124062925a3ad24298ff4e1e",
+            "docs/DEPLOYMENT.md records the deployment the 2026-08-25 redeploy \
+             replaced — the one whose config_hash anchored no tiers. Its accounts \
+             are still on chain and still readable, and naming the ImageID is how \
+             a reader following a stale link learns which of them they landed on",
+        ),
+        (
         "5bb4008273ddc31d1c2b5bad8835daaf4c567e029dbb059c20c7e83ba5966f82",
         "docs/DEPLOYMENT.md explains that the accounts of an earlier deployment \
          belong to this verifier, which the repository no longer contains — the \

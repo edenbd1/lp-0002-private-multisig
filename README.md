@@ -303,7 +303,7 @@ all the chain records and all the other members can see.
 | `crates/multisig-core` | Shared primitives, the in-circuit approval logic, and the account-layout codec. `no_std`. 41 tests |
 | `crates/membership-circuit/methods/guest-lez` | The membership proof as a native LEZ program, so the privacy circuit composes it with `env::verify` |
 | `crates/multisig-verifier-spel/methods/guest` | The on-chain verifier: `create_multisig`, `fund_treasury`, `create_proposal`, `approve`, `execute` |
-| `crates/multisig-verifier-tests` | 84 tests against the built binary, through the sequencer's own executor: 30 rejections and controls, 22 on the state it writes and the value it moves, 5 on the IDL and the docs, 2 pinning the membership binary |
+| `crates/multisig-verifier-tests` | 84 tests against the built binary, through the sequencer's own executor: 30 rejections and controls, 22 on the state it writes and the value it moves, 23 on the spending tiers and the rotation, 6 on the IDL and the docs, 3 pinning the membership binary and every quoted ImageID |
 | `crates/multisig-sdk` | The reusable client library for Logos modules. Transport-agnostic |
 | `crates/multisig-cli` | `msig`, the command line client |
 | `app/` | The Basecamp GUI |

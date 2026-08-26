@@ -386,6 +386,40 @@ fn report_the_cycle_costs() {
     };
 
     println!("multisig verifier, guest execution only");
+    // The three cheap instructions were once argued about rather than measured
+    // — "they do strictly less work than execute (M=1) and are bounded by it".
+    // The criterion says each on-chain operation, and an argument is not a
+    // number, so they are measured here with the same harness as the rest.
+    report(
+        "create_multisig",
+        session(
+            &elf,
+            &pid,
+            f.create_multisig_accounts(f.config_hash),
+            &f.create_multisig_ix(),
+        )
+        .expect("create_multisig executes"),
+    );
+    report(
+        "create_proposal",
+        session(
+            &elf,
+            &pid,
+            f.create_proposal_accounts(f.proposal_ref, true),
+            &f.create_proposal_ix(),
+        )
+        .expect("create_proposal executes"),
+    );
+    report(
+        "fund_treasury",
+        session(
+            &elf,
+            &pid,
+            f.fund_accounts(funding_signer([0xF0; 32], 1_000)),
+            &f.fund_ix(400),
+        )
+        .expect("fund_treasury executes"),
+    );
     report(
         "approve",
         session(

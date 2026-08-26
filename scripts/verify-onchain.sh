@@ -55,6 +55,25 @@ PROPOSAL_REF=$(python3 -c "import json;print(json.load(open('$PROPOSAL_JSON'))['
 CONFIG_HASH=$(python3 -c "import json;print(json.load(open('$WORK/multisig.json'))['config_hash_hex'])")
 MSIG_ID=$(python3 -c "import json;print(json.load(open('$WORK/multisig.json'))['id_hex'])")
 THRESHOLD=$(python3 -c "import json;print(json.load(open('$WORK/multisig.json'))['threshold'])")
+# What this proposal actually costs, which is not always the default. A tier that
+# covers the amount lowers it, and the closing line used to report the default
+# alone: "2 approval(s) recorded against a threshold of 3" reads as an execution
+# that went through under-approved, when it is the anchored tier doing its job.
+# The tier table is in the same record the threshold came from.
+REQUIRED=$(python3 -c "
+import json
+m=json.load(open('$WORK/multisig.json'))
+p=json.load(open('$WORK/proposals/$PROP_ID.json'))
+amount=p.get('amount')
+req=m['threshold']; why=''
+if amount is not None:
+    for cap, thr in m.get('tiers') or []:
+        if amount <= cap:
+            req, why = thr, ' (an anchored tier prices %s at %s, below the default of %s)' % (amount, thr, m['threshold'])
+            break
+print('%d\t%s' % (req, why))" 2>/dev/null)
+REQ_N=${REQUIRED%%$'\t'*}
+REQ_WHY=${REQUIRED#*$'\t'}
 
 echo "sequencer   $RPC"
 echo "proposal    $PROPOSAL_REF"
@@ -163,7 +182,7 @@ fi
 echo
 if [ "$fail" = 0 ]; then
   echo "all accounts present and owned by the verifier"
-  echo "$n approval(s) recorded against a threshold of $THRESHOLD"
+  echo "$n approval(s) recorded against a requirement of ${REQ_N:-$THRESHOLD}${REQ_WHY}"
 else
   echo "one or more accounts are missing or not owned by the verifier" >&2
 fi

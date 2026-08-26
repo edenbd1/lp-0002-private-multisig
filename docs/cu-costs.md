@@ -16,6 +16,9 @@ Verifier ImageID `a8a87f8b456299144236f42f194f1b85c11265763a976c055a7f471b615007
 
 | Instruction | Segments | User cycles | Proving cycles | Share of the public budget |
 |---|---:|---:|---:|---:|
+| `create_multisig` | 1 | 209,349 | 524,288 | 1.56 % |
+| `fund_treasury` | 1 | 298,376 | 524,288 | 1.56 % |
+| `create_proposal` | 1 | 338,828 | 524,288 | 1.56 % |
 | `approve` | 1 | 541,207 | 1,048,576 | 3.12 % |
 | `execute` (M=1) | 1 | 623,636 | 1,048,576 | 3.12 % |
 | `execute` (M=3) | 1 | 786,596 | 1,048,576 | 3.12 % |
@@ -44,9 +47,12 @@ cannot be read under someone else's table.
 less, because it counts the same approvals and writes two records but moves no
 value, so it never touches the treasury or the recipient.
 
-`create_multisig`, `fund_treasury` and `create_proposal` do strictly less work
-than `execute` (M=1) — a few hashes, a comparison, and a PDA claim — and are
-bounded by it.
+`create_multisig`, `fund_treasury` and `create_proposal` were once argued about
+here rather than measured — "strictly less work than `execute` (M=1), and bounded
+by it". True, and now unnecessary: they are in the table, from the same harness
+and the same command as every other row. The criterion says *each* on-chain
+operation, and an argument is not a number. They land in the smaller power-of-two
+segment, which is why all three read 1.56 % against `approve`'s 3.12 %.
 
 Every row is a real accepted execution against a fixture of that size, which is
 why the M=7 row needs a 7-member set rather than a 5-member one with the

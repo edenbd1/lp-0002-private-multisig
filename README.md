@@ -344,7 +344,7 @@ not supported"*.
 
 ## On the public LEZ testnet
 
-**Deployed 2026-08-24**, blocks 23028-23554: both programs, a **3-of-3** multisig
+**Deployed 2026-08-25**, blocks 23028-23554: both programs, a **3-of-3** multisig
 with a spending tier, a funded treasury, a proposal, **two** approvals on the
 privacy-preserving path, and an execution that moved the money — two against a
 threshold of three, because the anchored tier covers the amount.

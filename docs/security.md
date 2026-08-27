@@ -146,7 +146,8 @@ the circuit half and `crates/multisig-verifier-tests/` for the on-chain half.
    path that reads a threshold from caller-supplied data.
 
 3. **Approvals are bound to the exact action.** `proposal_ref` commits to
-   `(multisig_id, proposal_id, action_hash)`, and the nullifier and marker seeds
+   `(multisig_id, config_hash, proposal_id, action_hash)`, and the nullifier and
+   marker seeds
    derive from it. Approvals gathered for a benign action are worthless for a
    malicious one published under the same id. This also removes the mirror-image
    griefing vector: a junk action cannot burn the real proposal's markers,

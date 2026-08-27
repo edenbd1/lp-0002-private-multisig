@@ -1,6 +1,6 @@
 # Deployment
 
-**Deployed to the public LEZ testnet on 2026-08-24**, in blocks 23028-23554.
+**Deployed to the public LEZ testnet on 2026-08-25**, in blocks 23028-23554.
 Every hash and every address below was read back off the chain rather than
 derived on paper: `./scripts/verify-onchain-lifecycle.sh` re-checks the
 transactions from a clean clone, and `./scripts/verify-onchain.sh` re-reads the

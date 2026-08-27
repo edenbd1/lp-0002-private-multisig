@@ -16,7 +16,7 @@
 //!
 //!   1. **Membership is against an anchored root.** The multisig account is a
 //!      PDA whose address derives from `[multisig_id, config_hash]`, and
-//!      `config_hash` commits to `(member_root, threshold)`. Only
+//!      `config_hash` commits to `(member_root, threshold, tiers_hash)`. Only
 //!      `create_multisig` initialises that address. A prover who invents a
 //!      one-leaf tree containing themselves names a different `member_root`,
 //!      hence a different `config_hash`, hence a PDA that was never initialised

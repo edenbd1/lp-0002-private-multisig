@@ -10,7 +10,7 @@ where the `11NNN` form is SPEL's envelope around the program's own `5NNN`.
 | Code | Meaning | Raised by | Stops |
 |---|---|---|---|
 | `5001` | `witness_words` did not decode as an `ApproveWitness` | `approve` | Malformed or truncated witness data |
-| `5002` | `config_hash` is not `H(member_root ‖ threshold)` | `approve`, `execute` | Presenting a config hash inconsistent with the pair it claims to commit to |
+| `5002` | `config_hash` is not `H(member_root ‖ threshold ‖ tiers_hash)` | `approve`, `execute` | Presenting a config hash inconsistent with the pair it claims to commit to |
 | `5003` | No multisig is committed at this `(multisig_id, config_hash)` | `create_proposal`, `approve`, `execute` | **The invented member set, and the lowered threshold.** Both resolve to a PDA nobody initialised |
 | `5004` | No proposal is committed at this `proposal_ref` | `approve`, `execute` | Approving or executing a proposal that was never published |
 | `5005` | The nullifier is not the one the witness yields | `approve` | Proving a real membership while occupying another member's marker |

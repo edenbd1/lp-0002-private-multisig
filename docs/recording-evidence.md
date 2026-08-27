@@ -37,7 +37,7 @@ the film".
 ## Which commit the film shows
 
 The film was shot at
-[`dda7d2a`](https://github.com/edenbd1/lp-0002-private-multisig/commit/dda7d2a)
+[`bb63979`](https://github.com/edenbd1/lp-0002-private-multisig/commit/bb63979)
 and shows that hash on screen in its opening seconds, over a clean tree. The
 reviewed commit is later, because the transcript of a film can only be committed
 after the film exists, and the checks that followed found things worth fixing.
@@ -59,7 +59,7 @@ of 3", which read as an under-approved execution; it now names the tier that
 priced the transfer. The film's closing frames therefore show text these scripts
 no longer print. Nothing about the chain changed — the same thirteen
 transactions, the same accounts, the same balances — only what the scripts say
-about them. `git diff dda7d2a..HEAD --stat` prints the whole list.
+about them. `git diff bb63979..HEAD --stat` prints the whole list.
 
 ## What this does not establish
 

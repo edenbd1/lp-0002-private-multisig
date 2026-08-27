@@ -44,11 +44,22 @@ after the film exists, and the checks that followed found things worth fixing.
 Everything between the two is documentation and repository gates: this file, the
 transcript and its checker, the README's test tally — which had not followed the
 suite from 130 to 131 — and the gate that now reads that table rather than four
-remembered rows of it. **No program, no script the demo runs, no artefact the
-chain sees.** Rather than trust that list to stay complete,
-`git diff dda7d2a..HEAD --stat` prints what actually moved; the two program
-binaries under `artifacts/programs/` are not in it, and `scripts/preflight.sh`
+remembered rows of it. **No program and no artefact the chain sees** — the two
+binaries under `artifacts/programs/` are not in the diff, and `scripts/preflight.sh`
 fails if either ever hashes differently from what is deployed.
+
+Two scripts the film runs *have* changed since, and the film shows the older
+output, so it is worth saying exactly what differs rather than leaving a reader
+to find it. `verify-onchain-lifecycle.sh` used to close on "which is the part a
+block explorer cannot show you"; measured since, the explorer does show it — an
+approval renders `Proof Size: 264907 bytes` — so the line now says so, and the
+narration recorded before that measurement still carries the old claim.
+`verify-onchain.sh` used to close on "2 approval(s) recorded against a threshold
+of 3", which read as an under-approved execution; it now names the tier that
+priced the transfer. The film's closing frames therefore show text these scripts
+no longer print. Nothing about the chain changed — the same thirteen
+transactions, the same accounts, the same balances — only what the scripts say
+about them. `git diff dda7d2a..HEAD --stat` prints the whole list.
 
 ## What this does not establish
 

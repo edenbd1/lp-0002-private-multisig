@@ -256,7 +256,8 @@ pub fn compute_member_leaf(account_id: &[u8; 32], salt: &[u8; 32]) -> [u8; 32] {
 
 /// The multisig configuration commitment.
 ///
-/// `config_hash = SHA256(MULTISIG_CONFIG_PREFIX || member_root || threshold_le)`
+/// `config_hash = SHA256(MULTISIG_CONFIG_PREFIX || member_root || threshold_le
+///                        || tiers_hash)`
 ///
 /// This is what makes binding 2 work. The on-chain multisig PDA is seeded by
 /// `[multisig_id, config_hash]`, so the member set *and* the threshold are both
@@ -613,8 +614,8 @@ pub fn compute_transfer_action_hash(
 
 /// The proposal reference every approval is scoped to.
 ///
-/// `proposal_ref = SHA256(PROPOSAL_REF_PREFIX || multisig_id || proposal_id
-///                        || action_hash)`
+/// `proposal_ref = SHA256(PROPOSAL_REF_PREFIX || multisig_id || config_hash
+///                        || proposal_id || action_hash)`
 ///
 /// Folding `action_hash` in here is binding 3, and it closes a real attack. If
 /// approvals were scoped to `proposal_id` alone, a proposer could publish a

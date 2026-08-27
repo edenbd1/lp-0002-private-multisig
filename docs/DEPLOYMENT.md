@@ -211,7 +211,7 @@ proposal id `5bc829bb9a9efab4adb7446201f3a94113293bc51b63ef9356a254671f2b96fc`.
 The threshold was **2 of 3**, and the action was *transfer 1 to
 `8kexXda8j5hPegPeHXzUM9PhvjYNFLpN8wN8PvG5iDhn`*, memo
 `transfer 1 LEZ to the grants treasury`. Executing it moved the amount: the
-treasury went **2 → 1** and the recipient **0 → 1**.
+treasury went **2 → 1** and the recipient **1 → 2**.
 
 ## The accounts, and what they prove
 
@@ -230,7 +230,7 @@ with `scripts/pda.py` and query `getAccount`.
 | execution marker | `J1N6WWpHVPh6pBpXmKAe522JBEWaaRT3jymaWcczg5AG` | 0 |
 
 A seventh account is not the program's and is the point of the exercise: the
-**recipient**, `8kexXda8j5hPegPeHXzUM9PhvjYNFLpN8wN8PvG5iDhn`, went **0 → 1**. It
+**recipient**, `8kexXda8j5hPegPeHXzUM9PhvjYNFLpN8wN8PvG5iDhn`, went **1 → 2**. It
 is owned by the native transfer program rather than by the verifier, which is
 what makes the balance it received spendable instead of burnt.
 

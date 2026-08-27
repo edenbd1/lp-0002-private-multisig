@@ -119,7 +119,8 @@ echo
 if [ "$fail" -eq 0 ]; then
   echo "Both programs on chain are the bytecode in this repository, the thirteen"
   echo "transactions resolve, and the five approvals are PrivacyPreserving rather"
-  echo "than Public — which is the part a block explorer cannot show you."
+  echo "than Public. The explorer agrees: an approval's page reads Proof Size:"
+  echo "264907 bytes where execute reads 0. This reads it off the sequencer."
 else
   echo "Something above did not hold." >&2
 fi

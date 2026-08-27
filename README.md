@@ -361,8 +361,11 @@ tables and the two records side by side.
 
 It recomputes each deploy hash from the committed bytecode rather than trusting
 the table below, and asserts the variant every transaction carries — the two
-approvals are `PrivacyPreserving` and not `Public`, which is the part a block
-explorer cannot show you. A hash that was never deployed runs first as the
+approvals are `PrivacyPreserving` and not `Public`. The explorer shows that too —
+an approval's page reads `Type: Privacy-Preserving Transaction` and
+`Proof Size: 264907 bytes`, against `Public Transaction` and `0 bytes` on
+`execute` — so this reads the same fact off the sequencer rather than an index.
+A hash that was never deployed runs first as the
 control; if it ever resolves the run is abandoned rather than reported green.
 
 | Step | Transaction | Block |
@@ -392,13 +395,13 @@ Six accounts came out of it, all owned by the verifier program:
 | execution marker | `J1N6WWpHVPh6pBpXmKAe522JBEWaaRT3jymaWcczg5AG` | 0 |
 
 The recipient — `8kexXda8j5hPegPeHXzUM9PhvjYNFLpN8wN8PvG5iDhn`, owned by the
-native transfer program and not by the verifier — went **0 → 1**. The treasury
+native transfer program and not by the verifier — went **1 → 2**. The treasury
 falling by exactly what the recipient gained is the claim that no marker on its
 own can make.
 
 Neither approval marker could exist without a membership proof having been
 verified on chain, and neither names a member. Read them back with
-`./scripts/verify-onchain.sh .testnet 5bc829bb9a9efab4adb7446201f3a94113293bc51b63ef9356a254671f2b96fc`.
+`./scripts/verify-onchain.sh artifacts/testnet 86bb53f6851ef77b03cdfc2e04f9ff2d930e11dbee1b33492018b95a3d65560d`.
 
 **Addresses from before this deployment are still reachable and still empty.**
 The previous verifier ImageID `5bb40082…` claimed five accounts and wrote nothing

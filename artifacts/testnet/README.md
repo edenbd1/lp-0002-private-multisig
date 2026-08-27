@@ -39,7 +39,7 @@ Read the chain rather than these files:
 
 ```bash
 ./scripts/verify-onchain-lifecycle.sh          # the eight transactions
-./scripts/verify-onchain.sh .testnet 86bb53f6851ef77b03cdfc2e04f9ff2d930e11dbee1b33492018b95a3d65560d
+./scripts/verify-onchain.sh artifacts/testnet 86bb53f6851ef77b03cdfc2e04f9ff2d930e11dbee1b33492018b95a3d65560d
 ```
 
 **An earlier run's files used to live here** and were replaced rather than kept

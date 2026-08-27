@@ -103,14 +103,21 @@ Before pushing, run what CI runs:
 ```
 
 It runs what CI runs rather than an approximation of it — `fmt --check`,
-`clippy --all-targets -- -D warnings`, build and test, then the three checks
-cheap enough to be worth doing before a push: every quoted sha256 against the
-file it names, the IDL against the error codes the guest declares, and a YAML
-parse of the workflows. Ten steps, not the four this sentence used to claim; the last three are
-cheap because they read the tree rather than build it.
-The one CI gate it cannot reproduce is `scripts/check-run-citations.py`, which
-needs the GitHub API to resolve the runs the documents cite; run that one
-directly after touching a document that names a run. Wire it up as a pre-push hook with:
+`clippy --all-targets -- -D warnings`, build and test, then the checks cheap
+enough to be worth doing before a push: every quoted sha256 against the file it
+names, the IDL against the error codes the guest declares, every stated test
+count against what its suite passes, every quoted path and link, every explorer
+link against the chain, every cited CI run against the commits this branch has,
+no file naming a different prize entry, and a YAML parse of the workflows.
+**Twelve steps, and the list is not an approximation of CI's — it is CI's.**
+
+That last claim is load-bearing and it has already been false once. This file
+used to say the one gate preflight could not reproduce was
+`scripts/check-run-citations.py`, because it needs the GitHub API. The rest of
+that sentence was true and the conclusion was not: `gh` is available where this
+runs, and leaving the gate out meant a history rewrite orphaned two cited runs
+and turned CI red with a green preflight. It runs here now, and so does the leak
+check that was missing beside it. Wire preflight up as a pre-push hook with:
 
 ```bash
 printf '#!/usr/bin/env bash\nexec "$(git rev-parse --show-toplevel)/scripts/preflight.sh"\n' \

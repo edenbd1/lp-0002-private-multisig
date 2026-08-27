@@ -134,6 +134,12 @@ jobs:
       - name: Every stated test count is what its suite passes
         run: ./scripts/check-test-count.py
 
+      # Ran in preflight.sh and nowhere a push could see. A digest quoted beside
+      # a downloadable asset is the one number a reader cannot recompute without
+      # the file, so it is exactly the one a machine should be checking.
+      - name: Every quoted sha256 is that file's
+        run: ./scripts/check-quoted-hashes.py
+
       - name: Adversarial suite against the built binary
         run: cargo test -p multisig-verifier-tests
 

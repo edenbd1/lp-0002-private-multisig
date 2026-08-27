@@ -4,8 +4,9 @@ These files are the client-side record of the LP-0002 lifecycle that ran on the
 public LEZ testnet on **2026-08-25**, against verifier ImageID
 `a8a87f8b456299144236f42f194f1b85c11265763a976c055a7f471b61500750` — a **3-of-3**
 multisig with a spending tier, its treasury funded, a proposal published, **two**
-approvals gathered on the privacy-preserving path, and executed. Eight
-transactions, blocks 23028-23066. [`docs/DEPLOYMENT.md`](../../docs/DEPLOYMENT.md)
+approvals gathered on the privacy-preserving path, and executed — then the same
+member set voted to replace itself. Thirteen transactions: twelve in blocks
+23028-23554, and the `membership_lez` deploy earlier at block 4459. [`docs/DEPLOYMENT.md`](../../docs/DEPLOYMENT.md)
 has every hash and every address.
 
 **Two approvals against a threshold of three**, because the tier this multisig
@@ -38,7 +39,7 @@ pointing **Multisig folder** here shows the deployed state.
 Read the chain rather than these files:
 
 ```bash
-./scripts/verify-onchain-lifecycle.sh          # the eight transactions
+./scripts/verify-onchain-lifecycle.sh          # the thirteen transactions
 ./scripts/verify-onchain.sh artifacts/testnet 86bb53f6851ef77b03cdfc2e04f9ff2d930e11dbee1b33492018b95a3d65560d
 ```
 

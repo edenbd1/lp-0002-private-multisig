@@ -32,8 +32,10 @@ that it exists at all.
 --explorer ALSO ASKS THE EXPLORER
 
 `getTransaction` says the node has it. It does not say a reader clicking the
-link sees anything: the explorer is a separate index and reaches a transaction
-about an hour and three quarters after the sequencer does. With `--explorer`
+link sees anything: the explorer is a separate index and runs behind the
+sequencer. How far behind is not a constant — measured 2026-08-25 it was about
+an hour and three quarters, measured 2026-08-27 about three and a half hours —
+so this quotes no figure and `--explorer` prints the index's own head instead. With `--explorer`
 each transaction page is fetched too, and judged on size — the page for a hash
 that cannot exist is a ~2.4 kB shell, and any real one is several times that.
 
@@ -58,6 +60,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RPC = os.environ.get("LEZ_RPC", "https://testnet.lez.logos.co")
 TX = re.compile(r"explorer\.testnet\.lez\.logos\.co/transaction/([0-9a-fA-F]{8,})")
 BARE = re.compile(r"[0-9a-fA-F]{64}")
+TX_HEADERS = {"transaction", "tx", "transaction hash", "hash", "deploy tx"}
 ACCT = re.compile(r"explorer\.testnet\.lez\.logos\.co/account/([1-9A-HJ-NP-Za-km-z]{20,})")
 SKIP_DIRS = ("vendor/", "target/", "_external/", "node_modules/")
 
@@ -123,6 +126,7 @@ def main():
     verbose = "--list" in sys.argv
     want_explorer = "--explorer" in sys.argv
     refs = {}
+    from_tables = [0]
     for doc in documents():
         # A table's Transaction column is a chain reference even when it is not a
         # link. Before this, a hash written bare — which is how the lifecycle
@@ -141,7 +145,8 @@ def main():
                     tx_col = None
                     continue
                 cells = [c.strip() for c in line.strip().strip("|").split("|")]
-                header = [i for i, c in enumerate(cells) if "transaction" in c.lower()]
+                header = [i for i, c in enumerate(cells)
+                          if c.strip().strip("*` ").lower() in TX_HEADERS]
                 if header and not BARE.search(line):
                     tx_col = header[0]
                     continue
@@ -150,6 +155,8 @@ def main():
                     if m:
                         refs.setdefault(("tx", m.group(0).lower()), []).append(
                             "%s:%d" % (doc, lineno))
+                        from_tables[0] += 1
+
 
     if not refs:
         print("no explorer link appears in any document, so there is nothing to\n"
@@ -181,6 +188,10 @@ def main():
             failures.append("%s %s does not exist on this chain, and is linked at %s"
                             % (kind, key, ", ".join(sites)))
 
+    # Printed rather than asserted, and printed on purpose: the table branch is
+    # keyed on a column header, so renaming that header switches it off. A count
+    # that silently goes to zero is the failure this line makes legible.
+    print("%d of them were read out of a table's transaction column" % from_tables[0])
     print("resolved %d of %d explorer reference(s) across %d document(s)"
           % (resolved, len(refs), len(documents())))
 

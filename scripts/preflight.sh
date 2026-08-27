@@ -56,10 +56,20 @@ step "Counts        every stated test count is what its suite passes" \
 step "Docs          every quoted path, link and line citation resolves" \
      python3 scripts/check-docs.py
 
-# Touche le réseau : le nœud public, pas GitHub. Laissé en dernier pour que
-# les contrôles hors-ligne aient déjà parlé si celui-ci ne peut pas joindre.
+# Touches the network: the public node, not GitHub. Left last so the offline
+# checks have already spoken if this one cannot reach it.
 step "Chain refs    every explorer link resolves" \
      python3 scripts/check-chain-refs.py
+
+# These two ran in CI and not here, and the gap cost a red build: rewriting this
+# branch's history orphaned two cited CI runs, and the only thing that noticed
+# was the workflow, after the push. A preflight that omits a gate CI runs is
+# exactly as useful as no preflight for the gate it omits.
+step "Run citations every cited CI run is on a commit this branch has" \
+     python3 scripts/check-run-citations.py
+
+step "Leaks         no file names a different prize entry" \
+     env OWN_PRIZE=LP-0002 python3 scripts/check-no-cross-submission.py
 
 step "Workflows     yaml parse" python3 - <<'PY'
 import glob, sys

@@ -144,15 +144,20 @@ curl -s https://explorer.testnet.lez.logos.co/transaction/dce8fd4dc4b53216d72714
 curl -s "https://explorer.testnet.lez.logos.co/transaction/$(python3 -c 'print("ff"*32)')" | wc -c
 ```
 
-**Match on the body, never on the length.** Measured 2026-08-24 on this
-lifecycle's own eight hashes, the render is proportional to what a transaction
-carries, so there are three sizes and not two:
+**Match on the body, never on the length.** Re-measured 2026-08-27 across all
+thirteen of this lifecycle's hashes, the render is proportional to what a
+transaction carries, so there are three sizes and not two:
 
 | what | over `curl` | why |
 |---|---|---|
 | a hash that cannot exist | **2,416 bytes** | the page stops at the loading shell |
-| a **public** transaction | **~4.5-5 kB** | *complete* — `Type: Public Transaction`, `Program ID`, instruction-data size, signature count, and every account with its nonce |
-| a deployment or a privacy-preserving transaction | **370-640 kB** | the same page plus the proof bytes, which are almost all of it |
+| a **public** transaction | **4.9-7.7 kB** | *complete* — `Type: Public Transaction`, `Program ID`, instruction-data size, signature count, and every account with its nonce |
+| a deployment or a privacy-preserving transaction | **372-694 kB** | the same page plus the proof bytes, which are almost all of it |
+
+The public row spans wider than it looks: `fund_treasury` renders 4,920 bytes and
+`rotate_config` 7,652, because a rotation names more accounts. An earlier version
+of this table said 4.5-5 kB, measured over eight hashes when the lifecycle had
+eight; the rotation added five more and the ceiling moved with them.
 
 A public transaction's page is short because a public transaction carries no
 proof, not because anything is missing from it. So a size tells you which *kind*

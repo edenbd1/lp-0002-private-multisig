@@ -57,6 +57,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RPC = os.environ.get("LEZ_RPC", "https://testnet.lez.logos.co")
 TX = re.compile(r"explorer\.testnet\.lez\.logos\.co/transaction/([0-9a-fA-F]{8,})")
+BARE = re.compile(r"[0-9a-fA-F]{64}")
 ACCT = re.compile(r"explorer\.testnet\.lez\.logos\.co/account/([1-9A-HJ-NP-Za-km-z]{20,})")
 SKIP_DIRS = ("vendor/", "target/", "_external/", "node_modules/")
 
@@ -123,12 +124,32 @@ def main():
     want_explorer = "--explorer" in sys.argv
     refs = {}
     for doc in documents():
+        # A table's Transaction column is a chain reference even when it is not a
+        # link. Before this, a hash written bare — which is how the lifecycle
+        # tables write them — was resolved by nothing: flipping its last digit
+        # left every gate green. The column is found by name in the header, so a
+        # table that has no such column contributes nothing and stays silent.
+        tx_col = None
         with open(os.path.join(ROOT, doc), encoding="utf-8", errors="replace") as fh:
             for lineno, line in enumerate(fh, 1):
                 for h in TX.findall(line):
                     refs.setdefault(("tx", h.lower()), []).append("%s:%d" % (doc, lineno))
                 for a in ACCT.findall(line):
                     refs.setdefault(("acct", a), []).append("%s:%d" % (doc, lineno))
+
+                if not line.lstrip().startswith("|"):
+                    tx_col = None
+                    continue
+                cells = [c.strip() for c in line.strip().strip("|").split("|")]
+                header = [i for i, c in enumerate(cells) if "transaction" in c.lower()]
+                if header and not BARE.search(line):
+                    tx_col = header[0]
+                    continue
+                if tx_col is not None and tx_col < len(cells):
+                    m = BARE.fullmatch(cells[tx_col].strip("`"))
+                    if m:
+                        refs.setdefault(("tx", m.group(0).lower()), []).append(
+                            "%s:%d" % (doc, lineno))
 
     if not refs:
         print("no explorer link appears in any document, so there is nothing to\n"

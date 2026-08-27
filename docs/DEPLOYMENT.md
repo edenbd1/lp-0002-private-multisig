@@ -1,6 +1,8 @@
 # Deployment
 
 **Deployed to the public LEZ testnet on 2026-08-25**, in blocks 23028-23554.
+`membership_lez` is older: it has been at block 4459 since 2026-08-12, so the
+range covers twelve of the thirteen transactions rather than all of them.
 Every hash and every address below was read back off the chain rather than
 derived on paper: `./scripts/verify-onchain-lifecycle.sh` re-checks the
 transactions from a clean clone, and `./scripts/verify-onchain.sh` re-reads the

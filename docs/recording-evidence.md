@@ -84,16 +84,15 @@ it, at `Proof Size: 264907 bytes`.
 
 Both films were reshot rather than relabelled, and the check is not "does the
 transcript match" but "does the picture still say what the scripts say today".
-Every frame of all three films was read with OCR and searched for the wordings
+Every frame of both films was read with OCR and searched for the wordings
 that are now wrong:
 
-| wording | must not appear | cycle | claim | e2e |
-|---|---|---:|---:|---:|
-| `threshold of` | yes | 0 | 0 | 0 |
-| `cannot show you` | yes | 0 | 0 | 0 |
-| `Five checks` / `[n/5]` | yes | 0 | 0 | 0 |
-| `requirement of 2` | expected | 43 | — | 26 |
-| `RISC0_DEV_MODE=0` | expected | — | 49 | 120 |
+| wording | must not appear | cycle | e2e |
+|---|---|---:|---:|
+| `threshold of` | yes | 0 | 0 |
+| `cannot show you` | yes | 0 | 0 |
+| `requirement of 2` | expected | 43 | 26 |
+| `RISC0_DEV_MODE=0` | expected | — | 120 |
 
 Counts are frames. A transcript check anchors only on lines the narration names;
 this reads everything on screen, which is the half that let the old defect
@@ -109,7 +108,7 @@ through.
   afterwards: this transcript against a different film still fails, on five
   counts. Nothing here claims the frames between the samples.
 - **Not the wording.** Nothing checks the transcript's sentences against the
-  audio. Structure, fit and four anchors are what is proved.
+  audio. Structure, fit and five anchors are what is proved.
 - **An OCR behaviour routed around, not diagnosed.** Tesseract renders `0` as
   `@` in this terminal font, and on the machine these were run on it returns an
   empty string for images under some temporary directories, silently. The

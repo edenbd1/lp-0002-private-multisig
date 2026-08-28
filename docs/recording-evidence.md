@@ -54,8 +54,10 @@ trouble of wondering.
 The **end-to-end film** was shot at
 [`b4f53ba`](https://github.com/edenbd1/lp-0002-private-multisig/commit/b4f53ba6ae9bdd4722d8437c7beb36b626e4d28d)
 and shows that hash in full in its opening seconds, over a clean tree. The
-reviewed commit is one later, and what separates them is this file: the
-measurement of a film cannot be written before the film is measured.
+reviewed commit is later — necessarily, because a film's transcript and the
+measurement of that transcript can only be written once the film exists. Run
+`git diff b4f53ba <reviewed commit> --stat` for the exact list; it is this file,
+the transcript, and the anchor added to hold one to the other.
 
 The **66-second reading of the chain** was shot at
 [`631efab`](https://github.com/edenbd1/lp-0002-private-multisig/commit/631efab731e29ac49e6e972713ce0c7b1b94d1d9),

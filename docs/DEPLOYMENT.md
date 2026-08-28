@@ -217,12 +217,12 @@ re-runs the whole lifecycle. The two deployment hashes come back identical,
 because a deployment hash is `SHA256(borsh(bytecode))` and the binaries are
 committed; the six lifecycle hashes are signed with a nonce and will be new.
 
-Multisig id `95d44c351a586e2e37d748ca14e4108904cf1c627b3d8ec51bf9b38851662e04`,
-member root `5372f377b5c1b94df954d7c0751edfa4bd2d76d6ab0f30f76ff9bc442bbc5970`,
-config hash `3310d0fb1321e48f0a8a8fc7f539aa232dc783ce02d4fa384da6b360aad25269`
+Multisig id `b03e107257f6cadaf0486fa1563f5eb3700ab51b7fd32056bae959d7e9c1ae86`,
+member root `cee4c2248aee07489975ee54ff460af7e35f39e9f6d7aa1772975dc81cb62c00`,
+config hash `1628d88b94961f00d73dd27521ed9241701a4d0a24b8fa1129704d827dc1b3ec`
 (which is what anchors the root *and* the threshold in the multisig's address),
-proposal id `5bc829bb9a9efab4adb7446201f3a94113293bc51b63ef9356a254671f2b96fc`.
-The threshold was **2 of 3**, and the action was *transfer 1 to
+proposal id `86bb53f6851ef77b03cdfc2e04f9ff2d930e11dbee1b33492018b95a3d65560d`.
+The threshold was **3 of 3**, and the action was *transfer 1 to
 `8kexXda8j5hPegPeHXzUM9PhvjYNFLpN8wN8PvG5iDhn`*, memo
 `transfer 1 LEZ to the grants treasury`. Executing it moved the amount: the
 treasury went **2 → 1** and the recipient **1 → 2**.
@@ -230,7 +230,7 @@ treasury went **2 → 1** and the recipient **1 → 2**.
 ## The accounts, and what they prove
 
 All six are owned by the verifier program
-(ProgramId `52b64613,119bac93,9a02b1d4,9455020d,82852362,92624012,42d23a5a,1e4eff98`).
+(ProgramId `8b7fa8a8,14996245,2ff43642,851b4f19,766512c1,056c973a,1b477f5a,50075061`).
 Read them yourself with `./scripts/verify-onchain.sh`, or derive the addresses
 with `scripts/pda.py` and query `getAccount`.
 
@@ -291,7 +291,7 @@ counted them against the threshold anchored in the multisig's address.
 | Program | ImageID | ProgramId (hex) |
 |---|---|---|
 | `membership_lez` | `56f784d6b37f5cbac85d2eca3e28f56346e8739e6c22cb15a1b7165616758e31` | `d684f756,ba5c7fb3,ca2e5dc8,63f5283e,9e73e846,15cb226c,5616b7a1,318e7516` |
-| `multisig_verifier` | `a8a87f8b456299144236f42f194f1b85c11265763a976c055a7f471b61500750` | `52b64613,119bac93,9a02b1d4,9455020d,82852362,92624012,42d23a5a,1e4eff98` |
+| `multisig_verifier` | `a8a87f8b456299144236f42f194f1b85c11265763a976c055a7f471b61500750` | `8b7fa8a8,14996245,2ff43642,851b4f19,766512c1,056c973a,1b477f5a,50075061` |
 
 Verify for yourself:
 

@@ -235,10 +235,12 @@ supersedes measured **614 s** and **609 s** for a 2-of-3.) The second approval
 here is the slower of the pair because it was resubmitted: the account that first
 carried it had never been initialised under the transfer program, so the privacy
 circuit refused it client-side before any proof was wasted, and the retry ran
-against a freshly provisioned approver. Both figures are in that run's
-`.testnet/lifecycle.tsv` next to the transaction hashes
-`d1381309…` and `9f7c541c…`, so the timing and the on-chain evidence come out of
-the same run rather than being paired up afterwards. Two approvals within 5 s of
+against a freshly provisioned approver. Both figures are laptop wall-clock from that
+run's log; the run's on-chain evidence is the two transfer approvals recorded in
+`docs/DEPLOYMENT.md` (`1a5e529d…` and `28a07e8d…`), which resolve on the explorer.
+The per-approval timing itself lives in `.testnet/lifecycle.tsv`, which is build
+output rather than a committed file, so treat the seconds as a laptop measurement
+rather than something a clone can re-derive. Two approvals within 5 s of
 each other is what an uncontended machine looks like; compare the 440/469 pair
 above and the 444/704 pair below, both taken under load.
 

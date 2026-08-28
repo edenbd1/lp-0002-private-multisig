@@ -8,7 +8,7 @@ it as
 [`recordings/lp-0002-threshold-moves-value.srt`](../recordings/lp-0002-threshold-moves-value.srt),
 so the film can be read and grepped instead of watched.
 
-## Measured 2026-08-28, on the reshot film
+## Measured 2026-08-29, on the reshot film
 
 ```
   lp-0002-threshold-moves-value.srt: 24 cue(s), lp-0002-threshold-moves-value-sub.mp4: 76.1 s
@@ -47,25 +47,13 @@ the film".
 
 ## Which commit each film shows
 
-There are two films, and they were shot an hour apart, so they show different
-commits. Saying which is which costs a paragraph and saves a reviewer the
-trouble of wondering.
-
-The **end-to-end film** was shot at
-[`b4f53ba`](https://github.com/edenbd1/lp-0002-private-multisig/commit/b4f53ba6ae9bdd4722d8437c7beb36b626e4d28d)
-and shows that hash in full in its opening seconds, over a clean tree. The
-reviewed commit is later — necessarily, because a film's transcript and the
-measurement of that transcript can only be written once the film exists. Run
-`git diff b4f53ba <reviewed commit> --stat` for the exact list; it is this file,
-the transcript, and the anchor added to hold one to the other.
-
-The **76-second reading of the chain** was shot at
-[`631efab`](https://github.com/edenbd1/lp-0002-private-multisig/commit/631efab731e29ac49e6e972713ce0c7b1b94d1d9),
-one commit earlier. The reason is structural rather than an oversight: a film's
-transcript can only be committed once the film exists, so the commit carrying the
-transcript is necessarily later than the take it transcribes.
-`git diff 631efab b4f53ba --stat` is two files — that transcript, and the anchor
-added to `scripts/check-transcript.py` to hold it to the picture.
+Both films were shot at
+[`c72ff1c`](https://github.com/edenbd1/lp-0002-private-multisig/commit/c72ff1c54a5656387ef20052551925efc339d914)
+and each shows that hash in full in its opening seconds, over a clean tree. The
+reviewed commit is a little later — necessarily, because a film's transcript and
+the measurement of that transcript can only be written once the film exists. Run
+`git diff c72ff1c <reviewed commit> --stat` for the exact list; it is this file
+alone.
 
 **No program, no script either film runs, and no artefact the chain sees** is in
 that diff. The two binaries under `artifacts/programs/` are untouched, and
@@ -91,8 +79,8 @@ that are now wrong:
 |---|---|---:|---:|
 | `threshold of` | yes | 0 | 0 |
 | `cannot show you` | yes | 0 | 0 |
-| `requirement of 2` | expected | 43 | 26 |
-| `RISC0_DEV_MODE=0` | expected | — | 120 |
+| `requirement of 2` | expected | 26 | 12 |
+| `RISC0_DEV_MODE=0` | expected | — | 52 |
 
 Counts are frames. A transcript check anchors only on lines the narration names;
 this reads everything on screen, which is the half that let the old defect

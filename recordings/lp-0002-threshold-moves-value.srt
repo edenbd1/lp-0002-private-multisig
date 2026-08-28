@@ -75,10 +75,22 @@ native transfer program and not by the verifier,
 which is what makes it spendable.
 
 20
-00:00:59,655 --> 00:01:03,175
-Both scripts are in the repository, and they take no
+00:00:59,655 --> 00:01:03,360
+Both scripts are in the repository. The lifecycle
 
 21
-00:01:03,175 --> 00:01:05,274
-arguments. Thanks for watching.
+00:01:03,360 --> 00:01:06,839
+one takes no arguments; the other takes a work
+
+22
+00:01:06,839 --> 00:01:10,771
+directory and a proposal id, so it can be pointed at
+
+23
+00:01:10,771 --> 00:01:14,174
+any run rather than only this one. Thanks for
+
+24
+00:01:14,174 --> 00:01:14,855
+watching.
 

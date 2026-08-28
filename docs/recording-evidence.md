@@ -11,7 +11,7 @@ so the film can be read and grepped instead of watched.
 ## Measured 2026-08-28, on the reshot film
 
 ```
-  lp-0002-threshold-moves-value.srt: 21 cue(s), lp-0002-threshold-moves-value-sub.mp4: 66.5 s
+  lp-0002-threshold-moves-value.srt: 24 cue(s), lp-0002-threshold-moves-value-sub.mp4: 76.1 s
     ok    structure, and the last cue lands 1.2 s before the end
     ok    privacy-preserving variant spoken at 12s, and on screen there
     ok    approval marker            spoken at 28s, and on screen there
@@ -59,7 +59,7 @@ measurement of that transcript can only be written once the film exists. Run
 `git diff b4f53ba <reviewed commit> --stat` for the exact list; it is this file,
 the transcript, and the anchor added to hold one to the other.
 
-The **66-second reading of the chain** was shot at
+The **76-second reading of the chain** was shot at
 [`631efab`](https://github.com/edenbd1/lp-0002-private-multisig/commit/631efab731e29ac49e6e972713ce0c7b1b94d1d9),
 one commit earlier. The reason is structural rather than an oversight: a film's
 transcript can only be committed once the film exists, so the commit carrying the

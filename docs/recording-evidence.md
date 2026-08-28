@@ -8,17 +8,28 @@ it as
 [`recordings/lp-0002-threshold-moves-value.srt`](../recordings/lp-0002-threshold-moves-value.srt),
 so the film can be read and grepped instead of watched.
 
-## Measured 2026-08-26
+## Measured 2026-08-28, on the reshot film
 
 ```
-  lp-0002-threshold-moves-value.srt: 15 cue(s), lp-0002-threshold-moves-value-sub.mp4: 46.5 s
+  lp-0002-threshold-moves-value.srt: 21 cue(s), lp-0002-threshold-moves-value-sub.mp4: 66.5 s
     ok    structure, and the last cue lands 1.2 s before the end
     ok    privacy-preserving variant spoken at 12s, and on screen there
-    ok    approval marker            spoken at 21s, and on screen there
-    ok    Thirteen transactions      spoken at 9s, and on screen there
-    ok    recipient                  spoken at 28s, and on screen there
-  transcript matches the film: structure, fit, and 4 anchor(s) tied to the picture.
+    ok    approval marker            spoken at 28s, and on screen there
+    ok    Thirteen transactions      spoken at 8s, and on screen there
+    ok    recipient                  spoken at 51s, and on screen there
+    ok    requirement of two         spoken at 35s, and on screen there
+  transcript matches the film: structure, fit, and 5 anchor(s) tied to the picture.
 ```
+
+**Why there is a fifth anchor now.** The film this replaces showed
+`2 approval(s) recorded against a threshold of 3` for 27 of its 46 seconds, while
+the narration said "passing the gate moves value" — read literally, an execution
+that went through under-approved. `verify-onchain.sh` had already been corrected
+to print `requirement of 2 (an anchored tier prices 1 at 2, below the default of
+3)`; the film predated the fix. The transcript check passed that film 4 anchors
+out of 4, because its anchors only test lines the narration names and the
+narration never mentioned the approval count. The wrong line sat in a blind spot
+by construction. The new narration says it aloud, so an anchor can hold it.
 
 The anchors are the part that matters. The narration is spoken, so its words are
 never on screen — but what it *talks about* is, and each anchor requires the
@@ -34,32 +45,56 @@ to prevent — run against a film whose narration used none of its phrases, it
 reported "anchor not testable" four times and then printed "transcript matches
 the film".
 
-## Which commit the film shows
+## Which commit each film shows
 
-The film was shot at
-[`bb63979`](https://github.com/edenbd1/lp-0002-private-multisig/commit/bb63979)
-and shows that hash on screen in its opening seconds, over a clean tree. The
-reviewed commit is later, because the transcript of a film can only be committed
-after the film exists, and the checks that followed found things worth fixing.
-Everything between the two is documentation and repository gates: this file, the
-transcript and its checker, the README's test tally — which had not followed the
-suite from 130 to 131 — and the gate that now reads that table rather than four
-remembered rows of it. **No program and no artefact the chain sees** — the two
-binaries under `artifacts/programs/` are not in the diff, and `scripts/preflight.sh`
-fails if either ever hashes differently from what is deployed.
+There are two films, and they were shot an hour apart, so they show different
+commits. Saying which is which costs a paragraph and saves a reviewer the
+trouble of wondering.
 
-Two scripts the film runs *have* changed since, and the film shows the older
-output, so it is worth saying exactly what differs rather than leaving a reader
-to find it. `verify-onchain-lifecycle.sh` used to close on "which is the part a
-block explorer cannot show you"; measured since, the explorer does show it — an
-approval renders `Proof Size: 264907 bytes` — so the line now says so, and the
-narration recorded before that measurement still carries the old claim.
-`verify-onchain.sh` used to close on "2 approval(s) recorded against a threshold
-of 3", which read as an under-approved execution; it now names the tier that
-priced the transfer. The film's closing frames therefore show text these scripts
-no longer print. Nothing about the chain changed — the same thirteen
-transactions, the same accounts, the same balances — only what the scripts say
-about them. `git diff bb63979..HEAD --stat` prints the whole list.
+The **end-to-end film** was shot at
+[`b4f53ba`](https://github.com/edenbd1/lp-0002-private-multisig/commit/b4f53ba6ae9bdd4722d8437c7beb36b626e4d28d)
+— the reviewed commit itself — and shows that hash in full in its opening
+seconds, over a clean tree.
+
+The **66-second reading of the chain** was shot at
+[`631efab`](https://github.com/edenbd1/lp-0002-private-multisig/commit/631efab731e29ac49e6e972713ce0c7b1b94d1d9),
+one commit earlier. The reason is structural rather than an oversight: a film's
+transcript can only be committed once the film exists, so the commit carrying the
+transcript is necessarily later than the take it transcribes.
+`git diff 631efab b4f53ba --stat` is two files — that transcript, and the anchor
+added to `scripts/check-transcript.py` to hold it to the picture.
+
+**No program, no script either film runs, and no artefact the chain sees** is in
+that diff. The two binaries under `artifacts/programs/` are untouched, and
+`scripts/preflight.sh` fails if either ever hashes differently from what is
+deployed.
+
+## What the films show, checked against what the scripts print
+
+The previous pair of films had drifted from the scripts they filmed, and the
+drift inverted a claim: the closing line read
+`2 approval(s) recorded against a threshold of 3`, which is what an execution
+that went through under-approved looks like, while the narration said "passing
+the gate moves value". The other film's narration said the privacy-preserving
+variant is "the part a block explorer cannot show you" — and the explorer shows
+it, at `Proof Size: 264907 bytes`.
+
+Both films were reshot rather than relabelled, and the check is not "does the
+transcript match" but "does the picture still say what the scripts say today".
+Every frame of all three films was read with OCR and searched for the wordings
+that are now wrong:
+
+| wording | must not appear | cycle | claim | e2e |
+|---|---|---:|---:|---:|
+| `threshold of` | yes | 0 | 0 | 0 |
+| `cannot show you` | yes | 0 | 0 | 0 |
+| `Five checks` / `[n/5]` | yes | 0 | 0 | 0 |
+| `requirement of 2` | expected | 43 | — | 26 |
+| `RISC0_DEV_MODE=0` | expected | — | 49 | 120 |
+
+Counts are frames. A transcript check anchors only on lines the narration names;
+this reads everything on screen, which is the half that let the old defect
+through.
 
 ## What this does not establish
 

@@ -63,6 +63,14 @@ ANCHORS = {
         # `balance 2` and not `recipient`: the word is in the screen's own
         # caption, so matching on it would pass whatever the number said.
         ("recipient",               r"balance\s*2"),
+        # L'ancre qui manquait. Le film précédent affichait
+        # « 2 approval(s) recorded against a threshold of 3 » pendant 27 de ses
+        # 46 secondes, pendant que la voix disait « passing the gate moves
+        # value » — une exécution qui se lit comme sous-approuvée. Aucune ancre
+        # ne la regardait, parce que les ancres ne testent que les lignes dont
+        # la narration parle et qu'elle n'en parlait pas. Elle en parle
+        # maintenant, donc cette ligne est enfin tenue.
+        ("requirement of two",      r"requirement of 2"),
     ],
 }
 

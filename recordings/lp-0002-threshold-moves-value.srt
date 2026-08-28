@@ -1,60 +1,84 @@
 1
-00:00:00,000 --> 00:00:04,002
+00:00:00,000 --> 00:00:03,649
 This is LP-0002, at the commit on screen, live on
 
 2
-00:00:04,002 --> 00:00:05,880
+00:00:03,649 --> 00:00:05,362
 the public LEZ testnet.
 
 3
-00:00:07,080 --> 00:00:10,255
+00:00:06,562 --> 00:00:10,256
 Thirteen transactions, and five approvals carry the
 
 4
-00:00:10,255 --> 00:00:13,057
-privacy-preserving variant — the part a block
+00:00:10,256 --> 00:00:13,660
+privacy-preserving variant. The explorer agrees
 
 5
-00:00:13,057 --> 00:00:14,614
-explorer cannot show you.
+00:00:13,660 --> 00:00:17,354
+rather than takes our word for it: it reports about
 
 6
-00:00:15,814 --> 00:00:19,083
-Every account decodes at its published offsets. Each
+00:00:17,354 --> 00:00:20,903
+265 kB of proof on each approval, and zero on the
 
 7
-00:00:19,083 --> 00:00:22,163
-approval marker exists because a membership proof
+00:00:20,903 --> 00:00:21,482
+execute.
 
 8
-00:00:22,163 --> 00:00:25,054
-was verified on chain, and neither one names a
+00:00:22,682 --> 00:00:26,045
+Every account decodes at its published offsets. Each
 
 9
-00:00:25,054 --> 00:00:25,494
-member.
+00:00:26,045 --> 00:00:29,214
+approval marker exists because a membership proof
 
 10
-00:00:26,694 --> 00:00:29,902
-And passing the gate moves value. The recipient
+00:00:29,214 --> 00:00:32,189
+was verified on chain, and neither one names a
 
 11
-00:00:29,902 --> 00:00:32,906
-holds two, in an account owned by the native
+00:00:32,189 --> 00:00:32,642
+member.
 
 12
-00:00:32,906 --> 00:00:36,387
-transfer program and not by the verifier — which is
+00:00:33,842 --> 00:00:36,927
+Two approvals against a requirement of two. The
 
 13
-00:00:36,387 --> 00:00:38,025
-what makes it spendable.
+00:00:36,927 --> 00:00:39,946
+default is three; an anchored tier prices this
 
 14
-00:00:39,225 --> 00:00:43,036
-Both scripts are in the repository, and they take no
+00:00:39,946 --> 00:00:43,293
+transfer at two, and the tier table is part of what
 
 15
-00:00:43,036 --> 00:00:45,308
+00:00:43,293 --> 00:00:46,575
+the configuration hash commits to, so it cannot be
+
+16
+00:00:46,575 --> 00:00:49,791
+swapped underneath. Passing the gate moves value:
+
+17
+00:00:49,791 --> 00:00:53,139
+the recipient holds two, in an account owned by the
+
+18
+00:00:53,139 --> 00:00:56,289
+native transfer program and not by the verifier,
+
+19
+00:00:56,289 --> 00:00:58,455
+which is what makes it spendable.
+
+20
+00:00:59,655 --> 00:01:03,175
+Both scripts are in the repository, and they take no
+
+21
+00:01:03,175 --> 00:01:05,274
 arguments. Thanks for watching.
 

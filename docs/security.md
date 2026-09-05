@@ -201,7 +201,7 @@ the circuit half and `crates/multisig-verifier-tests/` for the on-chain half.
 
 ## Why the proof is genuinely verified on chain
 
-This is the criterion most submissions in this program have failed, so it is
+This is the criterion easiest to get subtly wrong, so it is
 worth being exact about the mechanism.
 
 A LEZ **public** transaction proves and verifies nothing. The sequencer

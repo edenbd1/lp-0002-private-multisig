@@ -52,6 +52,20 @@ can only do if a membership proof was verified on chain.
 
 ---
 
+## Watch the demo
+
+Two narrated screen recordings ship in [`recordings/`](recordings/), so a fresh
+clone carries the demo without leaving the repository:
+
+- **[`lp-0002-threshold-moves-value.mp4`](recordings/lp-0002-threshold-moves-value.mp4)**
+  (76 s) — a 3-of-5 approval reaches threshold and the treasury pays the
+  recipient on the testnet, with captions in
+  [`lp-0002-threshold-moves-value.srt`](recordings/lp-0002-threshold-moves-value.srt).
+- **[`lp-0002-e2e-real-proofs.mp4`](recordings/lp-0002-e2e-real-proofs.mp4)**
+  (2 min) — the full lifecycle end to end with **real proofs**
+  (`RISC0_DEV_MODE=0`): the client proves locally and the sequencer verifies
+  each privacy-preserving receipt on chain.
+
 ## Quick start
 
 ```bash
